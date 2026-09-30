@@ -1,0 +1,7 @@
+# Studio lock and backup files
+*.rbxl.lock
+*.rbxlx.lock
+*.rbxl-*
+# Files built by `rojo build`
+build/
+.DS_Store

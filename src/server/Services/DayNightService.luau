@@ -1,0 +1,82 @@
+-- Night (5 min): houses are open and full of eggs. Day (20 s): the street closes and everyone on it is sent home.
+-- Phase is mirrored to ReplicatedStorage attributes IsNight and PhaseEndsAt (server time) for the client HUD.
+
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local PlotService = require(script.Parent.PlotService)
+
+local DayNightService = {}
+
+local nightCallbacks: { () -> () } = {}
+local dayCallbacks: { () -> () } = {}
+
+function DayNightService.IsNight(): boolean
+	return ReplicatedStorage:GetAttribute("IsNight") == true
+end
+
+function DayNightService.OnNightStart(callback: () -> ())
+	table.insert(nightCallbacks, callback)
+end
+
+function DayNightService.OnDayStart(callback: () -> ())
+	table.insert(dayCallbacks, callback)
+end
+
+local function isInside(zone: BasePart, position: Vector3): boolean
+	local offset = zone.CFrame:PointToObjectSpace(position)
+	local half = zone.Size / 2
+	return math.abs(offset.X) <= half.X and math.abs(offset.Y) <= half.Y and math.abs(offset.Z) <= half.Z
+end
+
+function DayNightService.Start(map: Instance)
+	local street = map:WaitForChild("Street")
+	local barrier = street:FindFirstChild("DayBarrier") :: BasePart?
+	local zone = street:FindFirstChild("StreetZone") :: BasePart?
+	local barrierSign = barrier and barrier:FindFirstChild("BarrierSign")
+	local barrierLabel = barrierSign and barrierSign:FindFirstChild("Label") :: TextLabel?
+
+	local function setPhase(isNight: boolean, duration: number)
+		ReplicatedStorage:SetAttribute("IsNight", isNight)
+		ReplicatedStorage:SetAttribute("PhaseEndsAt", workspace:GetServerTimeNow() + duration)
+		Lighting.ClockTime = if isNight then 0 else 7
+		if barrier then
+			barrier.CanCollide = not isNight
+			barrier.Transparency = if isNight then 1 else 0.3
+		end
+		if barrierLabel then
+			barrierLabel.Text = if isNight then "" else "It's daytime! The street opens at night."
+		end
+	end
+
+	task.spawn(function()
+		while true do
+			setPhase(true, Config.NightSeconds)
+			for _, callback in nightCallbacks do
+				task.spawn(callback)
+			end
+			Remotes.Notify:FireAllClients("Night has fallen! Fresh eggs are in every house.", Color3.fromRGB(190, 120, 255))
+			task.wait(Config.NightSeconds)
+
+			setPhase(false, Config.DaySeconds)
+			for _, callback in dayCallbacks do
+				callback() -- runs first so carried eggs are dropped before anyone is sent home
+			end
+			if zone then
+				for _, player in Players:GetPlayers() do
+					local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+					if root and isInside(zone, root.Position) then
+						PlotService.TeleportHome(player)
+					end
+				end
+			end
+			Remotes.Notify:FireAllClients("The sun is up! The street is closed until night.", Color3.fromRGB(255, 220, 120))
+			task.wait(Config.DaySeconds)
+		end
+	end)
+end
+
+return DayNightService
