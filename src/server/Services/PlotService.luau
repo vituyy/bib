@@ -37,6 +37,36 @@ local function petIncome(data): number
 end
 PlotService.PetIncome = petIncome
 
+-- Friend boost: +Config.FriendBoostPercent% pet Money for every friend in the same server.
+-- Stored as the player's "FriendBoost" attribute (a percentage) so the HUD can show it.
+local friendCache: { [string]: boolean } = {}
+local function areFriends(a: Player, b: Player): boolean
+	local key = math.min(a.UserId, b.UserId) .. "|" .. math.max(a.UserId, b.UserId)
+	if friendCache[key] == nil then
+		local ok, result = pcall(a.IsFriendsWith, a, b.UserId)
+		if not ok then
+			return false -- web call failed; try again next time someone joins or leaves
+		end
+		friendCache[key] = result
+	end
+	return friendCache[key]
+end
+
+local function refreshFriendBoosts(leaving: Player?)
+	local players = Players:GetPlayers()
+	for _, player in players do
+		if player ~= leaving then
+			local friends = 0
+			for _, other in players do
+				if other ~= player and other ~= leaving and areFriends(player, other) then
+					friends += 1
+				end
+			end
+			player:SetAttribute("FriendBoost", friends * Config.FriendBoostPercent)
+		end
+	end
+end
+
 function PlotService.RollPet(eggId: string): string
 	local egg = Config.Eggs[eggId]
 	local total = 0
@@ -359,12 +389,22 @@ function PlotService.TeleportHome(player: Player)
 end
 
 local function hatchReady(player: Player, data)
+	-- Hatched pets go on the base while it has room, then into the inventory; when both are full the egg waits.
 	local now = os.time()
 	local hatched = {}
+	local onBase, stored = #data.Pets, #data.Storage
 	for n = #data.Incubators, 1, -1 do
 		local entry = data.Incubators[n]
-		if entry.EndsAt <= now and #data.Pets + #hatched < Config.PetSlotsFor(data.BaseLevel) then
-			table.insert(hatched, { Index = n, Pet = entry.Pet or PlotService.RollPet(entry.Egg) })
+		if entry.EndsAt <= now then
+			local toBase = onBase < Config.PetSlotsFor(data.BaseLevel)
+			if toBase or stored < Config.MaxPetsStored then
+				table.insert(hatched, { Index = n, Pet = entry.Pet or PlotService.RollPet(entry.Egg), ToBase = toBase })
+				if toBase then
+					onBase += 1
+				else
+					stored += 1
+				end
+			end
 		end
 	end
 	if #hatched == 0 then
@@ -373,7 +413,7 @@ local function hatchReady(player: Player, data)
 	DataService.Update(player, function(d)
 		for _, h in hatched do
 			table.remove(d.Incubators, h.Index)
-			table.insert(d.Pets, h.Pet)
+			table.insert(if h.ToBase then d.Pets else d.Storage, h.Pet)
 			if not table.find(d.Discovered, h.Pet) then
 				table.insert(d.Discovered, h.Pet)
 			end
@@ -381,7 +421,11 @@ local function hatchReady(player: Player, data)
 	end)
 	for _, h in hatched do
 		local pet = Config.Pets[h.Pet]
-		Remotes.Notify:FireClient(player, string.format("Your egg hatched into a %s %s!", pet.Rarity, pet.Name), Config.Rarities[pet.Rarity].Color)
+		local text = string.format("Your egg hatched into a %s %s!", pet.Rarity, pet.Name)
+		if not h.ToBase then
+			text ..= " (base full: it's in your Pets inventory)"
+		end
+		Remotes.Notify:FireClient(player, text, Config.Rarities[pet.Rarity].Color)
 	end
 end
 
@@ -439,6 +483,14 @@ function PlotService.Start(map: Instance)
 	end
 	Players.PlayerRemoving:Connect(releasePlot)
 
+	Players.PlayerAdded:Connect(function()
+		refreshFriendBoosts()
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		refreshFriendBoosts(player)
+	end)
+	task.spawn(refreshFriendBoosts)
+
 	-- Re-draw pets and incubators only when they actually change.
 	local lastPetKey: { [Player]: string } = {}
 	local lastIncubatorKey: { [Player]: string } = {}
@@ -478,7 +530,8 @@ function PlotService.Start(map: Instance)
 			for _, player in Players:GetPlayers() do
 				local data = DataService.Get(player)
 				if data then
-					local income = petIncome(data) * Config.IncomeTickSeconds
+					local boost = 1 + (player:GetAttribute("FriendBoost") or 0) / 100
+					local income = petIncome(data) * boost * Config.IncomeTickSeconds
 					if income > 0 then
 						DataService.Update(player, function(d)
 							d.Money += income
@@ -493,7 +546,7 @@ function PlotService.Start(map: Instance)
 								local left = entry.EndsAt - now
 								l.Text = if left > 0
 									then egg.Name .. "\n" .. formatTime(left)
-									elseif #data.Pets >= Config.PetSlotsFor(data.BaseLevel) then egg.Name .. "\nBase full!"
+									elseif #data.Pets >= Config.PetSlotsFor(data.BaseLevel) and #data.Storage >= Config.MaxPetsStored then egg.Name .. "\nPets full!"
 									else egg.Name .. "\nHatching!"
 							end
 						end

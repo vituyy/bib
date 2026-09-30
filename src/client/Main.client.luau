@@ -1,7 +1,8 @@
--- Client: HUD (Candy and Money pills, night/day timer, chase banner, messages, speed level bar at the bottom),
--- the studded menu buttons on the left (Rebirth, Index, Pet, Egg, Store) and their panels, and the Speed Shop menu.
+-- Client: HUD (Candy and Money on the right, night/day timer, chase banner, messages, speed level bar at the bottom,
+-- friend boost in the bottom left), the studded menu buttons on the left (Rebirth, Index, Pet, Egg, Store) and their
+-- panels, and the Speed Shop menu.
 -- Look: chunky cartoon UI. White studded panels with thick black outlines, cyan boxes, glossy gradient buttons
--- and white text with a black outline.
+-- and white text with a black outline. Pets and Eggs use a darker inventory window with a blue title bar.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -9,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
+local Art = require(ReplicatedStorage.Shared.Art)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 
@@ -33,6 +35,9 @@ local PAINT = {
 	Night = { Color3.fromRGB(160, 120, 255), Color3.fromRGB(85, 45, 185) },
 	Day = { Color3.fromRGB(255, 235, 120), Color3.fromRGB(255, 170, 40) },
 	Panel = { WHITE, Color3.fromRGB(230, 235, 245) },
+	Header = { Color3.fromRGB(100, 215, 255), Color3.fromRGB(25, 125, 230) },
+	CandyText = { Color3.fromRGB(255, 160, 185), Color3.fromRGB(235, 40, 85) },
+	MoneyText = { Color3.fromRGB(255, 245, 120), Color3.fromRGB(255, 160, 20) },
 	LevelFill = { Color3.fromRGB(255, 100, 20), Color3.fromRGB(255, 235, 60) },
 	XpFill = { Color3.fromRGB(100, 215, 30), Color3.fromRGB(190, 250, 80) },
 }
@@ -178,31 +183,50 @@ local toggleMenu: (name: string, forceOpen: boolean?) -> ()
 ---------------------------------------------------------------------------
 local gui = new("ScreenGui", { Name = "SpookyHUD", ResetOnSpawn = false, IgnoreGuiInset = false, Parent = player:WaitForChild("PlayerGui") })
 
--- Candy and Money pills, top centre
-local currencyBar = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0),
-	Size = UDim2.fromOffset(424, 48),
-	Position = UDim2.new(0.5, 0, 0, 10),
+-- Candy and Money, right side in the middle: a round badge and a big number in gradient letters.
+local currencyStack = new("Frame", {
+	AnchorPoint = Vector2.new(1, 0.5),
+	Size = UDim2.fromOffset(250, 124),
+	Position = UDim2.new(1, -16, 0.5, 0),
 	BackgroundTransparency = 1,
 	Parent = gui,
 }, {
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 16), SortOrder = Enum.SortOrder.LayoutOrder }),
+	new("UIListLayout", { Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
 })
-local function currencyPill(order: number, paint: { Color3 }, icon: string)
-	local pill = box({ Size = UDim2.fromOffset(200, 48), LayoutOrder = order, Parent = currencyBar }, paint)
-	new("TextLabel", { Size = UDim2.fromOffset(38, 38), Position = UDim2.fromOffset(7, 5), BackgroundTransparency = 1, Text = icon, TextScaled = true, ZIndex = 2, Parent = pill })
-	return outlined({ Size = UDim2.new(1, -62, 1, -14), Position = UDim2.fromOffset(52, 7), Text = "0", TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = pill }, 2.5)
+local function currencyRow(order: number, icon: string, badgePaint: { Color3 }, textPaint: { Color3 })
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 56), BackgroundTransparency = 1, LayoutOrder = order, Parent = currencyStack })
+	local badge = new("Frame", { Size = UDim2.fromOffset(50, 50), Position = UDim2.fromOffset(0, 3), BackgroundColor3 = WHITE, Parent = holder }, {
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		gradient(badgePaint),
+		border(3),
+	})
+	new("TextLabel", { Size = UDim2.new(1, -14, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundTransparency = 1, Text = icon, TextScaled = true, Parent = badge })
+	local value = outlined({ Size = UDim2.new(1, -62, 1, 0), Position = UDim2.fromOffset(60, 0), Text = "0", TextXAlignment = Enum.TextXAlignment.Left, Parent = holder }, 3.5)
+	gradient(textPaint).Parent = value -- a UIGradient on a text label colours the letters
+	return value
 end
-local candyLabel = currencyPill(1, PAINT.Orange, "🍬")
-local moneyLabel = currencyPill(2, PAINT.Green, "💰")
+local candyLabel = currencyRow(1, "🍬", PAINT.Red, PAINT.CandyText)
+local moneyLabel = currencyRow(2, "💰", PAINT.Orange, PAINT.MoneyText)
 
--- Night / day timer under the currencies
-local phasePill = box({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(250, 40), Position = UDim2.new(0.5, 0, 0, 66), Parent = gui }, PAINT.Night)
+-- Friend boost, bottom left: +10% pet Money for each friend in this server.
+local friendHud = new("Frame", { AnchorPoint = Vector2.new(0, 1), Size = UDim2.fromOffset(270, 34), Position = UDim2.new(0, 16, 1, -16), BackgroundTransparency = 1, Parent = gui })
+local friendLabel = outlined({ Size = UDim2.new(1, -44, 1, 0), Text = "Friend Boost +0%", TextXAlignment = Enum.TextXAlignment.Left, Parent = friendHud }, 2.5)
+local friendIcon = outlined({ Size = UDim2.fromOffset(34, 34), Position = UDim2.new(1, -38, 0, 0), Text = "✚", TextColor3 = Color3.fromRGB(80, 230, 90), Parent = friendHud }, 2.5)
+local function refreshFriendBoost()
+	local boost = player:GetAttribute("FriendBoost") or 0
+	friendLabel.Text = string.format("Friend Boost +%d%%", boost)
+	friendIcon.TextColor3 = if boost > 0 then Color3.fromRGB(80, 230, 90) else Color3.fromRGB(150, 160, 150)
+end
+player:GetAttributeChangedSignal("FriendBoost"):Connect(refreshFriendBoost)
+refreshFriendBoost()
+
+-- Night / day timer, top centre
+local phasePill = box({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(250, 40), Position = UDim2.new(0.5, 0, 0, 10), Parent = gui }, PAINT.Night)
 local phaseGradient = phasePill:FindFirstChildOfClass("UIGradient") :: UIGradient
 local phaseLabel = outlined({ Size = UDim2.new(1, -20, 1, -12), Position = UDim2.fromOffset(10, 6), Text = "", ZIndex = 2, Parent = phasePill }, 2)
 
 -- Chase / carrying banner. Pulses gently while shown.
-local banner = box({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(520, 48), Position = UDim2.new(0.5, 0, 0, 118), Visible = false, Parent = gui }, PAINT.Red)
+local banner = box({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(520, 48), Position = UDim2.new(0.5, 0, 0, 62), Visible = false, Parent = gui }, PAINT.Red)
 local bannerGradient = banner:FindFirstChildOfClass("UIGradient") :: UIGradient
 local bannerLabel = outlined({ Size = UDim2.new(1, -24, 1, -14), Position = UDim2.fromOffset(12, 7), Text = "", ZIndex = 2, Parent = banner }, 2.5)
 TweenService:Create(new("UIScale", { Parent = banner }), TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.05 }):Play()
@@ -252,7 +276,7 @@ end
 ---------------------------------------------------------------------------
 -- Menus
 ---------------------------------------------------------------------------
-local TITLES = { Rebirth = "Rebirth", Index = "Pet Index", Pets = "Your Pets", Eggs = "Eggs", Store = "Store", Treadmills = "Speed Shop" }
+local TITLES = { Rebirth = "Rebirth", Index = "Pet Index", Pets = "Pets", Eggs = "Eggs", Store = "Store", Treadmills = "Speed Shop" }
 local ICONS = {
 	Rebirth = "rbxassetid://134156079401542",
 	Index = "rbxassetid://120727874564424",
@@ -262,7 +286,7 @@ local ICONS = {
 }
 
 -- Light grey stud outlines on the white panel, like a Lego plate.
-local function studs(parent: Instance, cellSize: UDim2, count: number)
+local function studs(parent: Instance, cellSize: UDim2, count: number, color: Color3?, transparency: number?)
 	local layer = new("CanvasGroup", { Name = "Studs", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = parent }, {
 		new("UICorner", { CornerRadius = UDim.new(0, 22) }),
 		new("UIGridLayout", { CellSize = cellSize, CellPadding = UDim2.new(), SortOrder = Enum.SortOrder.LayoutOrder }),
@@ -274,7 +298,7 @@ local function studs(parent: Instance, cellSize: UDim2, count: number)
 			BackgroundTransparency = 1, Parent = cell,
 		}, {
 			new("UICorner", { CornerRadius = UDim.new(0.25, 0) }),
-			new("UIStroke", { Color = Color3.fromRGB(215, 218, 228), Thickness = 2 }),
+			new("UIStroke", { Color = color or Color3.fromRGB(215, 218, 228), Transparency = transparency or 0, Thickness = 2 }),
 		})
 	end
 	return layer
@@ -331,11 +355,14 @@ local closeButton = new("TextButton", {
 	ZIndex = 3,
 	Parent = panel,
 }, { new("UIStroke", { Color = BLACK, Thickness = 4, LineJoinMode = Enum.LineJoinMode.Round }) })
-bounce(closeButton)
-closeButton.Activated:Connect(function()
+local invPanel: Frame
+local function closeMenus()
 	openMenu = nil
 	panel.Visible = false
-end)
+	invPanel.Visible = false
+end
+bounce(closeButton)
+closeButton.Activated:Connect(closeMenus)
 
 local function request(action: string, arg: any?)
 	local ok, success, message = pcall(function()
@@ -373,60 +400,353 @@ end
 
 local menus = {}
 
-function menus.Eggs(d)
-	local order = 0
-	local function nextOrder()
-		order += 1
-		return order
+---------------------------------------------------------------------------
+-- Inventory window (Pets and Eggs): blue title bar with search and X, dark studded body with card grids,
+-- buttons along the bottom.
+---------------------------------------------------------------------------
+local INVENTORY_MENUS = { Pets = true, Eggs = true }
+
+invPanel = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Size = UDim2.fromScale(0.66, 0.78),
+	Position = UDim2.fromScale(0.54, 0.54),
+	BackgroundColor3 = Color3.fromRGB(45, 28, 80),
+	BackgroundTransparency = 0.12,
+	Visible = false,
+	Parent = gui,
+}, {
+	corner(14),
+	border(4),
+	new("UISizeConstraint", { MaxSize = Vector2.new(760, 520), MinSize = Vector2.new(360, 280) }),
+})
+local invScale = new("UIScale", { Parent = invPanel })
+studs(invPanel, UDim2.fromOffset(34, 34), 23 * 16, WHITE, 0.9)
+
+local invHeader = box({ Size = UDim2.new(1, 0, 0, 66), Parent = invPanel }, PAINT.Header)
+local invIcon = new("ImageLabel", { Size = UDim2.fromOffset(72, 72), Position = UDim2.fromOffset(-4, -8), BackgroundTransparency = 1, ZIndex = 3, Parent = invHeader })
+local invTitle = outlined({ Size = UDim2.new(0.3, 0, 0, 46), Position = UDim2.fromOffset(78, 10), Text = "", TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3, Parent = invHeader }, 3)
+local searchBox = new("TextBox", {
+	AnchorPoint = Vector2.new(1, 0.5),
+	Size = UDim2.new(0.4, 0, 0, 42),
+	Position = UDim2.new(1, -76, 0.5, 0),
+	BackgroundColor3 = Color3.fromRGB(20, 45, 90),
+	BackgroundTransparency = 0.25,
+	Font = Enum.Font.FredokaOne,
+	PlaceholderText = "Search...",
+	PlaceholderColor3 = Color3.fromRGB(150, 170, 205),
+	Text = "",
+	TextColor3 = WHITE,
+	TextScaled = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	ClearTextOnFocus = false,
+	ZIndex = 3,
+	Parent = invHeader,
+}, {
+	corner(8),
+	new("UIStroke", { Color = Color3.fromRGB(10, 25, 55), Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }),
+})
+chunkyButton({ AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(52, 52), Position = UDim2.new(1, -10, 0.5, 0), Text = "X", ZIndex = 3, Parent = invHeader }, PAINT.Red, closeMenus)
+
+local invList = new("ScrollingFrame", {
+	Size = UDim2.new(1, -20, 1, -152),
+	Position = UDim2.fromOffset(10, 74),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 6,
+	ScrollBarImageColor3 = Color3.fromRGB(200, 190, 230),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	CanvasSize = UDim2.new(),
+	Parent = invPanel,
+}, {
+	new("UIListLayout", { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+	new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 8) }),
+})
+local invFooter = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Size = UDim2.new(1, -20, 0, 58),
+	Position = UDim2.new(0.5, 0, 1, -10),
+	BackgroundTransparency = 1,
+	Parent = invPanel,
+}, {
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 12),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}),
+})
+
+-- "Equipped 3/10" between two faint lines.
+local function sectionTitle(order: number, text: string)
+	local f = new("Frame", { Size = UDim2.new(1, -8, 0, 34), BackgroundTransparency = 1, LayoutOrder = order, Parent = invList })
+	for i, x in { 0, 0.72 } do
+		new("Frame", {
+			Size = UDim2.new(0.28, -8, 0, 3),
+			Position = UDim2.new(x, if i == 1 then 0 else 8, 0.5, -1),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.75,
+			BorderSizePixel = 0,
+			Parent = f,
+		})
 	end
-	local now = workspace:GetServerTimeNow()
-	header(nextOrder(), string.format("Incubators (%d / %d)", #d.Incubators, Config.IncubatorsFor(d.BaseLevel)))
-	if #d.Incubators == 0 then
-		row(nextOrder(), "Nothing hatching. Pick an egg below!")
+	outlined({ Size = UDim2.fromScale(0.44, 0.9), Position = UDim2.fromScale(0.28, 0.05), Text = text, Parent = f }, 2)
+end
+
+local function invHint(order: number, text: string)
+	local f = new("Frame", { Size = UDim2.new(1, -8, 0, 28), BackgroundTransparency = 1, LayoutOrder = order, Parent = invList })
+	outlined({ Size = UDim2.fromScale(1, 0.85), Text = text, TextColor3 = Color3.fromRGB(200, 190, 230), Parent = f }, 1.5)
+end
+
+local function cardGrid(order: number)
+	return new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order, Parent = invList }, {
+		new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(104, 112),
+			CellPadding = UDim2.fromOffset(10, 8),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
+end
+
+-- A model in a little 3D window, framed to fit.
+local function modelViewport(model: Model?, parent: Instance, props: { [string]: any })
+	props.BackgroundTransparency = 1
+	props.Ambient = Color3.fromRGB(170, 170, 170)
+	props.LightColor = WHITE
+	props.LightDirection = Vector3.new(-1, -1, -1)
+	props.Parent = parent
+	local viewport = new("ViewportFrame", props)
+	if not model then
+		return viewport
 	end
-	for _, entry in d.Incubators do
-		local egg = Config.Eggs[entry.Egg]
-		if egg then
-			local left = entry.EndsAt - now
-			row(nextOrder(), string.format("%s: %s", egg.Name, if left > 0 then formatTime(left) else "hatching!"), Config.Rarities[egg.Rarity].Color)
+	model.Parent = viewport
+	local center, size = model:GetBoundingBox()
+	local camera = Instance.new("Camera")
+	camera.FieldOfView = 40
+	local distance = size.Magnitude / 2 / math.tan(math.rad(20)) * 0.9
+	local look = model:GetPivot().LookVector
+	camera.CFrame = CFrame.lookAt(center.Position + look * distance + Vector3.new(0, size.Y * 0.3, 0), center.Position)
+	camera.Parent = viewport
+	viewport.CurrentCamera = camera
+	return viewport
+end
+
+local petAssets = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Pets")
+local function petModel(petId: string): Model?
+	local template = petAssets:FindFirstChild(petId)
+	return if template then template:Clone() else nil
+end
+
+-- One pet or egg card: a coloured splash, the model, an optional count in the corner and a line of text
+-- underneath. Returns the button and the bottom label.
+local function card(grid: Instance, order: number, model: Model?, splash: Color3, bottomText: string, countText: string?, selected: boolean, onClick: () -> ())
+	local b = new("TextButton", { Text = "", BackgroundTransparency = 1, AutoButtonColor = false, LayoutOrder = order, Parent = grid }, { corner(14) })
+	new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromScale(0.8, 0.72),
+		BackgroundColor3 = splash,
+		BackgroundTransparency = 0.35,
+		Parent = b,
+	}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+	modelViewport(model, b, { Size = UDim2.new(1, 0, 1, -20), ZIndex = 2 })
+	if countText then
+		outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(50, 28), Position = UDim2.fromScale(1, 0), Text = countText, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3, Parent = b }, 2.5)
+	end
+	local bottom = outlined({ Size = UDim2.new(1, 0, 0, 26), Position = UDim2.new(0, 0, 1, -26), Text = bottomText, ZIndex = 3, Parent = b }, 2.5)
+	if selected then
+		new("UIStroke", { Color = Color3.fromRGB(255, 225, 60), Thickness = 4, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = b })
+	end
+	bounce(b)
+	b.Activated:Connect(onClick)
+	return b, bottom
+end
+
+-- Dark blob for a slot with nothing in it ("+4" locked pet slots, "Empty" incubators).
+local function blob(grid: Instance, order: number, text: string, onClick: () -> ())
+	local b = new("TextButton", { Text = "", BackgroundTransparency = 1, AutoButtonColor = false, LayoutOrder = order, Parent = grid })
+	new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromScale(0.8, 0.72),
+		BackgroundColor3 = BLACK,
+		BackgroundTransparency = 0.45,
+		Parent = b,
+	}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+	outlined({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromScale(0.62, 0.3), Text = text, Parent = b }, 2)
+	bounce(b)
+	b.Activated:Connect(onClick)
+end
+
+local function footerButton(order: number, text: string, paint: { Color3 }, onClick: () -> ())
+	chunkyButton({ Size = UDim2.new(0.3, 0, 0, 52), Text = text, LayoutOrder = order, Parent = invFooter }, paint, onClick)
+end
+
+local function footerHint(order: number, text: string)
+	outlined({ Size = UDim2.new(0.5, 0, 0, 30), Text = text, TextColor3 = Color3.fromRGB(200, 190, 230), LayoutOrder = order, Parent = invFooter }, 1.5)
+end
+
+local function matchesSearch(name: string): boolean
+	local query = string.lower(searchBox.Text)
+	return query == "" or string.find(string.lower(name), query, 1, true) ~= nil
+end
+
+local function byIncome(a: string, b: string): boolean
+	return Config.Pets[a].MoneyPerSecond > Config.Pets[b].MoneyPerSecond
+end
+
+-- Pets: equipped pets (on the base) on top, the inventory below, stacked by kind.
+local selectedPet: { Pet: string, Equipped: boolean }? = nil
+
+function menus.Pets(d)
+	local slots = Config.PetSlotsFor(d.BaseLevel)
+	local boost = 1 + (player:GetAttribute("FriendBoost") or 0) / 100
+	if selectedPet and not table.find(if selectedPet.Equipped then d.Pets else d.Storage, selectedPet.Pet) then
+		selectedPet = nil -- sold or moved
+	end
+
+	local function petCard(grid: Instance, order: number, petId: string, equipped: boolean, count: number?)
+		local pet = Config.Pets[petId]
+		local isSelected = selectedPet ~= nil and selectedPet.Pet == petId and selectedPet.Equipped == equipped
+		card(grid, order, petModel(petId), Config.Rarities[pet.Rarity].Color, "$" .. formatNumber(pet.MoneyPerSecond * boost) .. "/s",
+			if count then "x" .. count else nil, isSelected, function()
+				selectedPet = if isSelected then nil else { Pet = petId, Equipped = equipped }
+				renderMenu()
+			end)
+	end
+
+	sectionTitle(1, string.format("Equipped %d/%d", #d.Pets, slots))
+	local equippedGrid = cardGrid(2)
+	local equipped = table.clone(d.Pets)
+	table.sort(equipped, byIncome)
+	for n, petId in equipped do
+		if matchesSearch(Config.Pets[petId].Name) then
+			petCard(equippedGrid, n, petId, true)
+		end
+	end
+	local locked = Config.PetSlotsFor(#Config.BaseUpgrades) - slots
+	if locked > 0 then
+		blob(equippedGrid, 1000, "+" .. locked, function()
+			toast("Upgrade your base for more pet slots!", ORANGE)
+		end)
+	end
+
+	local counts, kinds = {}, {}
+	for _, petId in d.Storage do
+		if not counts[petId] then
+			counts[petId] = 0
+			table.insert(kinds, petId)
+		end
+		counts[petId] += 1
+	end
+	table.sort(kinds, byIncome)
+	sectionTitle(3, string.format("Inventory %d/%d", #d.Storage, Config.MaxPetsStored))
+	if #kinds == 0 then
+		invHint(4, if #d.Pets == 0 then "Hatch eggs to get pets!" else "Pets that don't fit on your base wait here.")
+	end
+	local inventoryGrid = cardGrid(5)
+	for n, petId in kinds do
+		if matchesSearch(Config.Pets[petId].Name) then
+			petCard(inventoryGrid, n, petId, false, counts[petId])
 		end
 	end
 
-	header(nextOrder(), string.format("Egg Bag (%d / %d) - hatching is free", #d.Eggs, Config.MaxEggsHeld))
-	if #d.Eggs == 0 then
-		row(nextOrder(), "No eggs yet. Sneak through a window and steal one!")
-	end
-	local full = #d.Incubators >= Config.IncubatorsFor(d.BaseLevel)
-	for index, entry in d.Eggs do
-		local eggId = Config.ParseEgg(entry)
-		local egg = Config.Eggs[eggId]
-		if egg then
-			row(nextOrder(), string.format("%s (%s) %s", egg.Name, egg.Rarity, formatTime(egg.HatchSeconds)), Config.Rarities[egg.Rarity].Color,
-				if full then "Busy" else "Hatch", if full then PAINT.Grey else PAINT.Green, function()
-					request("Hatch", index)
-				end)
-		end
+	footerButton(1, "Equip Best", PAINT.Green, function()
+		selectedPet = nil
+		request("EquipBest")
+	end)
+	local target = selectedPet
+	if target then
+		local pet = Config.Pets[target.Pet]
+		footerButton(2, if target.Equipped then "Unequip" else "Equip", PAINT.Purple, function()
+			selectedPet = nil
+			request(if target.Equipped then "UnequipPet" else "EquipPet", target.Pet)
+		end)
+		footerButton(3, "Sell $" .. formatNumber(pet.MoneyPerSecond * Config.PetSellSeconds), PAINT.Red, function()
+			request("SellPet", target)
+		end)
+	else
+		footerHint(2, "Tap a pet to equip, unequip or sell it")
 	end
 end
 
-function menus.Pets(d)
-	local income = 0
-	for _, petId in d.Pets do
-		local pet = Config.Pets[petId]
-		income += if pet then pet.MoneyPerSecond else 0
+-- Eggs: what's hatching (with live countdowns) on top, the egg bag below. Tap an egg to hatch it.
+local incubatorTimers: { { Label: TextLabel, EndsAt: number } } = {}
+
+local function refreshIncubatorTimers()
+	local now = workspace:GetServerTimeNow()
+	for _, timer in incubatorTimers do
+		local left = timer.EndsAt - now
+		timer.Label.Text = if left > 0 then formatTime(left) else "Hatching!"
 	end
-	header(0, string.format("%d / %d pets earning $%s/s", #d.Pets, Config.PetSlotsFor(d.BaseLevel), formatNumber(income)))
-	for index, petId in d.Pets do
-		local pet = Config.Pets[petId]
-		if pet then
-			local rarity = Config.Rarities[pet.Rarity]
-			local sellValue = math.floor(pet.MoneyPerSecond * Config.PetSellSeconds)
-			row(index, string.format("%s (%s) $%s/s", pet.Name, pet.Rarity, formatNumber(pet.MoneyPerSecond)), rarity.Color, "Sell $" .. formatNumber(sellValue), PAINT.Red, function()
-				request("SellPet", index)
+end
+
+function menus.Eggs(d)
+	local slots = Config.IncubatorsFor(d.BaseLevel)
+	sectionTitle(1, string.format("Hatching %d/%d", #d.Incubators, slots))
+	local hatchGrid = cardGrid(2)
+	for n, entry in d.Incubators do
+		local egg = Config.Eggs[entry.Egg]
+		if egg then
+			local _, timer = card(hatchGrid, n, Art.Egg(entry.Egg, entry.Pet), Config.Rarities[egg.Rarity].Color, "", nil, false, function()
+				toast(egg.Name .. " is hatching on your base", ORANGE)
+			end)
+			table.insert(incubatorTimers, { Label = timer, EndsAt = entry.EndsAt })
+		end
+	end
+	refreshIncubatorTimers()
+	for n = #d.Incubators + 1, slots do
+		blob(hatchGrid, n, "Empty", function()
+			toast("Tap an egg below to hatch it!", ORANGE)
+		end)
+	end
+
+	local counts, kinds = {}, {}
+	for _, entry in d.Eggs do
+		if not counts[entry] then
+			counts[entry] = 0
+			table.insert(kinds, entry)
+		end
+		counts[entry] += 1
+	end
+	local function rank(entry: string): number
+		local egg = Config.Eggs[(Config.ParseEgg(entry))]
+		return if egg then Config.Rarities[egg.Rarity].Order else 0
+	end
+	table.sort(kinds, function(a, b)
+		return rank(a) > rank(b)
+	end)
+	sectionTitle(3, string.format("Egg Bag %d/%d", #d.Eggs, Config.MaxEggsHeld))
+	if #kinds == 0 then
+		invHint(4, "No eggs yet. Sneak through a window and steal one!")
+	end
+	local bagGrid = cardGrid(5)
+	for n, entry in kinds do
+		local eggId, petId = Config.ParseEgg(entry)
+		local egg = Config.Eggs[eggId]
+		if egg and matchesSearch(egg.Name) then
+			card(bagGrid, n, Art.Egg(eggId, petId), Config.Rarities[egg.Rarity].Color, formatTime(egg.HatchSeconds), "x" .. counts[entry], false, function()
+				local index = table.find(d.Eggs, entry)
+				if index then
+					request("Hatch", index)
+				end
 			end)
 		end
 	end
+
+	footerButton(1, "Hatch Best", PAINT.Orange, function()
+		request("HatchBest")
+	end)
+	footerHint(2, "Tap an egg to hatch it. Hatching is free!")
 end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	if openMenu and INVENTORY_MENUS[openMenu] then
+		renderMenu()
+	end
+end)
 
 -- Rebirth: current vs next rebirth side by side, a level bar towards the next one, and the Rebirth button.
 local function spacer(order: number, height: number)
@@ -506,37 +826,6 @@ function menus.Store(_d)
 	end
 end
 
--- A pet model in a little 3D window. Undiscovered pets are a black silhouette.
-local petAssets = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Pets")
-local function petViewport(petId: string, parent: Instance, silhouette: boolean)
-	local viewport = new("ViewportFrame", {
-		Size = UDim2.new(1, -8, 1, -46),
-		Position = UDim2.fromOffset(4, 4),
-		BackgroundTransparency = 1,
-		Ambient = Color3.fromRGB(170, 170, 170),
-		LightColor = WHITE,
-		LightDirection = Vector3.new(-1, -1, -1),
-		ImageColor3 = if silhouette then BLACK else WHITE,
-		ImageTransparency = if silhouette then 0.15 else 0,
-		ZIndex = 2,
-		Parent = parent,
-	})
-	local template = petAssets:FindFirstChild(petId)
-	if not template then
-		return
-	end
-	local model = template:Clone()
-	model.Parent = viewport
-	local center, size = model:GetBoundingBox()
-	local camera = Instance.new("Camera")
-	camera.FieldOfView = 40
-	local distance = size.Magnitude / 2 / math.tan(math.rad(20)) * 0.9
-	local look = model:GetPivot().LookVector
-	camera.CFrame = CFrame.lookAt(center.Position + look * distance + Vector3.new(0, size.Y * 0.3, 0), center.Position)
-	camera.Parent = viewport
-	viewport.CurrentCamera = camera
-end
-
 function menus.Index(d)
 	local found = d.Discovered or {}
 	local claimed = d.IndexClaimed or {}
@@ -568,7 +857,13 @@ function menus.Index(d)
 		local known = table.find(found, petId) ~= nil
 		local rarity = Config.Rarities[pet.Rarity]
 		local card = box({ LayoutOrder = n, Parent = grid }, if known then PAINT.Cyan else PAINT.Grey)
-		petViewport(petId, card, not known)
+		modelViewport(petModel(petId), card, {
+			Size = UDim2.new(1, -8, 1, -46),
+			Position = UDim2.fromOffset(4, 4),
+			ImageColor3 = if known then WHITE else BLACK, -- undiscovered pets are a black silhouette
+			ImageTransparency = if known then 0 else 0.15,
+			ZIndex = 2,
+		})
 		outlined({ Size = UDim2.new(1, -8, 0, 20), Position = UDim2.new(0, 4, 1, -42), Text = if known then pet.Name else "???", ZIndex = 2, Parent = card }, 1.5)
 		outlined({ Size = UDim2.new(1, -8, 0, 17), Position = UDim2.new(0, 4, 1, -21), Text = if known then pet.Rarity else "", TextColor3 = rarity.Color, ZIndex = 2, Parent = card }, 1.5)
 	end
@@ -623,19 +918,29 @@ renderMenu = function()
 	if not (openMenu and data) then
 		return
 	end
-	local scroll = list.CanvasPosition
-	for _, child in list:GetChildren() do
-		if child:IsA("GuiObject") then
-			child:Destroy()
+	local inventory = INVENTORY_MENUS[openMenu] ~= nil
+	local target = if inventory then invList else list
+	local scroll = target.CanvasPosition
+	for _, container in { list, invList, invFooter } do
+		for _, child in container:GetChildren() do
+			if child:IsA("GuiObject") then
+				child:Destroy()
+			end
 		end
 	end
+	table.clear(incubatorTimers)
 	local icon = ICONS[openMenu]
-	panelIcon.Image = icon or ""
-	panelIcon.Visible = icon ~= nil
-	panelTitle.Position = UDim2.fromOffset(if icon then 58 else 16, -30)
-	panelTitle.Text = TITLES[openMenu] or openMenu
+	if inventory then
+		invIcon.Image = icon or ""
+		invTitle.Text = TITLES[openMenu] or openMenu
+	else
+		panelIcon.Image = icon or ""
+		panelIcon.Visible = icon ~= nil
+		panelTitle.Position = UDim2.fromOffset(if icon then 58 else 16, -30)
+		panelTitle.Text = TITLES[openMenu] or openMenu
+	end
 	menus[openMenu](data)
-	list.CanvasPosition = scroll
+	target.CanvasPosition = scroll
 end
 
 -- Menus only need a redraw when something other than the ticking Money changes.
@@ -647,7 +952,8 @@ local function menuKey(d)
 	end
 	return table.concat({
 		openMenu or "", shopTab, d.SpeedLevel, d.Rebirths, d.Treadmill, d.Trail or 0, #(d.OwnedTrails or {}), d.EquippedCostume,
-		table.concat(d.Eggs, ","), table.concat(incubating, ","), table.concat(d.Pets, ","),
+		table.concat(d.Eggs, ","), table.concat(incubating, ","), table.concat(d.Pets, ","), table.concat(d.Storage or {}, ","),
+		player:GetAttribute("FriendBoost") or 0,
 		table.concat(d.Discovered or {}, ","), table.concat(d.IndexClaimed or {}, ","), d.BaseLevel,
 		if openMenu == "Treadmills" then math.floor(if shopTab == "Trails" then d.Money / 1000 else d.Candy) else 0,
 	}, "|")
@@ -655,16 +961,23 @@ end
 
 toggleMenu = function(name: string, forceOpen: boolean?)
 	if openMenu == name and not forceOpen then
-		openMenu = nil
-		panel.Visible = false
+		closeMenus()
 		return
 	end
-	local wasOpen = panel.Visible
+	local inventory = INVENTORY_MENUS[name] ~= nil
+	local window = if inventory then invPanel else panel
+	local scale = if inventory then invScale else panelScale
+	local wasOpen = window.Visible
+	if openMenu ~= name then
+		selectedPet = nil
+	end
 	openMenu = name
-	panel.Visible = true
+	searchBox.Text = ""
+	;(if inventory then panel else invPanel).Visible = false
+	window.Visible = true
 	if not wasOpen then
-		panelScale.Scale = 0.85
-		TweenService:Create(panelScale, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+		scale.Scale = 0.85
+		TweenService:Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1 }):Play()
 	end
 	lastMenuKey = ""
 	renderMenu()
@@ -675,8 +988,8 @@ local MENU_ORDER = { "Rebirth", "Index", "Pets", "Eggs", "Store" }
 local menuButtons = new("Frame", {
 	Name = "MenuButtons",
 	AnchorPoint = Vector2.new(0, 0.5),
-	Size = UDim2.new(0, 100, 0.72, 0),
-	Position = UDim2.new(0, 10, 0.54, 0),
+	Size = UDim2.new(0, 100, 0.66, 0),
+	Position = UDim2.new(0, 10, 0.5, 0),
 	BackgroundTransparency = 1,
 	Parent = gui,
 }, { new("UIListLayout", { Padding = UDim.new(0.02, 0), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
@@ -794,9 +1107,8 @@ RunService:BindToRenderStep("TreadmillAutoRun", Enum.RenderPriority.Character.Va
 	end
 end)
 
--- Night/day timer, and a live countdown in the Eggs menu.
+-- Night/day timer, and the live countdowns in the Eggs menu.
 task.spawn(function()
-	local tick = 0
 	while true do
 		local isNight = ReplicatedStorage:GetAttribute("IsNight")
 		local endsAt = ReplicatedStorage:GetAttribute("PhaseEndsAt")
@@ -806,9 +1118,8 @@ task.spawn(function()
 			phaseGradient.Color = ColorSequence.new(paint[1], paint[2])
 			phaseLabel.Text = if isNight then "🌙 NIGHT " .. formatTime(left) else "☀️ DAY " .. formatTime(left) .. " - street closed"
 		end
-		tick += 1
-		if tick % 4 == 0 and openMenu == "Eggs" then
-			renderMenu()
+		if openMenu == "Eggs" then
+			refreshIncubatorTimers()
 		end
 		task.wait(0.25)
 	end

@@ -113,21 +113,113 @@ function actions.Hatch(player: Player, data, eggIndex: any)
 	return true, string.format("%s is incubating on your base", egg.Name)
 end
 
-function actions.SellPet(player: Player, data, petIndex: any)
-	if type(petIndex) ~= "number" then
-		return false, "Pick a pet"
+-- Pets are either equipped (data.Pets: on the base, earning) or in the inventory (data.Storage).
+-- The Pets menu sends { Pet = petId, Equipped = bool } to say which one it means.
+local function petArg(data, arg: any): (string?, { string }?)
+	if type(arg) ~= "table" or type(arg.Pet) ~= "string" or not Config.Pets[arg.Pet] then
+		return nil, nil
 	end
-	local petId = data.Pets[petIndex]
-	local pet = petId and Config.Pets[petId]
-	if not pet then
+	local list = if arg.Equipped then data.Pets else data.Storage
+	return if table.find(list, arg.Pet) then arg.Pet else nil, list
+end
+
+local function removeOne(list: { string }, petId: string)
+	table.remove(list, table.find(list, petId) :: number)
+end
+
+function actions.SellPet(player: Player, data, arg: any)
+	local petId = petArg(data, arg)
+	if not petId then
 		return false, "That pet is gone"
 	end
+	local pet = Config.Pets[petId]
 	local value = math.floor(pet.MoneyPerSecond * Config.PetSellSeconds)
 	DataService.Update(player, function(d)
-		table.remove(d.Pets, petIndex)
+		removeOne(if arg.Equipped then d.Pets else d.Storage, petId)
 		d.Money += value
 	end)
 	return true, string.format("Sold %s for $%s", pet.Name, fmt(value))
+end
+
+function actions.EquipPet(player: Player, data, petId: any)
+	if type(petId) ~= "string" or not table.find(data.Storage, petId) then
+		return false, "That pet is gone"
+	end
+	if #data.Pets >= Config.PetSlotsFor(data.BaseLevel) then
+		return false, "Your base is full. Unequip a pet or upgrade your base."
+	end
+	DataService.Update(player, function(d)
+		removeOne(d.Storage, petId)
+		table.insert(d.Pets, petId)
+	end)
+	return true, Config.Pets[petId].Name .. " is on your base"
+end
+
+function actions.UnequipPet(player: Player, data, petId: any)
+	if type(petId) ~= "string" or not table.find(data.Pets, petId) then
+		return false, "That pet is gone"
+	end
+	if #data.Storage >= Config.MaxPetsStored then
+		return false, "Your pet inventory is full"
+	end
+	DataService.Update(player, function(d)
+		removeOne(d.Pets, petId)
+		table.insert(d.Storage, petId)
+	end)
+	return true, Config.Pets[petId].Name .. " went to your inventory"
+end
+
+-- Puts the highest-earning pets on the base and the rest in the inventory.
+function actions.EquipBest(player: Player, data)
+	local all = table.clone(data.Pets)
+	table.move(data.Storage, 1, #data.Storage, #all + 1, all)
+	table.sort(all, function(a, b)
+		return Config.Pets[a].MoneyPerSecond > Config.Pets[b].MoneyPerSecond
+	end)
+	local slots = Config.PetSlotsFor(data.BaseLevel)
+	local best = { table.unpack(all, 1, math.min(slots, #all)) }
+	local rest = { table.unpack(all, slots + 1, #all) }
+	DataService.Update(player, function(d)
+		d.Pets = best
+		d.Storage = rest
+	end)
+	return true, "Equipped your best pets!"
+end
+
+-- Fills every free incubator with the rarest eggs in the bag.
+function actions.HatchBest(player: Player, data)
+	local free = Config.IncubatorsFor(data.BaseLevel) - #data.Incubators
+	if free <= 0 then
+		return false, "All your incubators are busy"
+	end
+	if #data.Eggs == 0 then
+		return false, "No eggs to hatch. Go steal some!"
+	end
+	local order = {}
+	for index, entry in data.Eggs do
+		local egg = Config.Eggs[(Config.ParseEgg(entry))]
+		if egg then
+			table.insert(order, { Index = index, Rank = Config.Rarities[egg.Rarity].Order })
+		end
+	end
+	table.sort(order, function(a, b)
+		return a.Rank > b.Rank
+	end)
+	local picked = {}
+	for n = 1, math.min(free, #order) do
+		table.insert(picked, order[n].Index)
+	end
+	table.sort(picked, function(a, b)
+		return a > b -- remove from the back so the other indexes stay valid
+	end)
+	local now = os.time()
+	DataService.Update(player, function(d)
+		for _, index in picked do
+			local eggId, petId = Config.ParseEgg(table.remove(d.Eggs, index))
+			table.insert(d.Incubators, { Egg = eggId, Pet = petId, EndsAt = now + Config.Eggs[eggId].HatchSeconds })
+		end
+	end)
+	return true, string.format("%d egg%s incubating on your base", #picked, if #picked == 1 then " is" else "s are")
 end
 
 function actions.Rebirth(player: Player, data)

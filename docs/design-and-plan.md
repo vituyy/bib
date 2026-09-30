@@ -119,6 +119,10 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 20 pets across 7 rarities. Up to 10 pets live on your base and earn Money every second. A pet can be sold for 30 seconds of its income.
 
+**Equipped and inventory (added 30 September 2026):** pets on your base are *equipped* (10 slots, +2 per base upgrade). Extra pets go to an inventory of up to 60. The Pets menu has **Equip Best**, which puts your highest-earning pets on the base. When the base is full, hatched pets go straight to the inventory.
+
+**Friend boost (added 30 September 2026):** +10% pet Money for every friend playing in the same server, shown in the bottom-left corner.
+
 | Pet | Rarity | Money/s | Egg design hint |
 |---|---|---|---|
 | Bat | Common | 1 | Dark grey egg with two folded wing flaps |

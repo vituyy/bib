@@ -19,7 +19,8 @@ Config.StartingData = {
 	EquippedCostume = "None",
 	Eggs = {}, -- "EggId|PetId" entries waiting to be hatched (the pet is decided when the egg spawns)
 	Incubators = {}, -- { { Egg = eggId, Pet = petId, EndsAt = unix time } }
-	Pets = {}, -- pet ids placed on the base
+	Pets = {}, -- pet ids equipped: placed on the base, earning Money
+	Storage = {}, -- pet ids owned but not equipped (the Pets menu inventory)
 	BaseLevel = 0, -- base upgrades bought (0 to #Config.BaseUpgrades)
 	Discovered = {}, -- pet ids hatched at least once (the Index)
 	IndexClaimed = {}, -- Index milestone counts already claimed (5, 10, 15, 20)
@@ -287,6 +288,8 @@ Config.CaughtStunTime = 1.5 -- seconds the thief is slowed after being caught
 Config.MaxEggsHeld = 12 -- unhatched egg inventory cap
 Config.IncubatorSlots = 3 -- eggs hatching at the same time on a new base
 Config.MaxPetsOnBase = 10 -- pet slots on a new base
+Config.MaxPetsStored = 60 -- inventory cap for pets that are not equipped
+Config.FriendBoostPercent = 10 -- extra pet Money for every friend playing in the same server
 
 ---------------------------------------------------------------------------
 -- Base upgrades: bought with Money at the UPGRADE BASE sign. Each one makes the base
