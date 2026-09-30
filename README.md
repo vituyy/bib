@@ -21,22 +21,18 @@ How `src/` maps to Studio:
 
 File names follow the Rojo rules: `Name.server.luau` is a Script, `Name.client.luau` is a LocalScript, and `Name.luau` is a ModuleScript.
 
-## Working with Rojo (recommended)
+## How to play the latest version
 
-[Rojo](https://rojo.space/docs) keeps the scripts in `src/` in sync with Studio while you work.
+1. Download `place/SpookyStealV3.2.rbxl` from this repo (open the file on GitHub and click the download button).
+2. Double-click it to open it in Roblox Studio, then press **Play**.
 
-1. Install Rojo (for example with [Aftman](https://github.com/LPGhatguy/aftman) or [Rokit](https://github.com/rojo-rbx/rokit)) and the Rojo plugin for Studio.
-2. Open `place/SpookyStealV3.2.rbxl` in Studio.
-3. In a terminal inside this repo, run `rojo serve`.
-4. In Studio, open the Rojo plugin and click **Connect**.
+Every code change is copied into the place file for you (`tools/sync_place.py`), so the download always has the latest scripts.
 
-After that, edits to files in `src/` show up in Studio right away. Rojo only manages the three folders in the table above; the map and models still live in the place file.
+If you change the map or models in Studio, save the place and upload the new file to Claude, so the repo stays up to date.
 
-**Rule of thumb:** change scripts in `src/`, not in Studio (Rojo overwrites Studio edits to those scripts). Change the map and models in Studio, then save the place file over `place/SpookyStealV3.2.rbxl` and commit it.
+## Working with Rojo (optional)
 
-## Without Rojo
-
-You can also edit everything in Studio as usual. Before committing, save the place over `place/SpookyStealV3.2.rbxl` and ask Claude to re-extract the scripts into `src/` so the two stay in step.
+[Rojo](https://rojo.space/docs) can sync `src/` into Studio live instead: run `rojo serve` in this folder and click **Connect** in the Rojo Studio plugin.
 
 ## Not synced by Rojo
 
