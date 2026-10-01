@@ -12,6 +12,15 @@ local ShopService = {}
 
 local lastRequest: { [Player]: number } = {}
 
+-- Redeemable codes (typed in the Store menu). Each player can use a code once. Codes are not case sensitive.
+-- Keep them here, not in Config: Config is sent to every player, this script is not.
+-- Rewards: Money and/or Candy.
+local CODES: { [string]: { Money: number?, Candy: number? } } = {
+	DEV01 = { Money = 100000 },
+	DEV02 = { Candy = 10000 },
+}
+local wrongCodes: { [Player]: { Count: number, ResetAt: number } } = {}
+
 local function fmt(n: number): string
 	local s = tostring(math.floor(n))
 	return (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
@@ -87,6 +96,46 @@ function actions.BuyCostume(player: Player, data, costumeId: any)
 		d.EquippedCostume = costumeId
 	end)
 	return true, "Bought and equipped " .. costume.Name .. "!"
+end
+
+function actions.RedeemCode(player: Player, data, code: any)
+	if type(code) ~= "string" or #code > 40 then
+		return false, "Type a code first"
+	end
+	local key = string.upper((string.gsub(code, "%s", "")))
+	if key == "" then
+		return false, "Type a code first"
+	end
+	local now = os.clock()
+	local tries = wrongCodes[player]
+	if tries and now < tries.ResetAt and tries.Count >= 5 then
+		return false, "Too many wrong codes. Wait a minute and try again."
+	end
+	local reward = CODES[key]
+	if not reward then
+		if not tries or now >= tries.ResetAt then
+			tries = { Count = 0, ResetAt = now + 60 }
+			wrongCodes[player] = tries
+		end
+		tries.Count += 1
+		return false, "That code does not exist"
+	end
+	if table.find(data.RedeemedCodes, key) then
+		return false, "You already used this code"
+	end
+	DataService.Update(player, function(d)
+		table.insert(d.RedeemedCodes, key)
+		d.Money += reward.Money or 0
+		d.Candy += reward.Candy or 0
+	end)
+	local parts = {}
+	if reward.Money then
+		table.insert(parts, "$" .. fmt(reward.Money))
+	end
+	if reward.Candy then
+		table.insert(parts, fmt(reward.Candy) .. " Candy")
+	end
+	return true, "Code accepted! You got " .. table.concat(parts, " and ") .. "!"
 end
 
 -- Put an egg from the bag into a free incubator. Hatching is free; rarer eggs take longer.
@@ -304,6 +353,11 @@ local function wireCostumeShop(map: Instance)
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
 			prompt.Parent = pedestal
 			prompt.Triggered:Connect(function(player)
+				-- Prompts can be fired from anywhere with cheats, so check the player really is at the mannequin.
+				local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if not (root and (root.Position - pedestal.Position).Magnitude <= prompt.MaxActivationDistance + 14) then
+					return
+				end
 				local ok, message = runAction(player, "BuyCostume", costume.Id)
 				Remotes.Notify:FireClient(player, message, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
 			end)
@@ -332,6 +386,7 @@ function ShopService.Start(map: Instance)
 	wireMenuCounters(map)
 	Players.PlayerRemoving:Connect(function(player)
 		lastRequest[player] = nil
+		wrongCodes[player] = nil
 	end)
 end
 

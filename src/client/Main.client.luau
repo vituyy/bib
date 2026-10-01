@@ -621,7 +621,7 @@ end
 
 local petAssets = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Pets")
 local function petModel(petId: string): Model?
-	local template = petAssets:FindFirstChild(petId)
+	local template = petAssets:FindFirstChild((Config.SplitPet(petId))) -- Big or Golden pets use the plain pet's model
 	return if template then template:Clone() else nil
 end
 
@@ -904,9 +904,31 @@ local STORE_ITEMS = {
 	{ Name = "$100K Money Pack", Kind = "Product" },
 }
 function menus.Store(_d)
-	header(0, "Coming soon!")
+	-- Codes: type one and press Redeem (the server checks it and gives the reward once per player).
+	header(0, "Codes")
+	local codeRow = box({ Size = UDim2.new(1, -8, 0, 60), LayoutOrder = 1, Parent = list }, PAINT.Cyan)
+	local codeInput = new("TextBox", {
+		Size = UDim2.new(1, -168, 1, -16),
+		Position = UDim2.fromOffset(12, 8),
+		BackgroundColor3 = Color3.fromRGB(25, 15, 45),
+		TextColor3 = WHITE,
+		PlaceholderText = "Type a code...",
+		PlaceholderColor3 = Color3.fromRGB(160, 160, 195),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		ClearTextOnFocus = false,
+		Text = "",
+		ZIndex = 2,
+		Parent = codeRow,
+	}, { corner(10), new("UITextSizeConstraint", { MaxTextSize = 26 }), new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }) })
+	chunkyButton({ Size = UDim2.new(0, 132, 1, -12), Position = UDim2.new(1, -138, 0, 6), Text = "Redeem", ZIndex = 2, Parent = codeRow }, PAINT.Green, function()
+		local code = codeInput.Text
+		codeInput.Text = ""
+		request("RedeemCode", code)
+	end)
+	header(2, "Coming soon!")
 	for n, item in STORE_ITEMS do
-		row(n, string.format("%s (%s)", item.Name, item.Kind), WHITE, "R$ ??", PAINT.Grey, function()
+		row(n + 2, string.format("%s (%s)", item.Name, item.Kind), WHITE, "R$ ??", PAINT.Grey, function()
 			toast("The Store opens soon!", ORANGE)
 		end)
 	end

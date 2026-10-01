@@ -72,8 +72,8 @@ Only the Mummy's desert theme came from Viktor; the rest are suggestions to chan
 
 | # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs |
 |---|---|---|---|---|---|---|
-| 1 | Friendly Mummy | 16 | 5 | None | 1 | 4 |
-| 2 | Old Witch | 18 | 10 | None | 1 | 4 |
+| 1 | Friendly Mummy | 14 | 5 | None | 1 | 4 |
+| 2 | Old Witch | 17 | 10 | None | 1 | 4 |
 | 3 | Scarecrow | 21 | 20 | Bedsheet Ghost | 1 | 5 |
 | 4 | Zombie Chef | 25 | 40 | Pumpkin Head | 2 | 5 |
 | 5 | Gravedigger | 30 | 80 | Witch | 1 | 5 |
@@ -82,7 +82,7 @@ Only the Mummy's desert theme came from Viktor; the rest are suggestions to chan
 | 8 | Headless Horseman | 58 | 650 | Werewolf | 2 | 6 |
 | 9 | Lich King | 72 | 1,300 | Grim Reaper | 2 | 6 |
 
-Owner speed grows roughly exponentially so the last houses need a well-trained runner. House 1 matches a brand-new player (16).
+Owner speed grows roughly exponentially so the last houses need a well-trained runner. House 1 is slower than a brand-new player (14 vs 16), so a first-timer can always get away from it.
 
 ### 2.4 Trick-or-Treat
 
@@ -91,7 +91,7 @@ Walk up to a front door and knock to get Candy (20 s cooldown per house). If you
 ### 2.5 Stealing eggs
 
 - Climb in through a window, pick an egg by its look and hold the prompt for 1 s.
-- The owner bursts out and chases the closest thief. Bigger, rarer eggs slow you down (95% down to 82% of your speed).
+- The owner needs a moment to notice you (a red "!" over their head): 0.8 s plus 0.2 s per egg rarity step, so a Common egg gives a 1 s head start and a Secret egg 2.2 s. They can't catch you during that time. Then the owner starts the chase from wherever they stand, even inside the house. They follow a planned path through rooms, doors, windows and stairs while a wall is in the way, pass through props outside so they never get stuck, and walk back to their spot afterwards. The closest thief is chased. Bigger, rarer eggs slow you down (95% down to 82% of your speed).
 - Get past the Level 1 line and walk the egg to your base to keep it. If the owner touches you, they take the egg back and you are stunned for 1.5 s. Owners also give up after 30 s or when you are 150 studs ahead.
 
 ### 2.6 Day and night
@@ -143,6 +143,29 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 | Headless Horseman | Secret | 8,000 | Black egg with ears and red flame cracks |
 | Pumpkin King | Secret | 15,000 | Orange-gold egg with a crown and a glowing carved face |
 
+**Egg variants (added 1 October 2026):** every egg rolls two separate things, and one result never changes the other, so an egg can have both, one or neither (a Big Diamond egg, a Gigantic egg, a Rainbow egg...). The egg and the pet it hatches look the part: bigger for a size, glowing and sparkling for a material.
+
+| Size | Chance | Egg size | Pet size | Money/s |
+|---|---|---|---|---|
+| Normal | 75.5% | 0.7x | 1x | x1 |
+| Big | 20% | 1.56x | 1.6x | x3 |
+| Huge | 4% | 1.89x | 2.1x | x8 |
+| Gigantic | 0.5% | 2.34x | 2.8x | x30 |
+
+| Material | Chance | Look | Money/s |
+|---|---|---|---|
+| Golden | 15% | gold glow | x3 |
+| Diamond | 5% | ice-blue glow | x8 |
+| Rainbow | 1% | glow cycling through every colour | x25 |
+
+Multipliers stack: a Gigantic Rainbow pet earns x750 (a Gigantic Rainbow Pumpkin King would earn $11.25M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big+Golden" and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
+
+Because variants raise the average pet income by about 3.4x, every Money price (costumes, trails, base upgrades, Index rewards) was multiplied by 3 so the pacing in 2.11 stays the same for an average-luck player. Lucky players are faster, unlucky ones a little slower.
+
+A thief carries the egg in front of their chest, like holding it in both hands.
+
+When the owner catches you (or you die while carrying), the egg goes back to the nest it was taken from, with the same pet, size and material, so another player can steal it.
+
 **Wandering pets:** pets walk slowly around inside your base, stop now and then to idle, and never leave the base. Money pops up above each pet as it earns. Pets don't block players.
 
 **Equipped and inventory:** your base has 10 pet slots, +2 per base upgrade (up to 18). Up to 60 more pets wait in the inventory. When the base is full, a hatched pet goes straight to the inventory. The Pets menu shows equipped pets on top and the inventory below, stacked by kind (x2, x3) with a search box. Tap a pet to equip, unequip or sell it; **Equip Best** puts your highest-earning pets on the base.
@@ -157,7 +180,7 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 - **Treadmills (Candy):** 7 tiers, Rusty to Cursed (0 to 150,000 Candy). A new one spawns in front of your base and replaces the old one. Step on and your character runs by itself, earning Speed XP (1 to 64 XP/s by tier). Jump to get off.
 - **Trails (Money):** sold in the new Trails tab of the Speed Shop. A trail multiplies the XP your treadmill gives: a 30 XP/s treadmill with a 1.5x trail gives 45 XP/s. You keep every trail you buy and equip one at a time, and it shows as a visible trail behind your character.
-- **Speed Levels:** each level makes you about 1.85% faster, up to level 100. Level 0 = 16, level 20 = 23, level 45 = 37, level 70 = 58, level 100 = 100.
+- **Speed Levels:** each level makes you 1.85% faster. Level 0 = 16, level 50 ≈ 40, level 100 (max) ≈ 100. Each level costs 12% more XP than the last up to level 70 (6 XP for level 1, about 15,000 for level 70), then 5% more (about 65,000 for level 100). With a fitting treadmill, rebirth and trail a level takes roughly 10 to 40 seconds.
 - **Rebirth:** opens at Speed Level 10, then 20, 30, 40, 55, 70, 85 and 100 (8 rebirths). It resets your Speed Level and XP and raises your XP multiplier: x2 after the first rebirth, x3 after the second, up to x9. Pets, eggs, Money, Candy, treadmills, trails and costumes are kept.
 - **Total training speed:** treadmill XP/s × trail × rebirth multiplier.
 
@@ -165,13 +188,13 @@ Suggested trail ladder (the build in Studio may tune these):
 
 | Trail | XP boost | Price (Money) |
 |---|---|---|
-| Candle Smoke | 1.25x | 500 |
-| Bat Swarm | 1.5x | 5,000 |
-| Candy Sparkle | 2x | 40,000 |
-| Ghost Wisp | 2.5x | 250,000 |
-| Pumpkin Fire | 3x | 1,500,000 |
-| Blood Moon | 4x | 8,000,000 |
-| Nightmare Shadow | 5x | 40,000,000 |
+| Candle Smoke | 1.25x | 1,800 |
+| Bat Swarm | 1.5x | 18,000 |
+| Candy Sparkle | 2x | 135,000 |
+| Ghost Wisp | 2.5x | 1,050,000 |
+| Pumpkin Fire | 3x | 6,600,000 |
+| Blood Moon | 4x | 42,000,000 |
+| Nightmare Shadow | 5x | 225,000,000 |
 
 ### 2.10 Costumes
 
@@ -179,18 +202,32 @@ Money buys costumes from mannequins in the Costume Shop. They visibly dress your
 
 | Tier | Costume | Price (Money) | Candy bonus |
 |---|---|---|---|
-| 1 | Bedsheet Ghost | 50 | +10% |
-| 2 | Pumpkin Head | 300 | +25% |
-| 3 | Witch | 1,500 | +50% |
-| 4 | Vampire | 7,500 | +75% |
-| 5 | Glowing Skeleton | 35,000 | +100% |
-| 6 | Werewolf | 150,000 | +150% |
-| 7 | Grim Reaper | 600,000 | +200% |
-| 8 | Mummy | 2,500,000 | +300% |
-| 9 | Frankenstein | 10,000,000 | +400% |
-| 10 | Red Devil | 40,000,000 | +500% |
+| 1 | Bedsheet Ghost | 150 | +10% |
+| 2 | Pumpkin Head | 900 | +25% |
+| 3 | Witch | 5,400 | +50% |
+| 4 | Vampire | 30,000 | +75% |
+| 5 | Glowing Skeleton | 165,000 | +100% |
+| 6 | Werewolf | 900,000 | +150% |
+| 7 | Grim Reaper | 4,800,000 | +200% |
+| 8 | Mummy | 21,000,000 | +300% |
+| 9 | Frankenstein | 105,000,000 | +400% |
+| 10 | Red Devil | 450,000,000 | +500% |
 
-### 2.11 Interface
+### 2.11 Pacing targets (set 1 October 2026)
+
+These come from a simulation of an active player (about 40% of the time on the treadmill, 25% knocking, 35% stealing), so a normal player takes roughly 1.5 to 2 times as long. The aim: a purchase every few minutes in the first hour, no wait longer than about 30 to 45 minutes before the very end, and everything finished in about 8 to 10 hours of real play.
+
+| Milestone | Active player |
+|---|---|
+| First costume, steal from house 2 | 2 to 3 min |
+| Steal from house 4 | 16 min |
+| Steal from house 6 | 45 min |
+| Steal from house 9 | about 2 h |
+| All 10 costumes, 7 trails, 4 base upgrades | about 4 to 5 h |
+
+Money sinks and gates: costumes (also gate the candy per door), trails (XP multiplier), base upgrades (pet and incubator slots) and Index rewards. Candy only buys treadmills, so it has nothing to buy after the Cursed Treadmill (see 5.1).
+
+### 2.12 Interface
 
 - **Style:** chunky cartoon simulator UI. White studded panels with a thick black outline, the menu icon and name sticking out over the top-left corner, a big red X, cyan boxes, glossy gradient buttons and white text with a black outline. Menus pop open in the centre of the screen and buttons bounce.
 - **HUD:** Money and Candy on the right side in big gold and pink numbers with coin and candy icons; night/day timer at the top; "RUN!" banner during a chase; Speed Level bar at the bottom (orange to yellow) with walk speed, rebirth multiplier and a + button to the Speed Shop; friend boost bottom left; menu buttons (Rebirth, Index, Pets, Eggs, Store) on the left.
@@ -225,6 +262,14 @@ The main copy is the **SpookyStealV3.2** place, kept in the GitHub repo vituyy/b
 - One egg design per pet, rarity signs removed.
 - Wandering pets.
 - 10-second day.
+
+**Safety (added 1 October 2026)**
+
+- **Save lock:** a player's save is stamped with the server that has it open, so two servers can't both load it (no duplicating items by rejoining quickly). A crashed server blocks a player for at most 4 minutes. A loaded save is repaired (NaN or negative numbers, unknown pets, eggs or costumes are fixed or removed) so one bad value can't break the game.
+- **Codes:** the Store menu has a Codes box. Each code can be used once per player and is not case sensitive. They live in `CODES` at the top of `ShopService.luau` (server only, so players can't read them). Current codes: DEV01 gives $100,000 and DEV02 gives 10,000 Candy. Five wrong codes in a minute lock the box for a minute.
+- **Prompt range checks:** doors, eggs, mannequins and the upgrade sign check that the player is really standing next to them, because cheats can fire prompts from anywhere.
+- **Movement check:** if a player keeps moving much faster than the speed the server gave them for 2 seconds, they are put back where they were last fine.
+- Every purchase and menu action already goes through one server function that re-checks costs, ownership and rate.
 
 ## 4. Execution plan
 
@@ -266,7 +311,7 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 - ○ Animations: owner run and grab, pet walk and idle, hatch reveal, costume change
 - ○ Sounds and music: night ambience, door knock, alarm when an owner spots you, chase music, hatch fanfare
 - ○ Feedback: "RUN!" banner, screen shake on catch, Candy and Money flying to the HUD
-- ○ Owner pathfinding through doors and stairs
+- ✓ Owner pathfinding through rooms, doors, windows and stairs (untested in Studio)
 - ◐ UI polish and a mobile-friendly layout (new UI done, phone layout still to test)
 
 ### Phase 5: Balance
@@ -298,7 +343,7 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 **2. Rebirth vs. speed.** Rebirth resets Speed Level to 0, so a player who rebirths becomes too slow for the houses they were stealing from. The XP multiplier (x2, x3, ...) and trails help them climb back faster but don't fix it. Decide what rebirth keeps (e.g. a speed floor, or reset only XP) and what else it gives.
 
-3. **New-player escape.** House 1's owner runs at 16, the same as a new player, and even the smallest egg slows you to 95%. On paper a new player can never outrun them and relies on the 30 s give-up or the 150-stud rule. Decide whether the first house should be slower or the thief gets a head start.
+3. **New-player escape.** *(Done 1 October 2026: house 1's owner runs at 14 and house 2's at 17.)* A new player carrying the smallest egg runs at about 15, so house 1 can always be escaped. Check in Studio that the owner starting inside the house still feels fair.
 
 **4. Endgame.** Outrunning the Lich King (72) while carrying a Secret egg needs about Speed Level 93 (max is 100). Decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
 
