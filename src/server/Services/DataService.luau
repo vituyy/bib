@@ -146,6 +146,9 @@ local function sanitize(data: { [string]: any })
 	data.IndexClaimed = cleanList(data.IndexClaimed, function(n)
 		return if isNumber(n) then n else nil
 	end)
+	data.RedeemedCodes = cleanList(data.RedeemedCodes, function(code)
+		return if type(code) == "string" then code else nil
+	end)
 end
 
 local function lockedByOther(record: any): boolean

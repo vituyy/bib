@@ -233,6 +233,7 @@ The main copy is the **SpookyStealV3.2** place in Roblox Studio (a copy lives in
 **Safety (added 1 October 2026)**
 
 - **Save lock:** a player's save is stamped with the server that has it open, so two servers can't both load it (no duplicating items by rejoining quickly). A crashed server blocks a player for at most 4 minutes. A loaded save is repaired (NaN or negative numbers, unknown pets, eggs or costumes are fixed or removed) so one bad value can't break the game.
+- **Codes:** the Store menu has a Codes box. Each code can be used once per player and is not case sensitive. They live in `CODES` at the top of `ShopService.luau` (server only, so players can't read them). Current codes: DEV01 gives $100,000 and DEV02 gives 10,000 Candy. Five wrong codes in a minute lock the box for a minute.
 - **Prompt range checks:** doors, eggs, mannequins and the upgrade sign check that the player is really standing next to them, because cheats can fire prompts from anywhere.
 - **Movement check:** if a player keeps moving much faster than the speed the server gave them for 2 seconds, they are put back where they were last fine.
 - Every purchase and menu action already goes through one server function that re-checks costs, ownership and rate.

@@ -24,6 +24,7 @@ Config.StartingData = {
 	BaseLevel = 0, -- base upgrades bought (0 to #Config.BaseUpgrades)
 	Discovered = {}, -- pet ids hatched at least once (the Index)
 	IndexClaimed = {}, -- Index milestone counts already claimed (5, 10, 15, 20)
+	RedeemedCodes = {}, -- codes this player has already used (see CODES in ShopService)
 }
 
 ---------------------------------------------------------------------------
