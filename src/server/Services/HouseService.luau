@@ -62,6 +62,7 @@ type HouseState = {
 
 type Carry = {
 	House: HouseState,
+	SpotIndex: number, -- where the egg was picked up, so it can go back there
 	EggId: string,
 	PetId: string?,
 	Started: number,
@@ -252,6 +253,34 @@ local function clearEggs(state: HouseState)
 	end
 end
 
+-- Puts an egg (with the pet inside it, which can be a Big / Golden / ... variant) on a spot, ready to be stolen.
+local function placeEgg(state: HouseState, spotIndex: number, eggId: string, petId: string)
+	local spot = state.Spots[spotIndex]
+	local eggModel = Art.Egg(eggId, petId, true)
+	eggModel.Name = "Egg"
+	eggModel:PivotTo(spot.CFrame + Vector3.new(0, spot.Size.Y / 2, 0))
+
+	-- No name or rarity sign: players judge the egg by its look.
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Steal"
+	prompt.ObjectText = "Egg"
+	prompt.HoldDuration = Config.StealHoldDuration
+	prompt.MaxActivationDistance = 9
+	prompt.RequiresLineOfSight = false
+	prompt.KeyboardKeyCode = Enum.KeyCode.F
+	prompt.Parent = eggModel.PrimaryPart
+	prompt.Triggered:Connect(function(player)
+		if isNear(player, prompt) then
+			onStealTriggered(state, spotIndex, player)
+		end
+	end)
+
+	eggModel:SetAttribute("EggId", eggId)
+	eggModel:SetAttribute("PetId", petId)
+	eggModel.Parent = state.House
+	state.Eggs[spotIndex] = eggModel
+end
+
 local function spawnEggs(state: HouseState)
 	clearEggs(state)
 	-- Roll one egg per spot, then put the rarest eggs on the hardest-to-reach spots.
@@ -263,37 +292,13 @@ local function spawnEggs(state: HouseState)
 		return rarityOrder(a) < rarityOrder(b)
 	end)
 
-	for spotIndex, spot in state.Spots do
+	for spotIndex = 1, #state.Spots do
 		local eggId = rolled[spotIndex]
-		-- The pet is decided now, so the egg can look like what is inside it.
-		local petId = PlotService.RollPet(eggId)
-		local mutation = Config.RollMutation() -- a small chance of a Golden or Diamond (glowing) egg
-		if mutation then
-			petId ..= "+" .. mutation
-		end
-		local eggModel = Art.Egg(eggId, petId, true)
-		eggModel.Name = "Egg"
-		eggModel:PivotTo(spot.CFrame + Vector3.new(0, spot.Size.Y / 2, 0))
-
-		-- No name or rarity sign: players judge the egg by its look.
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = "Steal"
-		prompt.ObjectText = "Egg"
-		prompt.HoldDuration = Config.StealHoldDuration
-		prompt.MaxActivationDistance = 9
-		prompt.RequiresLineOfSight = false
-		prompt.KeyboardKeyCode = Enum.KeyCode.F
-		prompt.Parent = eggModel.PrimaryPart
-		prompt.Triggered:Connect(function(player)
-			if isNear(player, prompt) then
-				onStealTriggered(state, spotIndex, player)
-			end
-		end)
-
-		eggModel:SetAttribute("EggId", eggId)
-		eggModel:SetAttribute("PetId", petId)
-		eggModel.Parent = state.House
-		state.Eggs[spotIndex] = eggModel
+		-- The pet is decided now, so the egg can look like what is inside it. Size and material are two
+		-- separate rolls, so an egg can get both, one or neither.
+		local size, material = Config.RollVariant()
+		local petId = Config.MakePetId(PlotService.RollPet(eggId), size, material)
+		placeEgg(state, spotIndex, eggId, petId)
 	end
 end
 
@@ -305,7 +310,7 @@ local function attachCarriedEgg(player: Player, eggId: string, petId: string?)
 	if not root then
 		return
 	end
-	local eggModel = Art.Egg(eggId, petId, false, true)
+	local eggModel = Art.Egg(eggId, petId, false, true, 1.4) -- a Gigantic egg is not drawn bigger than this on your back
 	eggModel.Name = "CarriedEgg"
 	eggModel:PivotTo(root.CFrame * CFrame.new(0, 3, 0))
 	for _, d in eggModel:GetDescendants() do
@@ -340,16 +345,23 @@ local function finishTheft(player: Player, outcome: string)
 	clearCarry(player)
 	local state = carry.House
 	local egg = Config.Eggs[carry.EggId]
+	-- The egg's full name, with its size and material when it has them ("Big Golden Candy Egg").
+	local _, sizeName, materialName = Config.SplitPet(carry.PetId or "")
+	local eggName = (if sizeName then sizeName .. " " else "") .. (if materialName then materialName .. " " else "") .. egg.Name
+
+	-- A caught thief (or one who died or left) loses the egg, and it goes back to the nest it came from so
+	-- someone else can steal it. At sunrise every egg respawns anyway.
+	if (outcome == "caught" or outcome == "lost") and DayNightService.IsNight() and carry.PetId and not state.Eggs[carry.SpotIndex] and state.Spots[carry.SpotIndex] then
+		placeEgg(state, carry.SpotIndex, carry.EggId, carry.PetId)
+	end
 
 	if outcome == "escaped" then
 		DataService.Update(player, function(data)
 			table.insert(data.Eggs, Config.MakeEggEntry(carry.EggId, carry.PetId))
 		end)
-		local _, mutation = Config.SplitPet(carry.PetId or "")
-		local eggName = if mutation then mutation .. " " .. egg.Name else egg.Name
 		notify(player, "You escaped with a " .. eggName .. "! Put it in an incubator from the Eggs menu.", GREEN)
 	elseif outcome == "caught" then
-		notify(player, state.OwnerName .. " caught you and took the " .. egg.Name .. " back!", RED)
+		notify(player, state.OwnerName .. " caught you and put the " .. eggName .. " back in its nest!", RED)
 		CharacterService.Stun(player, Config.CaughtStunTime)
 	elseif outcome == "sunrise" then
 		notify(player, "The sun came up and your " .. egg.Name .. " crumbled to dust!", ORANGE)
@@ -501,7 +513,7 @@ local function alertMarker(owner: Model, scale: number, duration: number)
 	Debris:AddItem(gui, duration + 0.2)
 end
 
-local function startChase(state: HouseState, player: Player, eggId: string, petId: string?)
+local function startChase(state: HouseState, player: Player, eggId: string, petId: string?, spotIndex: number)
 	local alreadyChasing = false
 	for _, other in carrying do
 		if other.House == state and other.Chased then
@@ -510,6 +522,7 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 	end
 	carrying[player] = {
 		House = state,
+		SpotIndex = spotIndex,
 		EggId = eggId,
 		PetId = petId,
 		Started = os.clock(),
@@ -658,7 +671,7 @@ onStealTriggered = function(state: HouseState, spotIndex: number, player: Player
 	local petId = eggModel:GetAttribute("PetId")
 	eggModel:Destroy()
 	state.Eggs[spotIndex] = nil
-	startChase(state, player, eggId, petId)
+	startChase(state, player, eggId, petId, spotIndex)
 end
 
 ---------------------------------------------------------------------------

@@ -67,10 +67,65 @@ end
 -- Builds an egg whose look hints at the pet inside (Assets.Eggs.<PetId>, falling back to a plain studded egg
 -- in the egg type's colour), optionally sitting in a wooden plank nest. The model's pivot is its bottom centre,
 -- so model:PivotTo(groundCFrame) stands it on the ground. Parts are anchored unless `unanchored` is set.
-function Art.Egg(eggId: string, petId: string?, withNest: boolean?, unanchored: boolean?): Model
+-- Gives an egg or pet model the look of a material (Golden, Diamond, Rainbow): a coloured glow, a light and
+-- sparkles. Rainbow slowly cycles through every colour. Does nothing when `materialName` is nil.
+function Art.MaterialLook(model: Model, root: BasePart, materialName: string?)
+	local Config = require(ReplicatedStorage.Shared.Config)
+	local material = materialName and Config.Materials[materialName]
+	if not material then
+		return
+	end
+	local glow = Instance.new("Highlight")
+	glow.Name = "MaterialGlow"
+	glow.FillColor = material.Color
+	glow.FillTransparency = 0.6
+	glow.OutlineColor = material.Color
+	glow.OutlineTransparency = 0
+	glow.DepthMode = Enum.HighlightDepthMode.Occluded
+	glow.Parent = model
+
+	local light = Instance.new("PointLight")
+	light.Color = material.Color
+	light.Range = 12
+	light.Brightness = 2
+	light.Parent = root
+
+	local sparkles = Instance.new("ParticleEmitter")
+	sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	sparkles.Color = ColorSequence.new(material.Color)
+	sparkles.LightEmission = 1
+	sparkles.Lifetime = NumberRange.new(0.8, 1.4)
+	sparkles.Speed = NumberRange.new(1, 3)
+	sparkles.SpreadAngle = Vector2.new(180, 180)
+	sparkles.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0) })
+	sparkles.Rate = if materialName == "Rainbow" then 14 elseif materialName == "Diamond" then 9 else 6
+	sparkles.Parent = root
+
+	if materialName == "Rainbow" then
+		task.spawn(function()
+			task.wait(0.3) -- give the model time to be placed in the world
+			local hue = math.random()
+			while glow:IsDescendantOf(game) do
+				hue = (hue + 0.03) % 1
+				local color = Color3.fromHSV(hue, 0.75, 1)
+				glow.FillColor, glow.OutlineColor, light.Color = color, color, color
+				sparkles.Color = ColorSequence.new(color)
+				task.wait(0.1)
+			end
+		end)
+	end
+end
+
+-- Builds an egg whose look hints at the pet inside. `petId` may be a variant id ("Bat+Big+Golden"): the egg
+-- grows with its size and glows with its material. `scaleCap` limits how big a size can make it (used for the
+-- egg a thief carries).
+function Art.Egg(eggId: string, petId: string?, withNest: boolean?, unanchored: boolean?, scaleCap: number?): Model
 	local Config = require(ReplicatedStorage.Shared.Config)
 	local egg = Config.Eggs[eggId]
-	local height = (if egg then egg.Size else 2) * 1.8 -- sized for the scaled-up houses
+	local _, sizeName, materialName = Config.SplitPet(petId or "")
+	local sizeInfo = sizeName and Config.Sizes[sizeName]
+	local scale = if sizeInfo then math.min(sizeInfo.Scale, scaleCap or math.huge) else 1
+	local height = (if egg then egg.Size else 2) * 1.8 * scale -- sized for the scaled-up houses
 	local model = Instance.new("Model")
 	model.Name = "EggModel"
 
@@ -135,24 +190,7 @@ function Art.Egg(eggId: string, petId: string?, withNest: boolean?, unanchored: 
 		base.Parent = model
 	end
 
-	-- Mutated eggs (Golden, Diamond) glow in the mutation's colour.
-	local _, mutationName = Config.SplitPet(petId or "")
-	local mutation = mutationName and Config.Mutations[mutationName]
-	if mutation then
-		local glow = Instance.new("Highlight")
-		glow.Name = "MutationGlow"
-		glow.FillColor = mutation.Color
-		glow.FillTransparency = 0.6
-		glow.OutlineColor = mutation.Color
-		glow.OutlineTransparency = 0
-		glow.DepthMode = Enum.HighlightDepthMode.Occluded
-		glow.Parent = model
-		local light = Instance.new("PointLight")
-		light.Color = mutation.Color
-		light.Range = 12
-		light.Brightness = 2
-		light.Parent = root
-	end
+	Art.MaterialLook(model, root, materialName)
 
 	-- Pivot at the bottom centre (the root sits half an egg above the ground).
 	root.PivotOffset = CFrame.new(0, -height / 2, 0)

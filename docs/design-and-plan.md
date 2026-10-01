@@ -146,7 +146,25 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 | Headless Horseman | Secret | 8,000 | Black egg with ears and red flame cracks |
 | Pumpkin King | Secret | 15,000 | Orange-gold egg with a crown and a glowing carved face |
 
-**Mutations (added 1 October 2026):** every egg has a 3% chance to be **Golden** (earns x2) and a 0.5% chance to be **Diamond** (earns x4). Mutated eggs glow gold or light blue in the house, and the pet that hatches keeps the glow on your base. A mutated pet is stored as "Bat+Golden" and counts as its plain pet in the Index. Chances and multipliers are in `Config.Mutations`.
+**Egg variants (added 1 October 2026):** every egg rolls two separate things, and one result never changes the other, so an egg can have both, one or neither (a Big Diamond egg, a Gigantic egg, a Rainbow egg...). The egg and the pet it hatches look the part: bigger for a size, glowing and sparkling for a material.
+
+| Size | Chance | Pet size | Money/s |
+|---|---|---|---|
+| Big | 20% | 1.2x | x3 |
+| Huge | 4% | 1.45x | x8 |
+| Gigantic | 0.5% | 1.8x | x30 |
+
+| Material | Chance | Look | Money/s |
+|---|---|---|---|
+| Golden | 15% | gold glow | x3 |
+| Diamond | 5% | ice-blue glow | x8 |
+| Rainbow | 1% | glow cycling through every colour | x25 |
+
+Multipliers stack: a Gigantic Rainbow pet earns x750 (a Gigantic Rainbow Pumpkin King would earn $11.25M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big+Golden" and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
+
+Because variants raise the average pet income by about 3.4x, every Money price (costumes, trails, base upgrades, Index rewards) was multiplied by 3 so the pacing in 2.11 stays the same for an average-luck player. Lucky players are faster, unlucky ones a little slower.
+
+When the owner catches you (or you die while carrying), the egg goes back to the nest it was taken from, with the same pet, size and material, so another player can steal it.
 
 **Wandering pets:** pets walk slowly around inside your base, stop now and then to idle, and never leave the base. Money pops up above each pet as it earns. Pets don't block players.
 
@@ -162,13 +180,13 @@ Suggested trail ladder (the build in Studio may tune these):
 
 | Trail | XP boost | Price (Money) |
 |---|---|---|
-| Candle Smoke | 1.25x | 600 |
-| Bat Swarm | 1.5x | 6,000 |
-| Candy Sparkle | 2x | 45,000 |
-| Ghost Wisp | 2.5x | 350,000 |
-| Pumpkin Fire | 3x | 2,200,000 |
-| Blood Moon | 4x | 14,000,000 |
-| Nightmare Shadow | 5x | 75,000,000 |
+| Candle Smoke | 1.25x | 1,800 |
+| Bat Swarm | 1.5x | 18,000 |
+| Candy Sparkle | 2x | 135,000 |
+| Ghost Wisp | 2.5x | 1,050,000 |
+| Pumpkin Fire | 3x | 6,600,000 |
+| Blood Moon | 4x | 42,000,000 |
+| Nightmare Shadow | 5x | 225,000,000 |
 
 ### 2.10 Costumes
 
@@ -176,16 +194,16 @@ Money buys costumes from mannequins in the Costume Shop. They visibly dress your
 
 | Tier | Costume | Price (Money) |
 |---|---|---|
-| 1 | Bedsheet Ghost | 50 |
-| 2 | Pumpkin Head | 300 |
-| 3 | Witch | 1,800 |
-| 4 | Vampire | 10,000 |
-| 5 | Glowing Skeleton | 55,000 |
-| 6 | Werewolf | 300,000 |
-| 7 | Grim Reaper | 1,600,000 |
-| 8 | Mummy | 7,000,000 |
-| 9 | Frankenstein | 35,000,000 |
-| 10 | Red Devil | 150,000,000 |
+| 1 | Bedsheet Ghost | 150 |
+| 2 | Pumpkin Head | 900 |
+| 3 | Witch | 5,400 |
+| 4 | Vampire | 30,000 |
+| 5 | Glowing Skeleton | 165,000 |
+| 6 | Werewolf | 900,000 |
+| 7 | Grim Reaper | 4,800,000 |
+| 8 | Mummy | 21,000,000 |
+| 9 | Frankenstein | 105,000,000 |
+| 10 | Red Devil | 450,000,000 |
 
 ### 2.11 Pacing targets (set 1 October 2026)
 

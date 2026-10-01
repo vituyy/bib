@@ -94,13 +94,13 @@ Config.Treadmills = {
 -- A trail multiplies treadmill Speed XP (a 30 XP/s treadmill with a 1.5x trail gives 45 XP/s),
 -- stacks with the rebirth multiplier, and shows as a glowing trail behind you.
 Config.Trails = {
-	{ Name = "Candle Smoke", Price = 600, Multiplier = 1.25, Color = Color3.fromRGB(200, 190, 180) },
-	{ Name = "Bat Swarm", Price = 6000, Multiplier = 1.5, Color = Color3.fromRGB(120, 60, 200) },
-	{ Name = "Candy Sparkle", Price = 45000, Multiplier = 2, Color = Color3.fromRGB(255, 120, 200) },
-	{ Name = "Ghost Wisp", Price = 350000, Multiplier = 2.5, Color = Color3.fromRGB(200, 240, 255) },
-	{ Name = "Pumpkin Fire", Price = 2200000, Multiplier = 3, Color = Color3.fromRGB(255, 130, 20) },
-	{ Name = "Blood Moon", Price = 14000000, Multiplier = 4, Color = Color3.fromRGB(230, 30, 50) },
-	{ Name = "Nightmare Shadow", Price = 75000000, Multiplier = 5, Color = Color3.fromRGB(60, 0, 90) },
+	{ Name = "Candle Smoke", Price = 1800, Multiplier = 1.25, Color = Color3.fromRGB(200, 190, 180) },
+	{ Name = "Bat Swarm", Price = 18000, Multiplier = 1.5, Color = Color3.fromRGB(120, 60, 200) },
+	{ Name = "Candy Sparkle", Price = 135000, Multiplier = 2, Color = Color3.fromRGB(255, 120, 200) },
+	{ Name = "Ghost Wisp", Price = 1050000, Multiplier = 2.5, Color = Color3.fromRGB(200, 240, 255) },
+	{ Name = "Pumpkin Fire", Price = 6600000, Multiplier = 3, Color = Color3.fromRGB(255, 130, 20) },
+	{ Name = "Blood Moon", Price = 42000000, Multiplier = 4, Color = Color3.fromRGB(230, 30, 50) },
+	{ Name = "Nightmare Shadow", Price = 225000000, Multiplier = 5, Color = Color3.fromRGB(60, 0, 90) },
 }
 function Config.TrailMultiplier(trail: number?): number
 	local info = trail and Config.Trails[trail]
@@ -113,16 +113,16 @@ end
 ---------------------------------------------------------------------------
 Config.Costumes = {
 	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyBonus = 0, Color = Color3.fromRGB(200, 200, 200) },
-	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 50, CandyBonus = 10, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
-	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 300, CandyBonus = 25, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
-	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1800, CandyBonus = 50, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
-	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 10000, CandyBonus = 75, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
-	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 55000, CandyBonus = 100, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
-	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 300000, CandyBonus = 150, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
-	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 1600000, CandyBonus = 200, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
-	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 7000000, CandyBonus = 300, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
-	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 35000000, CandyBonus = 400, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
-	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 150000000, CandyBonus = 500, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
+	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 150, CandyBonus = 10, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
+	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 900, CandyBonus = 25, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
+	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 5400, CandyBonus = 50, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
+	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 30000, CandyBonus = 75, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
+	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 165000, CandyBonus = 100, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
+	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 900000, CandyBonus = 150, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
+	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 4800000, CandyBonus = 200, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
+	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 21000000, CandyBonus = 300, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
+	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 105000000, CandyBonus = 400, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
+	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 450000000, CandyBonus = 500, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
 }
 
 function Config.GetCostume(id: string)
@@ -198,57 +198,98 @@ Config.Pets = {
 }
 
 ---------------------------------------------------------------------------
--- Mutations: an egg can hatch a Golden or Diamond version of its pet that earns more. A mutated pet is stored
--- as "<PetId>+<Mutation>" (for example "Bat+Golden"). Config.Pets understands those ids too, so every script
--- that looks a pet up by id keeps working; use Config.SplitPet when you need the plain pet id (art, Index).
+-- Egg variants. Every egg rolls two separate things, and one result never changes the other, so an egg can
+-- have both (a Big Diamond egg), only one (a Gigantic egg, a Rainbow egg) or neither:
+--   Size:     Big, Huge or Gigantic. The egg and the pet grow.
+--   Material: Golden, Diamond or Rainbow. The egg and the pet glow.
+-- Chance is the share of all eggs that get that tier (the rest get none). Multipliers stack: a pet's Money per
+-- second = its normal income x Size multiplier x Material multiplier.
+-- A variant pet is stored as "<PetId>+<Size>+<Material>", for example "Bat+Big+Golden", "Bat+Huge" or
+-- "Bat+Rainbow". Config.Pets understands those ids too, so scripts that look a pet up by id need no changes;
+-- use Config.SplitPet when you need the plain pet id (art, Index).
 ---------------------------------------------------------------------------
-Config.Mutations = {
-	Golden = { Name = "Golden", Chance = 0.03, Multiplier = 2, Color = Color3.fromRGB(255, 205, 50) },
-	Diamond = { Name = "Diamond", Chance = 0.005, Multiplier = 4, Color = Color3.fromRGB(120, 230, 255) },
+Config.Sizes = {
+	Big = { Name = "Big", Chance = 0.20, Multiplier = 3, Scale = 1.2 },
+	Huge = { Name = "Huge", Chance = 0.04, Multiplier = 8, Scale = 1.45 },
+	Gigantic = { Name = "Gigantic", Chance = 0.005, Multiplier = 30, Scale = 1.8 },
 }
-local MUTATION_ORDER = { "Diamond", "Golden" } -- the rarer one is rolled first
+Config.Materials = {
+	Golden = { Name = "Golden", Chance = 0.15, Multiplier = 3, Color = Color3.fromRGB(255, 205, 50) },
+	Diamond = { Name = "Diamond", Chance = 0.05, Multiplier = 8, Color = Color3.fromRGB(120, 230, 255) },
+	Rainbow = { Name = "Rainbow", Chance = 0.01, Multiplier = 25, Color = Color3.fromRGB(255, 120, 200) }, -- cycles through every colour
+}
+local SIZE_ORDER = { "Gigantic", "Huge", "Big" } -- rarest first
+local MATERIAL_ORDER = { "Rainbow", "Diamond", "Golden" }
 
--- "Bat+Golden" -> "Bat", "Golden". A plain id gives (id, nil).
-function Config.SplitPet(id: string): (string, string?)
-	local base, mutation = string.match(id, "^([^+]+)%+(.+)$")
-	if base then
-		return base, mutation
-	end
-	return id, nil
-end
-
--- Returns a mutation name (or nil) for a freshly spawned egg.
-function Config.RollMutation(): string?
-	for _, name in MUTATION_ORDER do
-		if math.random() < Config.Mutations[name].Chance then
+local function rollTier(pool, order: { string }): string?
+	local roll = math.random()
+	for _, name in order do
+		roll -= pool[name].Chance
+		if roll < 0 then
 			return name
 		end
 	end
 	return nil
 end
 
-local mutatedPets = {}
+-- Rolls a freshly spawned egg's size and material: (size or nil, material or nil).
+function Config.RollVariant(): (string?, string?)
+	return rollTier(Config.Sizes, SIZE_ORDER), rollTier(Config.Materials, MATERIAL_ORDER)
+end
+
+-- "Bat+Big+Golden" -> "Bat", "Big", "Golden". A plain id gives (id, nil, nil).
+function Config.SplitPet(id: string): (string, string?, string?)
+	local parts = string.split(id, "+")
+	local size, material
+	for i = 2, #parts do
+		local token = parts[i]
+		if Config.Sizes[token] and not size then
+			size = token
+		elseif Config.Materials[token] and not material then
+			material = token
+		else
+			return id, nil, nil -- not a valid variant id
+		end
+	end
+	return parts[1], size, material
+end
+
+function Config.MakePetId(baseId: string, size: string?, material: string?): string
+	local id = baseId
+	if size then
+		id ..= "+" .. size
+	end
+	if material then
+		id ..= "+" .. material
+	end
+	return id
+end
+
+local variantPets = {}
 setmetatable(Config.Pets, {
 	__index = function(_, id)
 		if type(id) ~= "string" then
 			return nil
 		end
-		local cached = mutatedPets[id]
+		local cached = variantPets[id]
 		if cached then
 			return cached
 		end
-		local baseId, mutationName = Config.SplitPet(id)
+		local baseId, size, material = Config.SplitPet(id)
 		local base = rawget(Config.Pets, baseId)
-		local mutation = mutationName and Config.Mutations[mutationName]
-		if not (base and mutation) then
+		if not base or not (size or material) then
 			return nil
 		end
+		local sizeInfo = size and Config.Sizes[size]
+		local materialInfo = material and Config.Materials[material]
 		local info = table.clone(base)
-		info.Name = mutation.Name .. " " .. base.Name
-		info.MoneyPerSecond = base.MoneyPerSecond * mutation.Multiplier
+		info.Name = (if sizeInfo then sizeInfo.Name .. " " else "") .. (if materialInfo then materialInfo.Name .. " " else "") .. base.Name
+		info.MoneyPerSecond = base.MoneyPerSecond * (if sizeInfo then sizeInfo.Multiplier else 1) * (if materialInfo then materialInfo.Multiplier else 1)
 		info.BaseId = baseId
-		info.Mutation = mutationName
-		mutatedPets[id] = info
+		info.Size = size
+		info.Material = material
+		info.Scale = if sizeInfo then sizeInfo.Scale else 1
+		variantPets[id] = info
 		return info
 	end,
 })
@@ -264,10 +305,10 @@ end)
 
 -- Index milestones: Money for discovering this many different pets.
 Config.IndexRewards = {
-	{ Count = 5, Money = 15000 },
-	{ Count = 10, Money = 250000 },
-	{ Count = 15, Money = 4000000 },
-	{ Count = 20, Money = 45000000 },
+	{ Count = 5, Money = 45000 },
+	{ Count = 10, Money = 750000 },
+	{ Count = 15, Money = 12000000 },
+	{ Count = 20, Money = 135000000 },
 }
 
 ---------------------------------------------------------------------------
@@ -375,10 +416,10 @@ Config.FriendBoostPercent = 10 -- extra pet Money for every friend playing in th
 Config.BaseDepth = 40 -- depth of a new base (studs, front to back)
 Config.BaseDepthStep = 10
 Config.BaseUpgrades = {
-	{ Price = 8000 },
-	{ Price = 100000 },
-	{ Price = 1500000 },
-	{ Price = 22000000 },
+	{ Price = 24000 },
+	{ Price = 300000 },
+	{ Price = 4500000 },
+	{ Price = 66000000 },
 }
 
 function Config.IncubatorsFor(baseLevel: number?): number

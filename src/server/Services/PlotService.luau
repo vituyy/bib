@@ -25,6 +25,16 @@ local function setSign(plot: Instance, text: string)
 	end
 end
 
+-- 1500 -> "1.5K", 2000000 -> "2M" (for the labels above pets)
+local function shortNumber(n: number): string
+	for _, unit in { { 1e12, "T" }, { 1e9, "B" }, { 1e6, "M" }, { 1e3, "K" } } do
+		if n >= unit[1] then
+			return (string.format("%.1f", n / unit[1]):gsub("%.0$", "")) .. unit[2]
+		end
+	end
+	return tostring(math.floor(n))
+end
+
 local function petIncome(data): number
 	local total = 0
 	for _, petId in data.Pets do
@@ -142,7 +152,7 @@ local function renderPets(player: Player, data)
 		local pet = Config.Pets[petId]
 		if pet then
 			local rarity = Config.Rarities[pet.Rarity]
-			local size = 2.2 * (1 + rarity.Order * 0.12)
+			local size = 2.2 * (1 + rarity.Order * 0.12) * (pet.Scale or 1) -- Big, Huge and Gigantic pets are bigger
 			local model = Art.Clone("Pets", petId, size * 1.6)
 			local height = size
 			if model then
@@ -164,21 +174,11 @@ local function renderPets(player: Player, data)
 				model.PrimaryPart = body
 			end
 			model.Name = petId
-			local mutation = pet.Mutation and Config.Mutations[pet.Mutation]
-			if mutation then
-				local glow = Instance.new("Highlight")
-				glow.Name = "MutationGlow"
-				glow.FillColor = mutation.Color
-				glow.FillTransparency = 0.7
-				glow.OutlineColor = mutation.Color
-				glow.OutlineTransparency = 0
-				glow.DepthMode = Enum.HighlightDepthMode.Occluded
-				glow.Parent = model
-			end
+			Art.MaterialLook(model, model.PrimaryPart :: BasePart, pet.Material)
 			local start = randomSpot(base)
 			model:PivotTo(CFrame.new(start + Vector3.new(0, height / 2, 0)))
 			model.Parent = visuals
-			label(model.PrimaryPart :: BasePart, string.format("%s\n$%s/s", pet.Name, tostring(pet.MoneyPerSecond)), rarity.Color, height / 2 + 1.5)
+			label(model.PrimaryPart :: BasePart, string.format("%s\n$%s/s", pet.Name, shortNumber(pet.MoneyPerSecond)), rarity.Color, height / 2 + 1.5)
 			-- Winged models (WingL/WingR, each with a Hinge part) flap and hover.
 			local wings = {}
 			local root = model.PrimaryPart :: BasePart
@@ -425,7 +425,7 @@ local function hatchReady(player: Player, data)
 		for _, h in hatched do
 			table.remove(d.Incubators, h.Index)
 			table.insert(if h.ToBase then d.Pets else d.Storage, h.Pet)
-			local baseId = Config.SplitPet(h.Pet) -- the Index counts plain pets, not their mutated versions
+			local baseId = Config.SplitPet(h.Pet) -- the Index counts plain pets, not their Big or Golden versions
 			if not table.find(d.Discovered, baseId) then
 				table.insert(d.Discovered, baseId)
 			end
@@ -434,8 +434,8 @@ local function hatchReady(player: Player, data)
 	for _, h in hatched do
 		local pet = Config.Pets[h.Pet]
 		local text = string.format("Your egg hatched into a %s %s!", pet.Rarity, pet.Name)
-		if pet.Mutation then
-			text = string.format("MUTATION! Your egg hatched into a %s %s (earns x%d)!", pet.Rarity, pet.Name, Config.Mutations[pet.Mutation].Multiplier)
+		if pet.Size or pet.Material then
+			text = string.format("WOW! Your egg hatched into a %s %s! It earns $%s/s!", pet.Rarity, pet.Name, shortNumber(pet.MoneyPerSecond))
 		end
 		if not h.ToBase then
 			text ..= " (base full: it's in your Pets inventory)"

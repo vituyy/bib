@@ -621,7 +621,7 @@ end
 
 local petAssets = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Pets")
 local function petModel(petId: string): Model?
-	local template = petAssets:FindFirstChild(petId)
+	local template = petAssets:FindFirstChild((Config.SplitPet(petId))) -- Big or Golden pets use the plain pet's model
 	return if template then template:Clone() else nil
 end
 
