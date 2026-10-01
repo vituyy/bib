@@ -71,8 +71,8 @@ Only the Mummy's desert theme came from Viktor; the rest are suggestions to chan
 
 | # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs |
 |---|---|---|---|---|---|---|
-| 1 | Friendly Mummy | 16 | 5 | None | 1 | 4 |
-| 2 | Old Witch | 18 | 10 | None | 1 | 4 |
+| 1 | Friendly Mummy | 14 | 5 | None | 1 | 4 |
+| 2 | Old Witch | 17 | 10 | None | 1 | 4 |
 | 3 | Scarecrow | 21 | 20 | Bedsheet Ghost | 1 | 5 |
 | 4 | Zombie Chef | 25 | 40 | Pumpkin Head | 2 | 5 |
 | 5 | Gravedigger | 30 | 80 | Witch | 1 | 5 |
@@ -81,7 +81,7 @@ Only the Mummy's desert theme came from Viktor; the rest are suggestions to chan
 | 8 | Headless Horseman | 58 | 650 | Werewolf | 2 | 6 |
 | 9 | Lich King | 72 | 1,300 | Grim Reaper | 2 | 6 |
 
-Owner speed grows roughly exponentially so the last houses need a well-trained runner. House 1 matches a brand-new player (16).
+Owner speed grows roughly exponentially so the last houses need a well-trained runner. House 1 is slower than a brand-new player (14 vs 16), so a first-timer can always get away from it.
 
 ### 2.4 Trick-or-Treat
 
@@ -152,21 +152,21 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 - **Treadmills (Candy):** 7 tiers, Rusty to Cursed (0 to 150,000 Candy). A new one spawns in front of your base and replaces the old one. Step on and your character runs by itself, earning Speed XP (1 to 64 XP/s by tier). Jump to get off.
 - **Trails (Money):** sold in the new Trails tab of the Speed Shop. A trail multiplies the XP your treadmill gives: a 30 XP/s treadmill with a 1.5x trail gives 45 XP/s. You keep every trail you buy and equip one at a time, and it shows as a visible trail behind your character.
-- **Speed Levels:** each level makes you 4% faster. Level 0 = 16, level 20 ≈ 35, level 45 (max) ≈ 93.
-- **Rebirth:** opens at Speed Level 25 (+5 per rebirth). It resets your Speed Level and gives a permanent +50% XP multiplier. Trails are kept.
+- **Speed Levels:** each level makes you 1.85% faster. Level 0 = 16, level 50 ≈ 40, level 100 (max) ≈ 100. Each level costs 12% more XP than the last up to level 70 (6 XP for level 1, about 15,000 for level 70), then 5% more (about 65,000 for level 100). With a fitting treadmill, rebirth and trail a level takes roughly 10 to 40 seconds.
+- **Rebirth:** 8 rebirths, at Speed Level 10, 20, 30, 40, 55, 70, 85 and 100. Each one resets your Speed Level and adds a permanent +1x XP multiplier (x2 after the first, x9 after the last). Treadmills and trails are kept.
 - **Total training speed:** treadmill XP/s × trail × rebirth multiplier.
 
 Suggested trail ladder (the build in Studio may tune these):
 
 | Trail | XP boost | Price (Money) |
 |---|---|---|
-| Candle Smoke | 1.25x | 500 |
-| Bat Swarm | 1.5x | 5,000 |
-| Candy Sparkle | 2x | 40,000 |
-| Ghost Wisp | 2.5x | 250,000 |
-| Pumpkin Fire | 3x | 1,500,000 |
-| Blood Moon | 4x | 8,000,000 |
-| Nightmare Shadow | 5x | 40,000,000 |
+| Candle Smoke | 1.25x | 600 |
+| Bat Swarm | 1.5x | 6,000 |
+| Candy Sparkle | 2x | 45,000 |
+| Ghost Wisp | 2.5x | 350,000 |
+| Pumpkin Fire | 3x | 2,200,000 |
+| Blood Moon | 4x | 14,000,000 |
+| Nightmare Shadow | 5x | 75,000,000 |
 
 ### 2.10 Costumes
 
@@ -176,11 +176,28 @@ Money buys costumes from mannequins in the Costume Shop. They visibly dress your
 |---|---|---|
 | 1 | Bedsheet Ghost | 50 |
 | 2 | Pumpkin Head | 300 |
-| 3 | Witch | 1,500 |
-| 4 | Vampire | 7,500 |
-| 5 | Glowing Skeleton | 35,000 |
-| 6 | Werewolf | 150,000 |
-| 7 | Grim Reaper | 600,000 |
+| 3 | Witch | 1,800 |
+| 4 | Vampire | 10,000 |
+| 5 | Glowing Skeleton | 55,000 |
+| 6 | Werewolf | 300,000 |
+| 7 | Grim Reaper | 1,600,000 |
+| 8 | Mummy | 7,000,000 |
+| 9 | Frankenstein | 35,000,000 |
+| 10 | Red Devil | 150,000,000 |
+
+### 2.11 Pacing targets (set 1 October 2026)
+
+These come from a simulation of an active player (about 40% of the time on the treadmill, 25% knocking, 35% stealing), so a normal player takes roughly 1.5 to 2 times as long. The aim: a purchase every few minutes in the first hour, no wait longer than about 30 to 45 minutes before the very end, and everything finished in about 8 to 10 hours of real play.
+
+| Milestone | Active player |
+|---|---|
+| First costume, steal from house 2 | 2 to 3 min |
+| Steal from house 4 | 16 min |
+| Steal from house 6 | 45 min |
+| Steal from house 9 | about 2 h |
+| All 10 costumes, 7 trails, 4 base upgrades | about 4 to 5 h |
+
+Money sinks and gates: costumes (also gate the candy per door), trails (XP multiplier), base upgrades (pet and incubator slots) and Index rewards. Candy only buys treadmills, so it has nothing to buy after the Cursed Treadmill (see 5.1).
 
 ## 3. Built so far
 
@@ -276,9 +293,9 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 2. **Rebirth vs. speed.** Rebirth resets Speed Level to 0, so a player who rebirths becomes too slow for the houses they were stealing from. Trails help them climb back faster but don't fix it. Decide what rebirth keeps (e.g. a speed floor, or reset only XP) and what else it gives.
 
-3. **New-player escape.** House 1's owner runs at 16, the same as a new player, and even the smallest egg slows you to 95%. On paper a new player can never outrun them and relies on the 30 s give-up or the 150-stud rule. Decide whether the first house should be slower or the thief gets a head start.
+3. **New-player escape.** *(Done 1 October 2026: house 1's owner runs at 14 and house 2's at 17.)* A new player carrying the smallest egg runs at about 15, so house 1 can always be escaped. Check in Studio that the owner starting inside the house still feels fair.
 
-4. **Endgame.** The last house needs about Speed Level 44 with a Secret egg (max is 45). Decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
+4. **Endgame.** The last house needs about Speed Level 88 to 90 with a Secret egg (max is 100). Decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
 
 5. **Reading eggs.** With no signs, a new player can't tell a Common egg from a Mythic one. Decide how much help to give: only size, a subtle glow for Legendary and up, or the pet index revealing designs as you discover them (recommended).
 

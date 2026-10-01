@@ -46,10 +46,13 @@ function Config.WalkSpeedFor(speedLevel: number): number
 end
 
 -- XP needed to reach each Speed Level: XP_TO_REACH[1] is the cost of level 1.
--- Past the table, each level costs floor(level / 4) more than the one before.
-local XP_TO_REACH = { 5, 6, 7, 8, 10, 12, 14, 16, 18, 20, 22, 25 }
-for level = #XP_TO_REACH + 1, 100 do
-	XP_TO_REACH[level] = XP_TO_REACH[level - 1] + math.floor(level / 4)
+-- Each level costs 12% more than the one before up to level 70, then 5% more, so the last levels stay
+-- reachable. With the right treadmill, rebirth and trail a level takes roughly 10 to 40 seconds.
+local XP_TO_REACH = {}
+local xpCost = 6
+for level = 1, 100 do
+	XP_TO_REACH[level] = math.floor(xpCost + 0.5)
+	xpCost *= if level < 70 then 1.12 else 1.05
 end
 
 -- XP needed to go from this Speed Level to the next one.
@@ -90,13 +93,13 @@ Config.Treadmills = {
 -- A trail multiplies treadmill Speed XP (a 30 XP/s treadmill with a 1.5x trail gives 45 XP/s),
 -- stacks with the rebirth multiplier, and shows as a glowing trail behind you.
 Config.Trails = {
-	{ Name = "Candle Smoke", Price = 500, Multiplier = 1.25, Color = Color3.fromRGB(200, 190, 180) },
-	{ Name = "Bat Swarm", Price = 5000, Multiplier = 1.5, Color = Color3.fromRGB(120, 60, 200) },
-	{ Name = "Candy Sparkle", Price = 40000, Multiplier = 2, Color = Color3.fromRGB(255, 120, 200) },
-	{ Name = "Ghost Wisp", Price = 250000, Multiplier = 2.5, Color = Color3.fromRGB(200, 240, 255) },
-	{ Name = "Pumpkin Fire", Price = 1500000, Multiplier = 3, Color = Color3.fromRGB(255, 130, 20) },
-	{ Name = "Blood Moon", Price = 8000000, Multiplier = 4, Color = Color3.fromRGB(230, 30, 50) },
-	{ Name = "Nightmare Shadow", Price = 40000000, Multiplier = 5, Color = Color3.fromRGB(60, 0, 90) },
+	{ Name = "Candle Smoke", Price = 600, Multiplier = 1.25, Color = Color3.fromRGB(200, 190, 180) },
+	{ Name = "Bat Swarm", Price = 6000, Multiplier = 1.5, Color = Color3.fromRGB(120, 60, 200) },
+	{ Name = "Candy Sparkle", Price = 45000, Multiplier = 2, Color = Color3.fromRGB(255, 120, 200) },
+	{ Name = "Ghost Wisp", Price = 350000, Multiplier = 2.5, Color = Color3.fromRGB(200, 240, 255) },
+	{ Name = "Pumpkin Fire", Price = 2200000, Multiplier = 3, Color = Color3.fromRGB(255, 130, 20) },
+	{ Name = "Blood Moon", Price = 14000000, Multiplier = 4, Color = Color3.fromRGB(230, 30, 50) },
+	{ Name = "Nightmare Shadow", Price = 75000000, Multiplier = 5, Color = Color3.fromRGB(60, 0, 90) },
 }
 function Config.TrailMultiplier(trail: number?): number
 	local info = trail and Config.Trails[trail]
@@ -111,14 +114,14 @@ Config.Costumes = {
 	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyBonus = 0, Color = Color3.fromRGB(200, 200, 200) },
 	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 50, CandyBonus = 10, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
 	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 300, CandyBonus = 25, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
-	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1500, CandyBonus = 50, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
-	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 7500, CandyBonus = 75, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
-	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 35000, CandyBonus = 100, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
-	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 150000, CandyBonus = 150, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
-	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 600000, CandyBonus = 200, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
-	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 2500000, CandyBonus = 300, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
-	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 10000000, CandyBonus = 400, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
-	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 40000000, CandyBonus = 500, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
+	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1800, CandyBonus = 50, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
+	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 10000, CandyBonus = 75, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
+	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 55000, CandyBonus = 100, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
+	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 300000, CandyBonus = 150, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
+	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 1600000, CandyBonus = 200, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
+	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 7000000, CandyBonus = 300, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
+	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 35000000, CandyBonus = 400, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
+	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 150000000, CandyBonus = 500, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
 }
 
 function Config.GetCostume(id: string)
@@ -204,10 +207,10 @@ end)
 
 -- Index milestones: Money for discovering this many different pets.
 Config.IndexRewards = {
-	{ Count = 5, Money = 25000 },
-	{ Count = 10, Money = 300000 },
-	{ Count = 15, Money = 3000000 },
-	{ Count = 20, Money = 30000000 },
+	{ Count = 5, Money = 15000 },
+	{ Count = 10, Money = 250000 },
+	{ Count = 15, Money = 4000000 },
+	{ Count = 20, Money = 45000000 },
 }
 
 ---------------------------------------------------------------------------
@@ -271,9 +274,9 @@ end
 -- CostumeTier: the minimum costume tier that gets Candy at the door.
 ---------------------------------------------------------------------------
 Config.Houses = {
-	{ Owner = "Friendly Mummy", OwnerSpeed = 16, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
+	{ Owner = "Friendly Mummy", OwnerSpeed = 14, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
 		EggWeights = { CandyEgg = 70, PumpkinEgg = 25, BatEgg = 5 } },
-	{ Owner = "Old Witch", OwnerSpeed = 18, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
+	{ Owner = "Old Witch", OwnerSpeed = 17, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
 		EggWeights = { CandyEgg = 50, PumpkinEgg = 35, BatEgg = 13, GhostEgg = 2 } },
 	{ Owner = "Scarecrow", OwnerSpeed = 21, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { CandyEgg = 30, PumpkinEgg = 40, BatEgg = 25, GhostEgg = 5 } },
@@ -313,10 +316,10 @@ Config.FriendBoostPercent = 10 -- extra pet Money for every friend playing in th
 Config.BaseDepth = 40 -- depth of a new base (studs, front to back)
 Config.BaseDepthStep = 10
 Config.BaseUpgrades = {
-	{ Price = 5000 },
-	{ Price = 75000 },
-	{ Price = 1000000 },
-	{ Price = 15000000 },
+	{ Price = 8000 },
+	{ Price = 100000 },
+	{ Price = 1500000 },
+	{ Price = 22000000 },
 }
 
 function Config.IncubatorsFor(baseLevel: number?): number
