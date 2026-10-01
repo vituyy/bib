@@ -1,18 +1,19 @@
 # Spooky Steal: Game Design & Execution Plan
 
-Working title. Version 2, updated 29 September 2026 with trails, egg designs, wandering pets, the hand-built tattersall map and the 10-second day.
+> The Word version of this document is `docs/Spooky-Steal-Design-and-Plan.docx`; this Markdown copy is generated from it.
 
-> **Repo note (30 September 2026):** this file was converted from `Spooky-Steal-Design-and-Plan.docx`. The code in `src/` (from SpookyStealV3.2) already contains every Version 2 change, so Phase 2 below is marked done.
+Working title. Version 3, updated 1 October 2026 with the new cartoon UI, the pet inventory with Equip Best, the friend boost and the real numbers from the game.
 
 ## What changed in this version
 
 | Change | Summary |
 |---|---|
-| Trails | New Trails tab in the Speed Shop. Bought with Money, a trail multiplies the Speed XP your treadmill gives. |
-| Egg designs | Every pet has its own egg design that hints at the pet inside. No rarity signs above eggs: players judge an egg by its look. |
-| Wandering pets | Pets walk around your base instead of standing on a plate. |
-| New map | The map is stripped to themed baseplates and walls in the tattersall studs style. Viktor builds the rest by hand from models placed on the side. |
-| Shorter day | The day now lasts 10 seconds (was 20). |
+| New UI | Chunky cartoon style: white studded menus with thick black outlines, cyan boxes, glossy buttons and outlined text. Rebirth menu shows this rebirth vs the next one. |
+| HUD | Money and Candy in big gold and pink numbers on the right; night/day timer as plain text at the top; Speed Level bar at the bottom with a + button to the Speed Shop. |
+| Pet inventory | Pets are either equipped (on the base, earning) or in an inventory of 60. The Pets menu has search, stacked cards and Equip Best. |
+| Eggs menu | Same window as Pets: what's hatching with live timers, the egg bag below, tap an egg to hatch it, Hatch Best fills every free incubator. |
+| Friend boost | +10% pet Money for every friend playing in the same server, shown bottom left. |
+| Doc synced to the game | Speed, rebirth, costume and player numbers now match SpookyStealV3.2. |
 
 ## 1. Overview
 
@@ -20,7 +21,7 @@ Working title. Version 2, updated 29 September 2026 with trails, egg designs, wa
 
 **Genre:** Roblox "steal and collect" tycoon, inspired by Steal an Egg.
 
-**Players:** 6 per server, one base each.
+**Players:** 5 per server, one base each.
 
 **Look:** Tattersall studs style (two-tone checkered studs tiles), with each level in its own colour theme under dark Halloween night lighting.
 
@@ -37,7 +38,7 @@ Working title. Version 2, updated 29 September 2026 with trails, egg designs, wa
 
 ### 2.1 The map
 
-- **Hub** at the start of the street: 6 player bases (56 × 56 studs each), the Speed Shop (treadmills and trails) and the Costume Shop (mannequins). The hub is about 430 × 260 studs. Owners stop chasing at the Level 1 line, so the hub is safe.
+- **Hub** at the start of the street: 5 player bases (56 × 56 studs each), the Speed Shop (treadmills and trails) and the Costume Shop (mannequins). The hub is about 430 × 260 studs. Owners stop chasing at the Level 1 line, so the hub is safe.
 - **The street:** one long straight road of 9 house lots, about 2,100 studs long. Each lot is its own level and harder than the one before. Houses have one or two floors and several rooms, and get grander along the street.
 - No gates: every house can be broken into from the start. Progress is limited by speed (can you escape?) and costume (will they give you Candy?).
 
@@ -45,7 +46,7 @@ Working title. Version 2, updated 29 September 2026 with trails, egg designs, wa
 
 The map now starts as a blank layout that Viktor builds by hand:
 
-- **What's in the blank map:** the hub floor and walls, the 6 base pads, the shop spots, the 9 lots each with their own floor and boundary walls, and the level lines.
+- **What's in the blank map:** the hub floor and walls, the 5 base pads, the shop spots, the 9 lots each with their own floor and boundary walls, and the level lines.
 - **Style:** tattersall studs. Floors and walls use a checkerboard of two close shades of the same colour, with studs on every tile, like the reference screenshots (green grass next to a sand-coloured floor, orange and mustard walls).
 - **Models on the side:** every house (including the finished House 1 mummy tomb), prop and decoration sits in rows next to the map, ready to drag in. The old map is backed up in ServerStorage.
 - **Naming rules still apply:** the scripts find doors, egg spots, owner spawns, plots and level lines by name, so those parts must keep their names when a house is placed.
@@ -103,7 +104,7 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 - There are no signs or labels above eggs. Players learn to read the designs: a black egg with little ears is a Black Cat, an orange ribbed egg with a stem is a Pumpkling.
 - Rarer eggs are bigger, more detailed and heavier to carry, which is the only built-in rarity hint.
 - Eggs sit in nests (as in the reference screenshots).
-- Hatching is free, in 3 incubators on your base. You can hold 12 unhatched eggs. Hatch time depends on rarity:
+- **Hatching is free**, in 3 incubators on your base (+1 per base upgrade). You can hold 12 unhatched eggs. Tap an egg in the Eggs menu to hatch it, or press Hatch Best to fill every free incubator with your rarest eggs. Hatch time depends on rarity:
 
 | Rarity | Hatch time | Carry speed |
 |---|---|---|
@@ -117,11 +118,7 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 ### 2.8 Pets and their egg designs
 
-20 pets across 7 rarities. Up to 10 pets live on your base and earn Money every second. A pet can be sold for 30 seconds of its income.
-
-**Equipped and inventory (added 30 September 2026):** pets on your base are *equipped* (10 slots, +2 per base upgrade). Extra pets go to an inventory of up to 60. The Pets menu has **Equip Best**, which puts your highest-earning pets on the base. When the base is full, hatched pets go straight to the inventory.
-
-**Friend boost (added 30 September 2026):** +10% pet Money for every friend playing in the same server, shown in the bottom-left corner.
+20 pets across 7 rarities. Pets are either **equipped** (on your base, earning Money every second) or in your **inventory**. A pet can be sold for 30 seconds of its income.
 
 | Pet | Rarity | Money/s | Egg design hint |
 |---|---|---|---|
@@ -171,12 +168,20 @@ When the owner catches you (or you die while carrying), the egg goes back to the
 
 **Wandering pets:** pets walk slowly around inside your base, stop now and then to idle, and never leave the base. Money pops up above each pet as it earns. Pets don't block players.
 
+**Equipped and inventory:** your base has 10 pet slots, +2 per base upgrade (up to 18). Up to 60 more pets wait in the inventory. When the base is full, a hatched pet goes straight to the inventory. The Pets menu shows equipped pets on top and the inventory below, stacked by kind (x2, x3) with a search box. Tap a pet to equip, unequip or sell it; **Equip Best** puts your highest-earning pets on the base.
+
+**Friend boost:** +10% pet Money for every friend playing in the same server (up to +40% with 4 friends), shown in the bottom-left corner.
+
+**Base upgrades:** bought with Money at the UPGRADE BASE sign ($5K, $75K, $1M, $15M). Each one makes the base deeper and adds 2 pet slots and 1 incubator.
+
+**Pet Index:** every pet you hatch is recorded. Money rewards for discovering 5, 10, 15 and 20 different pets ($25K, $300K, $3M, $30M).
+
 ### 2.9 Speed: treadmills, trails and rebirth
 
 - **Treadmills (Candy):** 7 tiers, Rusty to Cursed (0 to 150,000 Candy). A new one spawns in front of your base and replaces the old one. Step on and your character runs by itself, earning Speed XP (1 to 64 XP/s by tier). Jump to get off.
 - **Trails (Money):** sold in the new Trails tab of the Speed Shop. A trail multiplies the XP your treadmill gives: a 30 XP/s treadmill with a 1.5x trail gives 45 XP/s. You keep every trail you buy and equip one at a time, and it shows as a visible trail behind your character.
 - **Speed Levels:** each level makes you 1.85% faster. Level 0 = 16, level 50 ≈ 40, level 100 (max) ≈ 100. Each level costs 12% more XP than the last up to level 70 (6 XP for level 1, about 15,000 for level 70), then 5% more (about 65,000 for level 100). With a fitting treadmill, rebirth and trail a level takes roughly 10 to 40 seconds.
-- **Rebirth:** 8 rebirths, at Speed Level 10, 20, 30, 40, 55, 70, 85 and 100. Each one resets your Speed Level and adds a permanent +1x XP multiplier (x2 after the first, x9 after the last). Treadmills and trails are kept.
+- **Rebirth:** opens at Speed Level 10, then 20, 30, 40, 55, 70, 85 and 100 (8 rebirths). It resets your Speed Level and XP and raises your XP multiplier: x2 after the first rebirth, x3 after the second, up to x9. Pets, eggs, Money, Candy, treadmills, trails and costumes are kept.
 - **Total training speed:** treadmill XP/s × trail × rebirth multiplier.
 
 Suggested trail ladder (the build in Studio may tune these):
@@ -193,20 +198,20 @@ Suggested trail ladder (the build in Studio may tune these):
 
 ### 2.10 Costumes
 
-Money buys costumes from mannequins in the Costume Shop. They visibly dress your character and set which doors give you Candy.
+Money buys costumes from mannequins in the Costume Shop. They visibly dress your character, set which doors give you Candy and add bonus Candy to every knock.
 
-| Tier | Costume | Price (Money) |
-|---|---|---|
-| 1 | Bedsheet Ghost | 150 |
-| 2 | Pumpkin Head | 900 |
-| 3 | Witch | 5,400 |
-| 4 | Vampire | 30,000 |
-| 5 | Glowing Skeleton | 165,000 |
-| 6 | Werewolf | 900,000 |
-| 7 | Grim Reaper | 4,800,000 |
-| 8 | Mummy | 21,000,000 |
-| 9 | Frankenstein | 105,000,000 |
-| 10 | Red Devil | 450,000,000 |
+| Tier | Costume | Price (Money) | Candy bonus |
+|---|---|---|---|
+| 1 | Bedsheet Ghost | 150 | +10% |
+| 2 | Pumpkin Head | 900 | +25% |
+| 3 | Witch | 5,400 | +50% |
+| 4 | Vampire | 30,000 | +75% |
+| 5 | Glowing Skeleton | 165,000 | +100% |
+| 6 | Werewolf | 900,000 | +150% |
+| 7 | Grim Reaper | 4,800,000 | +200% |
+| 8 | Mummy | 21,000,000 | +300% |
+| 9 | Frankenstein | 105,000,000 | +400% |
+| 10 | Red Devil | 450,000,000 | +500% |
 
 ### 2.11 Pacing targets (set 1 October 2026)
 
@@ -222,25 +227,32 @@ These come from a simulation of an active player (about 40% of the time on the t
 
 Money sinks and gates: costumes (also gate the candy per door), trails (XP multiplier), base upgrades (pet and incubator slots) and Index rewards. Candy only buys treadmills, so it has nothing to buy after the Cursed Treadmill (see 5.1).
 
+### 2.12 Interface
+
+- **Style:** chunky cartoon simulator UI. White studded panels with a thick black outline, the menu icon and name sticking out over the top-left corner, a big red X, cyan boxes, glossy gradient buttons and white text with a black outline. Menus pop open in the centre of the screen and buttons bounce.
+- **HUD:** Money and Candy on the right side in big gold and pink numbers with coin and candy icons; night/day timer at the top; "RUN!" banner during a chase; Speed Level bar at the bottom (orange to yellow) with walk speed, rebirth multiplier and a + button to the Speed Shop; friend boost bottom left; menu buttons (Rebirth, Index, Pets, Eggs, Store) on the left.
+- **Rebirth menu:** this rebirth vs the next side by side (XP multiplier, Speed Level reset), a warning line, a level bar towards the next rebirth, and Rebirth and Train Faster buttons.
+- **Pets and Eggs menus:** darker inventory window with a blue title bar, search box, card grids with coloured rarity splashes and counts, and Equip Best / Hatch Best at the bottom.
+
 ## 3. Built so far
 
-The main copy is the **SpookyStealV3.2** place in Roblox Studio (a copy lives in `place/`, and its scripts are in `src/`). Nothing is published.
+The main copy is the **SpookyStealV3.2** place, kept in the GitHub repo vituyy/bib (place/SpookyStealV3.2.rbxl) together with all scripts. Nothing is published yet.
 
 **Working and playtested**
 
-- Hub with 6 bases, Speed Shop and Costume Shop; one street of 9 unique houses (mummy tomb, witch cottage, farmhouse, zombie diner, gravedigger crypt, Vlad's manor, Banshee Hall, Horseman's Hollow, Lich King's keep).
+- Hub with 5 bases, Speed Shop and Costume Shop; one street of 9 unique houses (mummy tomb, witch cottage, farmhouse, zombie diner, gravedigger crypt, Vlad's manor, Banshee Hall, Horseman's Hollow, Lich King's keep).
 - Whole map scaled up: houses 1.75x bigger, lots 2x deeper and 1.5x longer, street about 2,100 studs, hub 430 × 260, bases 56 × 56.
 - House 1 fully upgraded into an Egyptian mummy tomb, inside and out (great hall, burial chamber, treasure vault, golden egg altars).
 - Trick-or-Treat with costume checks and roast lines.
 - Egg stealing, owner chase that stops at the Level 1 line, catch and stun, delivery to base. All 9 owners and 47 eggs spawn.
 - Day/night cycle with egg respawn and street closing.
 - Auto-running treadmills, Speed XP, levels and rebirth.
-- Free hatching in 3 incubators, pets on the base earning Money.
-- HUD and shop/egg/pet menus. Saving with DataStore (needs a published place to actually save).
+- **Free hatching** in 3+ incubators, pets on the base earning Money, pet inventory with Equip Best, friend boost.
+- New cartoon HUD and menus (Rebirth, Index, Pets, Eggs, Store, Speed Shop). Saving with DataStore (needs a published place to actually save).
 
 **Art**
 
-- 42 AI-generated studs models (9 owners, 20 pets, 7 costumes, 6 props) plus House 1's custom props. Costumes really dress the character and the mannequins wear them.
+- 65 AI-generated studs models (9 owners, 20 pets, 20 egg designs, 10 costumes, 6 props) plus House 1's custom props. Costumes really dress the character and the mannequins wear them.
 - Map decoration: street lamps, dead trees, gravestones, fences, pumpkins, cauldrons, purple haze, stars and a moon.
 
 **Version 2 changes (done in V3.2)**
@@ -279,6 +291,13 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 - ✓ Pets wander around the base
 - ✓ Day shortened to 10 s
 
+### Phase 2b: Version 3 UI and pets
+
+- ✓ Cartoon UI: studded menus, HUD, Rebirth menu, Speed Level bar
+- ✓ Pets inventory, Equip Best, Pets and Eggs window, Hatch Best
+- ✓ Friend boost (+10% Money per friend)
+- ◐ Playtest the new UI in Studio on PC and phone; swap the drawn Money/Candy icons for uploaded pictures
+
 ### Phase 3: World building (Viktor, by hand)
 
 - ○ Place the houses on their lots and dress each lot to its theme
@@ -293,7 +312,7 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 - ○ Sounds and music: night ambience, door knock, alarm when an owner spots you, chase music, hatch fanfare
 - ○ Feedback: "RUN!" banner, screen shake on catch, Candy and Money flying to the HUD
 - ✓ Owner pathfinding through rooms, doors, windows and stairs (untested in Studio)
-- ○ UI polish and a mobile-friendly layout
+- ◐ UI polish and a mobile-friendly layout (new UI done, phone layout still to test)
 
 ### Phase 5: Balance
 
@@ -313,7 +332,7 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 - ○ Publish privately, turn on API access, test saving
 - ○ Anti-exploit checks on the server (speed, teleport, remote spam)
 - ○ Monetisation (see section 5)
-- ○ Game icon, thumbnails, description, max players set to 6
+- ○ Game icon, thumbnails, description, max players set to 5
 - ○ Friends-only test, fix bugs, then public release around Halloween
 
 ## 5. What the concept is still missing
@@ -322,11 +341,11 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 1. **Stealing from other players.** In Steal an Egg the big hook is raiding other players' bases. Right now you only steal from NPC houses. Decide whether players can steal eggs or pets from each other, and how bases are protected (locks, shields, timers). Wandering pets would make a base raid look great.
 
-2. **Rebirth vs. speed.** Rebirth resets Speed Level to 0, so a player who rebirths becomes too slow for the houses they were stealing from. Trails help them climb back faster but don't fix it. Decide what rebirth keeps (e.g. a speed floor, or reset only XP) and what else it gives.
+**2. Rebirth vs. speed.** Rebirth resets Speed Level to 0, so a player who rebirths becomes too slow for the houses they were stealing from. The XP multiplier (x2, x3, ...) and trails help them climb back faster but don't fix it. Decide what rebirth keeps (e.g. a speed floor, or reset only XP) and what else it gives.
 
 3. **New-player escape.** *(Done 1 October 2026: house 1's owner runs at 14 and house 2's at 17.)* A new player carrying the smallest egg runs at about 15, so house 1 can always be escaped. Check in Studio that the owner starting inside the house still feels fair.
 
-4. **Endgame.** The last house needs about Speed Level 88 to 90 with a Secret egg (max is 100). Decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
+**4. Endgame.** Outrunning the Lich King (72) while carrying a Secret egg needs about Speed Level 93 (max is 100). Decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
 
 5. **Reading eggs.** With no signs, a new player can't tell a Common egg from a Mythic one. Decide how much help to give: only size, a subtle glow for Legendary and up, or the pet index revealing designs as you discover them (recommended).
 
@@ -334,11 +353,11 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 7. **Candy after treadmills.** Once you own the Cursed Treadmill, Candy has nothing to buy. Options: speed potions, egg-luck boosts, costume dyes.
 
-8. **Pet management.** Only 10 pets per base and selling pays 30 s of income. Decide on merging duplicates, trading, pet levels, or more pet space as a Money sink.
+**8. Pet management.** The base holds 10 to 18 pets and the inventory 60; selling pays 30 s of income. Decide on merging duplicates, trading, pet levels, or more inventory space as a Money sink.
 
 9. **Caught penalty.** The owner takes the egg and you're stunned for 1.5 s. Consider whether that is enough on the far houses.
 
-10. **Shared eggs.** 6 players share 47 eggs per night. Decide whether eggs are first come first served or per player, and whether players can help or block each other during a chase.
+**10. Shared eggs.** 5 players share 47 eggs per night. Decide whether eggs are first come first served or per player, and whether players can help or block each other during a chase.
 
 11. **Dark vs. bright.** The tattersall colours are brighter than the original dark Halloween palette. Check in game that night lighting keeps the spooky mood.
 
