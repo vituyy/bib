@@ -376,9 +376,9 @@ end
 -- CostumeTier: the minimum costume tier that gets Candy at the door.
 ---------------------------------------------------------------------------
 Config.Houses = {
-	{ Owner = "Friendly Mummy", OwnerSpeed = 14, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
+	{ Owner = "Old Witch", OwnerSpeed = 14, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
 		EggWeights = { CandyEgg = 70, PumpkinEgg = 25, BatEgg = 5 } },
-	{ Owner = "Old Witch", OwnerSpeed = 17, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
+	{ Owner = "Friendly Mummy", OwnerSpeed = 17, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
 		EggWeights = { CandyEgg = 50, PumpkinEgg = 35, BatEgg = 13, GhostEgg = 2 } },
 	{ Owner = "Scarecrow", OwnerSpeed = 21, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { CandyEgg = 30, PumpkinEgg = 40, BatEgg = 25, GhostEgg = 5 } },

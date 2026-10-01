@@ -1,19 +1,22 @@
 # Spooky Steal: Game Design & Execution Plan
 
-> The Word version of this document is `docs/Spooky-Steal-Design-and-Plan.docx`; this Markdown copy is generated from it.
+> The Word version of this document is `docs/Spooky-Steal-Design-and-Plan.docx`. Both files have the same text; update them together.
 
-Working title. Version 3, updated 1 October 2026 with the new cartoon UI, the pet inventory with Equip Best, the friend boost and the real numbers from the game.
+Working title. **Version 4**, updated 2 October 2026 to match the place file **SpookyStealV3.2 (13)**: the new Old Witch house, the Trick-or-Treat door scene, the new owner chase, egg variants, the economy rebalance, codes and the safety fixes.
 
-## What changed in this version
+## What changed in this version (since Version 3)
 
 | Change | Summary |
 |---|---|
-| New UI | Chunky cartoon style: white studded menus with thick black outlines, cyan boxes, glossy buttons and outlined text. Rebirth menu shows this rebirth vs the next one. |
-| HUD | Money and Candy in big gold and pink numbers on the right; night/day timer as plain text at the top; Speed Level bar at the bottom with a + button to the Speed Shop. |
-| Pet inventory | Pets are either equipped (on the base, earning) or in an inventory of 60. The Pets menu has search, stacked cards and Equip Best. |
-| Eggs menu | Same window as Pets: what's hatching with live timers, the egg bag below, tap an egg to hatch it, Hatch Best fills every free incubator. |
-| Friend boost | +10% pet Money for every friend playing in the same server, shown bottom left. |
-| Doc synced to the game | Speed, rebirth, costume and player numbers now match SpookyStealV3.2. |
+| New House 1 | The Old Witch's swamp cottage is built (swamp, trees, chimney smoke, cauldrons, reeds). The Friendly Mummy's tomb moved to House 2. Houses 3 to 9 are still placeholders. |
+| Door scene | Knocking opens the door (with everything on it), the owner steps into the doorway and talks in a speech bubble, then candy flies to you, or the owner roasts your costume, shakes with anger and slams the door. |
+| New owner chase | The owner starts from where they stand, even inside the house, navigates rooms, doors, windows and stairs, passes through props outside, needs a moment to notice you (a red "!") and walks back to their spot afterwards. |
+| Egg variants | Every egg rolls a Size (Big, Huge, Gigantic) and a Material (Golden, Diamond, Rainbow) separately, with big Money multipliers. Normal eggs are smaller, variant eggs and pets are bigger. |
+| Eggs and carrying | A caught thief's egg returns to its nest. The thief carries the egg in front of the chest. |
+| Rebalance | Steeper Speed XP, higher mid and late prices (Money prices x3 after the variants), slower owners for houses 1 and 2. A simulation shows the pacing. |
+| Codes | A Codes box in the Store menu: DEV01 gives $100,000, DEV02 gives 10,000 Candy. |
+| Safety | Save session lock and repair, prompt range checks, a movement check. |
+| Kept from Version 3 | Cartoon UI, pet inventory with Equip Best, Eggs menu with Hatch Best, friend boost. |
 
 ## 1. Overview
 
@@ -39,7 +42,7 @@ Working title. Version 3, updated 1 October 2026 with the new cartoon UI, the pe
 ### 2.1 The map
 
 - **Hub** at the start of the street: 5 player bases (56 × 56 studs each), the Speed Shop (treadmills and trails) and the Costume Shop (mannequins). The hub is about 430 × 260 studs. Owners stop chasing at the Level 1 line, so the hub is safe.
-- **The street:** one long straight road of 9 house lots, about 2,100 studs long. Each lot is its own level and harder than the one before. Houses have one or two floors and several rooms, and get grander along the street.
+- **The street:** one long straight road of 9 house lots, about 2,100 studs long. Each lot is its own level and harder than the one before. Houses have one or two floors and several rooms, and get grander along the street. Houses 1 and 2 are built; houses 3 to 9 are still simple placeholders.
 - No gates: every house can be broken into from the start. Progress is limited by speed (can you escape?) and costume (will they give you Candy?).
 
 ### 2.2 Map style and level themes
@@ -48,7 +51,8 @@ The map now starts as a blank layout that Viktor builds by hand:
 
 - **What's in the blank map:** the hub floor and walls, the 5 base pads, the shop spots, the 9 lots each with their own floor and boundary walls, and the level lines.
 - **Style:** tattersall studs. Floors and walls use a checkerboard of two close shades of the same colour, with studs on every tile, like the reference screenshots (green grass next to a sand-coloured floor, orange and mustard walls).
-- **Models on the side:** every house (including the finished House 1 mummy tomb), prop and decoration sits in rows next to the map, ready to drag in. The old map is backed up in ServerStorage.
+- **Models on the side:** houses 3 to 9, props and decorations sit in rows (`Workspace/ModelRows`) next to the map, ready to drag in. Houses 1 and 2 are already placed on the street.
+- **Backups in ServerStorage:** `OldMap`, `MapBackup_BeforeTattersall`, `MapBackup_BeforeRearrange`, `MapBackup_BeforeRearrange2`, the two witch house drafts (`WitchHouse_v1`, `WitchHouse_v2`) and `WitchMeshes` (cauldron, pumpkin and reeds models). They are not part of the game, but they add about 60,000 objects to the file.
 - **Naming rules still apply:** the scripts find doors, egg spots, owner spawns, plots and level lines by name, so those parts must keep their names when a house is placed.
 
 Each level gets its own floor and wall theme:
@@ -56,8 +60,8 @@ Each level gets its own floor and wall theme:
 | Level | Owner | Floor | Walls |
 |---|---|---|---|
 | Hub | – | Dark grass green | Purple and grey stone |
-| 1 | Friendly Mummy | Desert sand | Sandstone |
-| 2 | Old Witch | Swamp green | Mossy dark green |
+| 1 | Old Witch | Swamp green | Mossy dark green |
+| 2 | Friendly Mummy | Desert sand | Sandstone |
 | 3 | Scarecrow | Wheat yellow | Hay and barn red |
 | 4 | Zombie Chef | Red and cream diner tiles | Greasy mint green |
 | 5 | Gravedigger | Dead grass | Grey graveyard stone |
@@ -66,33 +70,42 @@ Each level gets its own floor and wall theme:
 | 8 | Headless Horseman | Autumn leaf orange | Dark wood brown |
 | 9 | Lich King | Frozen ice blue | Necrotic green |
 
-Only the Mummy's desert theme came from Viktor; the rest are suggestions to change freely.
+Houses 1 (swamp) and 2 (desert) are built and themed; the themes for houses 3 to 9 are suggestions to change freely.
 
 ### 2.3 The houses and owners
 
-| # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs |
-|---|---|---|---|---|---|---|
-| 1 | Friendly Mummy | 14 | 5 | None | 1 | 4 |
-| 2 | Old Witch | 17 | 10 | None | 1 | 4 |
-| 3 | Scarecrow | 21 | 20 | Bedsheet Ghost | 1 | 5 |
-| 4 | Zombie Chef | 25 | 40 | Pumpkin Head | 2 | 5 |
-| 5 | Gravedigger | 30 | 80 | Witch | 1 | 5 |
-| 6 | Count Vlad | 37 | 160 | Vampire | 2 | 6 |
-| 7 | Banshee | 46 | 320 | Glowing Skeleton | 2 | 6 |
-| 8 | Headless Horseman | 58 | 650 | Werewolf | 2 | 6 |
-| 9 | Lich King | 72 | 1,300 | Grim Reaper | 2 | 6 |
+| # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs | Look |
+|---|---|---|---|---|---|---|---|
+| 1 | Old Witch | 14 | 5 | None | 1 | 4 | Built: swamp cottage with chimney smoke, cauldrons and reeds |
+| 2 | Friendly Mummy | 17 | 10 | None | 1 | 4 | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
+| 3 | Scarecrow | 21 | 20 | Bedsheet Ghost | 1 | 5 | Placeholder |
+| 4 | Zombie Chef | 25 | 40 | Pumpkin Head | 2 | 5 | Placeholder |
+| 5 | Gravedigger | 30 | 80 | Witch | 1 | 5 | Placeholder |
+| 6 | Count Vlad | 37 | 160 | Vampire | 2 | 6 | Placeholder |
+| 7 | Banshee | 46 | 320 | Glowing Skeleton | 2 | 6 | Placeholder |
+| 8 | Headless Horseman | 58 | 650 | Werewolf | 2 | 6 | Placeholder |
+| 9 | Lich King | 72 | 1,300 | Grim Reaper | 2 | 6 | Placeholder |
 
-Owner speed grows roughly exponentially so the last houses need a well-trained runner. House 1 is slower than a brand-new player (14 vs 16), so a first-timer can always get away from it.
+Owner speed grows roughly exponentially so the last houses need a well-trained runner. House 1 is slower than a brand-new player (14 vs 16), so a first-timer can always get away from it. Owner names, speeds, Candy and egg odds live in `Config.Houses`; the house models carry the same `Index` and `Owner` attributes (House 1 = Old Witch, House 2 = Friendly Mummy).
 
 ### 2.4 Trick-or-Treat
 
-Walk up to a front door and knock to get Candy (20 s cooldown per house). If your costume is below the house's minimum, the owner refuses with a roast line such as "And you call this a costume? I'm not giving you my candy!"
+Walk up to a front door at night and knock to get Candy (20 s cooldown per house). Each knock plays a short scene:
+
+- **Good enough costume:** the door swings open on its hinge (the panels, handles, bars and anything else mounted on the door swing with it), the owner steps into the middle of the doorway, turns to you and hops twice. A dark speech bubble with their name says something like "Happy Halloween!", candy (glossy pink wrapped sweets) flies into your hands and you get the usual "gave you N Candy" message. Then the owner walks back and the door closes.
+- **Costume too weak:** the same opening, but the owner shakes with anger, the bubble shows a roast such as "My doorbell is scarier than you. Bye!", you get a message "Minimum costume for this house: X. No candy for you!" and the door slams.
+- If the owner is out chasing a thief, nobody opens the door and you only get the message. The scene stops by itself if a chase starts or the sun comes up. During the day nobody answers.
+- Lines are in `Config.TreatGreetings` and `Config.CostumeRoasts` (10 roasts, 6 greetings).
 
 ### 2.5 Stealing eggs
 
-- Climb in through a window, pick an egg by its look and hold the prompt for 1 s.
-- The owner needs a moment to notice you (a red "!" over their head): 0.8 s plus 0.2 s per egg rarity step, so a Common egg gives a 1 s head start and a Secret egg 2.2 s. They can't catch you during that time. Then the owner starts the chase from wherever they stand, even inside the house. They follow a planned path through rooms, doors, windows and stairs while a wall is in the way, pass through props outside so they never get stuck, and walk back to their spot afterwards. The closest thief is chased. Bigger, rarer eggs slow you down (95% down to 82% of your speed).
-- Get past the Level 1 line and walk the egg to your base to keep it. If the owner touches you, they take the egg back and you are stunned for 1.5 s. Owners also give up after 30 s or when you are 150 studs ahead.
+- Climb in through a window, pick an egg by its look and hold the prompt for 1 s. You must be standing next to it (cheats that fire prompts from far away are ignored).
+- You carry the egg in front of your chest, like holding it in both hands. Bigger, rarer eggs slow you down (95% down to 82% of your speed).
+- **The owner needs a moment to notice you** (a red "!" over their head): 0.8 s plus 0.2 s per egg rarity step, so a Common egg gives a 1 s head start and a Secret egg 2.2 s. They can't catch you during that time.
+- **Then the chase starts from wherever the owner stands**, even inside the house, and the front door swings open. While a wall or floor is in the way the owner follows a planned path through rooms, doors, windows and stairs; in the open they run straight at you and pass through props, so they never get stuck. The closest thief is chased.
+- Get past the Level 1 line and walk the egg to your base to keep it. Owners give up after 30 s or when you are 150 studs ahead.
+- **If the owner touches you**, they take the egg back and you are stunned for 1.5 s. The egg goes back to the nest it came from, with the same pet, size and material, so another player can steal it. The same happens if you die or leave while carrying.
+- **After the chase** the owner walks back to their spot (no teleporting) and the door closes behind them. If they can't get home within 45 s they are put back.
 
 ### 2.6 Day and night
 
@@ -102,7 +115,7 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 - When an egg spawns, the game picks its pet straight away (using that house's rarity odds), and the egg takes that pet's design. The egg always hatches the pet it was made for.
 - There are no signs or labels above eggs. Players learn to read the designs: a black egg with little ears is a Black Cat, an orange ribbed egg with a stem is a Pumpkling.
-- Rarer eggs are bigger, more detailed and heavier to carry, which is the only built-in rarity hint.
+- Rarer eggs are bigger, more detailed and heavier to carry, which is the only built-in rarity hint. On top of that, any egg can be a Big, Huge or Gigantic one and can glow Golden, Diamond or Rainbow (see 2.8).
 - Eggs sit in nests (as in the reference screenshots).
 - **Hatching is free**, in 3 incubators on your base (+1 per base upgrade). You can hold 12 unhatched eggs. Tap an egg in the Eggs menu to hatch it, or press Hatch Best to fill every free incubator with your rarest eggs. Hatch time depends on rarity:
 
@@ -162,19 +175,15 @@ Multipliers stack: a Gigantic Rainbow pet earns x750 (a Gigantic Rainbow Pumpkin
 
 Because variants raise the average pet income by about 3.4x, every Money price (costumes, trails, base upgrades, Index rewards) was multiplied by 3 so the pacing in 2.11 stays the same for an average-luck player. Lucky players are faster, unlucky ones a little slower.
 
-A thief carries the egg in front of their chest, like holding it in both hands.
-
-When the owner catches you (or you die while carrying), the egg goes back to the nest it was taken from, with the same pet, size and material, so another player can steal it.
-
 **Wandering pets:** pets walk slowly around inside your base, stop now and then to idle, and never leave the base. Money pops up above each pet as it earns. Pets don't block players.
 
 **Equipped and inventory:** your base has 10 pet slots, +2 per base upgrade (up to 18). Up to 60 more pets wait in the inventory. When the base is full, a hatched pet goes straight to the inventory. The Pets menu shows equipped pets on top and the inventory below, stacked by kind (x2, x3) with a search box. Tap a pet to equip, unequip or sell it; **Equip Best** puts your highest-earning pets on the base.
 
 **Friend boost:** +10% pet Money for every friend playing in the same server (up to +40% with 4 friends), shown in the bottom-left corner.
 
-**Base upgrades:** bought with Money at the UPGRADE BASE sign ($5K, $75K, $1M, $15M). Each one makes the base deeper and adds 2 pet slots and 1 incubator.
+**Base upgrades:** bought with Money at the UPGRADE BASE sign ($24K, $300K, $4.5M, $66M). Each one makes the base deeper and adds 2 pet slots and 1 incubator.
 
-**Pet Index:** every pet you hatch is recorded. Money rewards for discovering 5, 10, 15 and 20 different pets ($25K, $300K, $3M, $30M).
+**Pet Index:** every pet you hatch is recorded. Money rewards for discovering 5, 10, 15 and 20 different pets ($45K, $750K, $12M, $135M). Big or Golden versions don't count twice; the Index only counts plain pets.
 
 ### 2.9 Speed: treadmills, trails and rebirth
 
@@ -232,30 +241,40 @@ Money sinks and gates: costumes (also gate the candy per door), trails (XP multi
 - **Style:** chunky cartoon simulator UI. White studded panels with a thick black outline, the menu icon and name sticking out over the top-left corner, a big red X, cyan boxes, glossy gradient buttons and white text with a black outline. Menus pop open in the centre of the screen and buttons bounce.
 - **HUD:** Money and Candy on the right side in big gold and pink numbers with coin and candy icons; night/day timer at the top; "RUN!" banner during a chase; Speed Level bar at the bottom (orange to yellow) with walk speed, rebirth multiplier and a + button to the Speed Shop; friend boost bottom left; menu buttons (Rebirth, Index, Pets, Eggs, Store) on the left.
 - **Rebirth menu:** this rebirth vs the next side by side (XP multiplier, Speed Level reset), a warning line, a level bar towards the next rebirth, and Rebirth and Train Faster buttons.
-- **Pets and Eggs menus:** darker inventory window with a blue title bar, search box, card grids with coloured rarity splashes and counts, and Equip Best / Hatch Best at the bottom.
+- **Store menu:** a Codes box (type a code, press Redeem) above the "coming soon" Robux items. Each code works once per player; the server answers with a message (accepted, already used, unknown, or too many wrong tries).
+- **Pets and Eggs menus:** darker inventory window with a blue title bar, search box, card grids with coloured rarity splashes and counts, and Equip Best / Hatch Best at the bottom. Variant pets show their full name ("Big Golden Bat") and their higher Money per second; eggs in the menu show their size and glow.
 
 ## 3. Built so far
 
-The main copy is the **SpookyStealV3.2** place, kept in the GitHub repo vituyy/bib (place/SpookyStealV3.2.rbxl) together with all scripts. Nothing is published yet.
+The main copy is the **SpookyStealV3.2 (13)** place, kept in the GitHub repo vituyy/bib as `place/SpookyStealV3.2.rbxl` together with all scripts in `src/`. Nothing is published yet.
 
-**Working and playtested**
+**What is in the place file**
 
-- Hub with 5 bases, Speed Shop and Costume Shop; one street of 9 unique houses (mummy tomb, witch cottage, farmhouse, zombie diner, gravedigger crypt, Vlad's manor, Banshee Hall, Horseman's Hollow, Lich King's keep).
+- **Map:** a hub (5 player bases, Speed Shop, Costume Shop), a street with 9 level lines and a day barrier, the tattersall floor and wall layout for the hub and 9 levels, and the two finished houses on the street. About 25,000 objects are in the game world itself.
+- **Houses:** House 1 (Old Witch swamp cottage: structure with chimney, porch, roof and walls; decor with swamp, trees, backyard, fence, chimney smoke, altars, door and window decoration, a sneak-in window) and House 2 (Friendly Mummy Egyptian tomb: pylons, stairs, great hall, burial chamber, treasure vault, terrace, yard and backdrop). Each has a `Door`, 4 egg spots, an `OwnerSpawn`, an `OwnerExit` and the `Index` and `Owner` attributes.
+- **Side rows:** houses 3 to 9 (`Workspace/ModelRows/Houses`) and a model gallery of costumes and eggs.
+- **ServerStorage:** old maps and the witch house drafts (see 2.2). The file is about 2 MB; the backups are most of its size.
+- **Assets:** `ReplicatedStorage.Assets` has the AI-generated models (owners, pets, egg designs, costumes, props).
+- **Scripts (15):** `Server.Main`; `Services.MapBuilder`, `DataService`, `CharacterService`, `PlotService`, `SpeedService`, `HouseService`, `ShopService`, `DayNightService`, `BaseBuilder`; `Shared.Config`, `Remotes`, `Art`; client `Main` and `CostumeLabels`. All balance numbers are in `Shared.Config`.
+
+**Working**
+
+- Hub with 5 bases, Speed Shop and Costume Shop; a 9-house street with 2 finished houses and 7 placeholders.
 - Whole map scaled up: houses 1.75x bigger, lots 2x deeper and 1.5x longer, street about 2,100 studs, hub 430 × 260, bases 56 × 56.
-- House 1 fully upgraded into an Egyptian mummy tomb, inside and out (great hall, burial chamber, treasure vault, golden egg altars).
-- Trick-or-Treat with costume checks and roast lines.
-- Egg stealing, owner chase that stops at the Level 1 line, catch and stun, delivery to base. All 9 owners and 47 eggs spawn.
+- Trick-or-Treat with the door scene, costume checks and roast lines.
+- Egg stealing with the new owner chase, catch and stun, egg returning to its nest, delivery to base. All 9 owners and 47 eggs spawn.
 - Day/night cycle with egg respawn and street closing.
 - Auto-running treadmills, Speed XP, levels and rebirth.
-- **Free hatching** in 3+ incubators, pets on the base earning Money, pet inventory with Equip Best, friend boost.
-- New cartoon HUD and menus (Rebirth, Index, Pets, Eggs, Store, Speed Shop). Saving with DataStore (needs a published place to actually save).
+- Free hatching in 3+ incubators, pets on the base earning Money, pet inventory with Equip Best, friend boost, Pet Index.
+- Egg variants (Size and Material) with their looks and multipliers.
+- Cartoon HUD and menus (Rebirth, Index, Pets, Eggs, Store with Codes, Speed Shop). Saving with DataStore (needs a published place to actually save).
 
 **Art**
 
-- 65 AI-generated studs models (9 owners, 20 pets, 20 egg designs, 10 costumes, 6 props) plus House 1's custom props. Costumes really dress the character and the mannequins wear them.
+- 65 AI-generated studs models (9 owners, 20 pets, 20 egg designs, 10 costumes, 6 props) plus the custom props of the two finished houses. Costumes really dress the character and the mannequins wear them.
 - Map decoration: street lamps, dead trees, gravestones, fences, pumpkins, cauldrons, purple haze, stars and a moon.
 
-**Version 2 changes (done in V3.2)**
+**Version 2 changes (done)**
 
 - Blank tattersall map with themed floors and walls per level, all houses and props in rows on the side, old map backed up.
 - Trails tab and trail multiplier.
@@ -263,13 +282,25 @@ The main copy is the **SpookyStealV3.2** place, kept in the GitHub repo vituyy/b
 - Wandering pets.
 - 10-second day.
 
+**Version 4 changes (done in V3.2 (13))**
+
+- **Witch house:** new House 1, with the Friendly Mummy moved to House 2 (in `Config.Houses` the two owners swapped places, so each keeps its own numbers: House 1 is the slow starter at 14).
+- **Door scene** for Trick-or-Treat (2.4), including a generic door set-up that works with any door size and direction.
+- **Owner chase rewrite** (2.5): in-house start, path navigation (`PathfindingService`), ghost body outside, reaction time with a "!" marker, walk back home, and a safety net: if an owner ever falls through the floor, owners collide with props again and the log says so.
+- **Economy rebalance** (2.9 to 2.11): Speed XP now grows 12% per level up to level 70, then 5%; costumes, trails, base upgrades and Index rewards cost more; houses 1 and 2 are slower. The pacing came from a simulation of an active player.
+- **Egg variants** (2.8): independent Size and Material rolls; because they raise average pet income by about 3.4x, all Money prices were multiplied by 3. Normal eggs are drawn at 0.7x, variant eggs and pets are much bigger.
+- **Eggs:** a caught thief's egg returns to its nest; the thief carries the egg in front of the chest.
+- **Codes** in the Store menu.
+
 **Safety (added 1 October 2026)**
 
 - **Save lock:** a player's save is stamped with the server that has it open, so two servers can't both load it (no duplicating items by rejoining quickly). A crashed server blocks a player for at most 4 minutes. A loaded save is repaired (NaN or negative numbers, unknown pets, eggs or costumes are fixed or removed) so one bad value can't break the game.
-- **Codes:** the Store menu has a Codes box. Each code can be used once per player and is not case sensitive. They live in `CODES` at the top of `ShopService.luau` (server only, so players can't read them). Current codes: DEV01 gives $100,000 and DEV02 gives 10,000 Candy. Five wrong codes in a minute lock the box for a minute.
+- **Codes:** each code can be used once per player and is not case sensitive. They live in `CODES` at the top of `ShopService.luau` (server only, so players can't read them). Current codes: DEV01 gives $100,000 and DEV02 gives 10,000 Candy. Five wrong codes in a minute lock the box for a minute. Remove the dev codes before a public release.
 - **Prompt range checks:** doors, eggs, mannequins and the upgrade sign check that the player is really standing next to them, because cheats can fire prompts from anywhere.
 - **Movement check:** if a player keeps moving much faster than the speed the server gave them for 2 seconds, they are put back where they were last fine.
 - Every purchase and menu action already goes through one server function that re-checks costs, ownership and rate.
+
+**Written but not yet checked in a playtest** (the assistant could not run Studio): the owner path navigation and the "falls through the floor" fallback, the glow and sparkles of Golden, Diamond and Rainbow, the size of Gigantic eggs in their nests and of Gigantic pets on a base, the movement check (false alarms), and the session lock with two servers.
 
 ## 4. Execution plan
 
@@ -300,25 +331,30 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 ### Phase 3: World building (Viktor, by hand)
 
-- ○ Place the houses on their lots and dress each lot to its theme
-- ○ Upgrade houses 2 to 9 to the same quality as the House 1 tomb
-- ○ Interiors: furniture, hiding spots and room layouts that make the chase interesting
+- ✓ House 1 (Old Witch swamp cottage) and House 2 (Mummy tomb) built and placed on the street
+- ○ Place houses 3 to 9 on their lots and dress each lot to its theme
+- ○ Upgrade houses 3 to 9 to the same quality as the witch house and the tomb
+- ○ Interiors of houses 3 to 9: furniture, hiding spots and room layouts that make the chase interesting (the owner now finds his way around them)
 - ○ Real treadmill model per tier
 - ○ Check every door, egg spot and owner spawn still works after placing houses
 
 ### Phase 4: Game feel
 
-- ○ Animations: owner run and grab, pet walk and idle, hatch reveal, costume change
+- ✓ Door scene: door opens, owner talks in a speech bubble, candy flies or a roast and a slam
+- ✓ Owner reaction ("!"), head start by egg rarity, walk home after the chase
+- ○ Animations: owner run and grab, pet walk and idle, hatch reveal, costume change, a real "carrying" pose
 - ○ Sounds and music: night ambience, door knock, alarm when an owner spots you, chase music, hatch fanfare
 - ○ Feedback: "RUN!" banner, screen shake on catch, Candy and Money flying to the HUD
-- ✓ Owner pathfinding through rooms, doors, windows and stairs (untested in Studio)
+- ◐ Owner pathfinding through rooms, doors, windows and stairs (written, needs a playtest in the real houses)
 - ◐ UI polish and a mobile-friendly layout (new UI done, phone layout still to test)
 
 ### Phase 5: Balance
 
-- ○ Spreadsheet the full progression (Candy per night, Money per hour, time to each costume, trail and speed level)
-- ○ Fix the speed-vs-owner gaps listed in section 5
-- ○ Tune house rarity odds, hatch times, pet income and trail prices so a new player reaches house 3 to 4 in their first session
+- ✓ Simulation of the full progression (Candy per night, Money per hour, time to each costume, trail and speed level), see 2.11
+- ✓ Speed XP curve, prices and the first two owners tuned; Money prices x3 for the egg variants
+- ○ Playtest the pacing with real players and adjust (all numbers are in `Config.luau`)
+- ○ Give Candy something to buy after the Cursed Treadmill
+- ○ Tune house rarity odds and hatch times for houses 3 to 9 once they are built
 
 ### Phase 6: Retention and social
 
@@ -329,8 +365,9 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 ### Phase 7: Launch prep
 
+- ○ Delete the old backups from ServerStorage (about 60,000 objects) and the DEV01/DEV02 codes
 - ○ Publish privately, turn on API access, test saving
-- ○ Anti-exploit checks on the server (speed, teleport, remote spam)
+- ◐ Anti-exploit checks on the server (done: save lock, prompt range, movement check, one validated entry point for every action; to do: a real test with an exploit tool, ProfileStore)
 - ○ Monetisation (see section 5)
 - ○ Game icon, thumbnails, description, max players set to 5
 - ○ Friends-only test, fix bugs, then public release around Halloween
@@ -343,21 +380,21 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 **2. Rebirth vs. speed.** Rebirth resets Speed Level to 0, so a player who rebirths becomes too slow for the houses they were stealing from. The XP multiplier (x2, x3, ...) and trails help them climb back faster but don't fix it. Decide what rebirth keeps (e.g. a speed floor, or reset only XP) and what else it gives.
 
-3. **New-player escape.** *(Done 1 October 2026: house 1's owner runs at 14 and house 2's at 17.)* A new player carrying the smallest egg runs at about 15, so house 1 can always be escaped. Check in Studio that the owner starting inside the house still feels fair.
+3. **New-player escape.** *(Done: house 1's owner, the Old Witch, runs at 14 and house 2's, the Mummy, at 17; the owner also needs a moment to notice you.)* A new player carrying the smallest egg runs at about 15, so house 1 can always be escaped. Check in Studio that the owner starting inside the house still feels fair.
 
 **4. Endgame.** Outrunning the Lich King (72) while carrying a Secret egg needs about Speed Level 93 (max is 100). Decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
 
 5. **Reading eggs.** With no signs, a new player can't tell a Common egg from a Mythic one. Decide how much help to give: only size, a subtle glow for Legendary and up, or the pet index revealing designs as you discover them (recommended).
 
-6. **Egg design surprise.** Eggs now always hatch the pet they look like. Decide whether a small chance of a "mutated" or golden version would add excitement without breaking trust in the designs.
+6. **Egg design surprise.** *(Done: egg variants, see 2.8.)* Check in play that a Gigantic Rainbow jackpot (x750) feels exciting and does not break the economy, and whether big eggs should also be heavier to carry.
 
-7. **Candy after treadmills.** Once you own the Cursed Treadmill, Candy has nothing to buy. Options: speed potions, egg-luck boosts, costume dyes.
+7. **Candy after treadmills.** Once you own the Cursed Treadmill (about 2 hours in), Candy has nothing to buy. Options: speed potions, egg-luck boosts (more variants), extra incubator slots, costume dyes.
 
 **8. Pet management.** The base holds 10 to 18 pets and the inventory 60; selling pays 30 s of income. Decide on merging duplicates, trading, pet levels, or more inventory space as a Money sink.
 
 9. **Caught penalty.** The owner takes the egg and you're stunned for 1.5 s. Consider whether that is enough on the far houses.
 
-**10. Shared eggs.** 5 players share 47 eggs per night. Decide whether eggs are first come first served or per player, and whether players can help or block each other during a chase.
+**10. Shared eggs.** 5 players share 47 eggs per night, and a caught thief's egg goes back to its nest for the next player. Decide whether eggs are first come first served or per player, and whether players can help or block each other during a chase.
 
 11. **Dark vs. bright.** The tattersall colours are brighter than the original dark Halloween palette. Check in game that night lighting keeps the spooky mood.
 
@@ -375,15 +412,15 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 - Retention: daily rewards, quests, offline earnings, group rewards.
 - Leaderboards and the pet index.
 - Trading (if wanted), with scam protection.
-- Anti-exploit and save protection (move to ProfileStore before launch).
+- Deeper anti-exploit testing and save protection (the save lock is in; consider ProfileStore before launch).
 - Mobile and console controls.
 - Audio.
 - Analytics: where players quit, which house they get stuck on.
 
 ### 5.4 Suggested next three steps
 
-1. Build the map by hand on the new tattersall layout, starting with the hub and houses 1 to 3.
+1. Playtest this version in Studio and note what looks or feels wrong: the owner chase in both houses, the variant glows and sizes, the door scene on House 1's door, the new prices. Send the notes so they can be fixed in one pass.
 
-2. Decide on player-vs-player stealing and the rebirth rule, because both change the economy.
+2. Build houses 3 to 9 by hand on the tattersall layout (or have them drafted from reference pictures), starting with house 3, and check every door, egg spot and owner spawn after placing them.
 
-3. Build a balance spreadsheet with the new trail multipliers and fix the first-house escape problem before any public test.
+3. Decide on player-vs-player stealing and the rebirth rule, because both change the economy; then remove the old backups and dev codes before the first public test.
