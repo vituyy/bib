@@ -137,6 +137,21 @@ Config.CostumeRoasts = {
 	"That's it? My cat has a scarier costume.",
 	"No costume, no candy. Rules are rules!",
 	"Is that a costume or did you just wake up?",
+	"I've seen scarier things in my fridge. Shoo!",
+	"You call that spooky? My grandma wears scarier pajamas!",
+	"Come back when you're less... boring.",
+	"Wow, you really put in zero effort. Respect. Now go away!",
+	"My doorbell is scarier than you. Bye!",
+}
+
+-- What an owner says when your costume is good enough.
+Config.TreatGreetings = {
+	"Happy Halloween!",
+	"Ooh, what a spooky costume! Happy Halloween!",
+	"Now THAT is a costume! Here, take some candy!",
+	"Happy Halloween, little monster!",
+	"Boo! Scary stuff! Have some treats!",
+	"Fantastic costume! Happy Halloween!",
 }
 
 ---------------------------------------------------------------------------

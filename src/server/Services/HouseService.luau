@@ -3,6 +3,8 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
@@ -36,6 +38,9 @@ type HouseState = {
 	Spots: { BasePart },
 	Eggs: { [number]: Model }, -- spot index -> egg model
 	KnockCooldowns: { [Player]: number },
+	Door: BasePart?,
+	Prompt: ProximityPrompt?,
+	Busy: boolean, -- a door scene is playing
 }
 
 type Carry = {
@@ -408,6 +413,189 @@ end
 ---------------------------------------------------------------------------
 -- Trick-or-Treat
 ---------------------------------------------------------------------------
+local CANDY_COLORS = {
+	Color3.fromRGB(255, 140, 0),
+	Color3.fromRGB(255, 80, 160),
+	Color3.fromRGB(120, 255, 120),
+	Color3.fromRGB(120, 200, 255),
+	Color3.fromRGB(255, 240, 90),
+}
+
+-- Smoothly move an anchored model. Returns false if `alive` says the scene should stop.
+local function glide(model: Model, toCF: CFrame, duration: number, style: Enum.EasingStyle, alive: () -> boolean): boolean
+	local fromCF = model:GetPivot()
+	local t0 = os.clock()
+	while true do
+		if not alive() then
+			return false
+		end
+		local a = math.min((os.clock() - t0) / duration, 1)
+		model:PivotTo(fromCF:Lerp(toCF, TweenService:GetValue(a, style, Enum.EasingDirection.Out)))
+		if a >= 1 then
+			return true
+		end
+		task.wait()
+	end
+end
+
+local function speechBubble(owner: Model, text: string, color: Color3, scale: number): BillboardGui
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "SpeechBubble"
+	gui.Adornee = rootOf(owner)
+	gui.Size = UDim2.fromOffset(0, 0)
+	gui.StudsOffset = Vector3.new(0, 4.5 * scale, 0)
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 80
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundColor3 = Color3.fromRGB(255, 250, 235)
+	label.TextColor3 = color
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.TextWrapped = true
+	label.Text = text
+	local limit = Instance.new("UITextSizeConstraint")
+	limit.MaxTextSize = 22
+	limit.Parent = label
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
+	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
+	pad.Parent = label
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 16)
+	corner.Parent = label
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color
+	stroke.Thickness = 3
+	stroke.Parent = label
+	label.Parent = gui
+
+	gui.Parent = owner
+	TweenService:Create(gui, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(320, 90) }):Play()
+	Debris:AddItem(gui, 8)
+	return gui
+end
+
+-- Candy flies from the owner into the player's hands.
+local function tossCandy(from: Vector3, player: Player)
+	task.spawn(function()
+		local count = 7
+		local duration = 0.7
+		local pieces = {}
+		for i = 1, count do
+			local p = Instance.new("Part")
+			p.Shape = Enum.PartType.Ball
+			p.Size = Vector3.one * 0.7
+			p.Material = Enum.Material.Neon
+			p.Color = CANDY_COLORS[(i - 1) % #CANDY_COLORS + 1]
+			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+			p.Position = from
+			p.Parent = workspace
+			Debris:AddItem(p, 5)
+			pieces[i] = p
+		end
+		local t0 = os.clock()
+		while os.clock() - t0 < duration + count * 0.06 do
+			local targetRoot = rootOf(player.Character)
+			local target = targetRoot and targetRoot.Position or from
+			for i, p in pieces do
+				local a = math.clamp((os.clock() - t0 - (i - 1) * 0.06) / duration, 0, 1)
+				if p.Parent then
+					p.Position = from:Lerp(target, a) + Vector3.new(0, math.sin(a * math.pi) * 4, 0)
+					p.Transparency = if a > 0.85 then (a - 0.85) / 0.15 else 0
+				end
+			end
+			task.wait()
+		end
+		for _, p in pieces do
+			p:Destroy()
+		end
+	end)
+end
+
+-- The door scene: the door opens, the owner steps up and talks, then everything goes back.
+-- It stops quietly if the owner leaves to chase a thief or the sun comes up.
+local function playDoorScene(state: HouseState, player: Player, happy: boolean, line: string)
+	local door, owner = state.Door, state.Owner
+	local root = rootOf(owner)
+	if not (door and owner and root) then
+		return
+	end
+	local scale = 1 + state.Index * 0.05
+	local closedCF = door.CFrame
+	local homeCF = owner:GetPivot()
+	local function alive()
+		return state.OwnerHome and state.Owner == owner and owner.Parent ~= nil
+	end
+
+	state.Busy = true
+	if state.Prompt then
+		state.Prompt.Enabled = false
+	end
+	root.Anchored = true
+	door.CanCollide = false
+
+	-- The door swings inward on its left edge.
+	local openCF = closedCF * CFrame.new(-3.5, 0, 0) * CFrame.Angles(0, -math.rad(105), 0) * CFrame.new(3.5, 0, 0)
+	TweenService:Create(door, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { CFrame = openCF }):Play()
+
+	-- The owner steps into the doorway, looking at the player.
+	local ahead = closedCF * CFrame.new(0, 0, 3)
+	local spot = Vector3.new(ahead.X, homeCF.Y, ahead.Z)
+	local lookAt = rootOf(player.Character)
+	local faceTo = if lookAt then Vector3.new(lookAt.Position.X, spot.Y, lookAt.Position.Z) else spot + closedCF.LookVector
+	local doorwayCF = CFrame.lookAt(spot, faceTo)
+	if glide(owner, doorwayCF, 0.6, Enum.EasingStyle.Quad, alive) then
+		local bubble = speechBubble(owner, line, if happy then Color3.fromRGB(235, 110, 0) else Color3.fromRGB(200, 40, 40), scale)
+		if happy then
+			tossCandy(spot + Vector3.new(0, 3, 0), player)
+			-- A happy double hop.
+			for _ = 1, 2 do
+				if not (glide(owner, doorwayCF + Vector3.new(0, 1.5, 0), 0.15, Enum.EasingStyle.Quad, alive)
+					and glide(owner, doorwayCF, 0.15, Enum.EasingStyle.Quad, alive)) then
+					break
+				end
+			end
+		else
+			-- An angry shake.
+			for i = 1, 6 do
+				local sway = doorwayCF * CFrame.Angles(0, math.rad(if i % 2 == 0 then 14 else -14), 0)
+				if not glide(owner, sway, 0.08, Enum.EasingStyle.Linear, alive) then
+					break
+				end
+			end
+			glide(owner, doorwayCF, 0.08, Enum.EasingStyle.Linear, alive)
+		end
+		-- Let the player read it.
+		local readUntil = os.clock() + (if happy then 2 else 2.4)
+		while os.clock() < readUntil and alive() do
+			task.wait(0.1)
+		end
+		bubble:Destroy()
+	end
+
+	-- Back to normal. If the owner left for a chase, only the door is put back.
+	if alive() then
+		glide(owner, homeCF, 0.6, Enum.EasingStyle.Quad, alive)
+	end
+	if root.Parent then
+		root.Anchored = false
+	end
+	local closeInfo = if happy
+		then TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		else TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In) -- slam!
+	local closing = TweenService:Create(door, closeInfo, { CFrame = closedCF })
+	closing:Play()
+	closing.Completed:Wait()
+	door.CFrame = closedCF
+	door.CanCollide = true
+	state.Busy = false
+	if state.Prompt then
+		state.Prompt.Enabled = true
+	end
+end
+
 local function onKnock(state: HouseState, player: Player)
 	local data = DataService.Get(player)
 	if not data then
@@ -417,12 +605,20 @@ local function onKnock(state: HouseState, player: Player)
 		notify(player, "Nobody answers. Trick-or-Treat only works at night!", ORANGE)
 		return
 	end
+	if state.Busy then
+		return
+	end
+	-- If the owner is out chasing a thief nobody opens the door.
+	local scene = state.OwnerHome and state.Door ~= nil
 	local costume = Config.GetCostume(data.EquippedCostume)
 	if costume.Tier < state.Info.CostumeTier then
 		local roast = Config.CostumeRoasts[math.random(#Config.CostumeRoasts)]
 		local needed = Config.Costumes[state.Info.CostumeTier + 1]
 		notify(player, string.format('%s: "%s"', state.OwnerName, roast), RED)
-		notify(player, "You need at least a " .. needed.Name .. " costume here.", ORANGE)
+		notify(player, string.format("Minimum costume for this house: %s. No candy for you!", needed.Name), ORANGE)
+		if scene then
+			task.spawn(playDoorScene, state, player, false, roast)
+		end
 		return
 	end
 	local now = os.clock()
@@ -438,6 +634,9 @@ local function onKnock(state: HouseState, player: Player)
 		d.Candy += candy
 	end)
 	notify(player, string.format("%s gave you %d Candy!", state.OwnerName, candy), ORANGE)
+	if scene then
+		task.spawn(playDoorScene, state, player, true, Config.TreatGreetings[math.random(#Config.TreatGreetings)])
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -466,6 +665,8 @@ local function setupHouse(house: Model, index: number)
 		Spots = spots,
 		Eggs = {},
 		KnockCooldowns = {},
+		Door = house:FindFirstChild("Door") :: BasePart?,
+		Busy = false,
 	}
 	table.insert(houses, state)
 
@@ -488,6 +689,7 @@ local function setupHouse(house: Model, index: number)
 		prompt.MaxActivationDistance = 10
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
 		prompt.Parent = door
+		state.Prompt = prompt
 		prompt.Triggered:Connect(function(player)
 			onKnock(state, player)
 		end)
