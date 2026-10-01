@@ -196,6 +196,62 @@ Config.Pets = {
 	PumpkinKing = { Name = "Pumpkin King", Rarity = "Secret", MoneyPerSecond = 15000, Color = Color3.fromRGB(255, 90, 0) },
 }
 
+---------------------------------------------------------------------------
+-- Mutations: an egg can hatch a Golden or Diamond version of its pet that earns more. A mutated pet is stored
+-- as "<PetId>+<Mutation>" (for example "Bat+Golden"). Config.Pets understands those ids too, so every script
+-- that looks a pet up by id keeps working; use Config.SplitPet when you need the plain pet id (art, Index).
+---------------------------------------------------------------------------
+Config.Mutations = {
+	Golden = { Name = "Golden", Chance = 0.03, Multiplier = 2, Color = Color3.fromRGB(255, 205, 50) },
+	Diamond = { Name = "Diamond", Chance = 0.005, Multiplier = 4, Color = Color3.fromRGB(120, 230, 255) },
+}
+local MUTATION_ORDER = { "Diamond", "Golden" } -- the rarer one is rolled first
+
+-- "Bat+Golden" -> "Bat", "Golden". A plain id gives (id, nil).
+function Config.SplitPet(id: string): (string, string?)
+	local base, mutation = string.match(id, "^([^+]+)%+(.+)$")
+	if base then
+		return base, mutation
+	end
+	return id, nil
+end
+
+-- Returns a mutation name (or nil) for a freshly spawned egg.
+function Config.RollMutation(): string?
+	for _, name in MUTATION_ORDER do
+		if math.random() < Config.Mutations[name].Chance then
+			return name
+		end
+	end
+	return nil
+end
+
+local mutatedPets = {}
+setmetatable(Config.Pets, {
+	__index = function(_, id)
+		if type(id) ~= "string" then
+			return nil
+		end
+		local cached = mutatedPets[id]
+		if cached then
+			return cached
+		end
+		local baseId, mutationName = Config.SplitPet(id)
+		local base = rawget(Config.Pets, baseId)
+		local mutation = mutationName and Config.Mutations[mutationName]
+		if not (base and mutation) then
+			return nil
+		end
+		local info = table.clone(base)
+		info.Name = mutation.Name .. " " .. base.Name
+		info.MoneyPerSecond = base.MoneyPerSecond * mutation.Multiplier
+		info.BaseId = baseId
+		info.Mutation = mutationName
+		mutatedPets[id] = info
+		return info
+	end,
+})
+
 -- Index order: every pet, weakest first.
 Config.PetOrder = {}
 for petId in Config.Pets do
@@ -302,6 +358,8 @@ Config.StealHoldDuration = 1 -- seconds holding the prompt
 Config.ChaseMaxDuration = 30 -- owner gives up after this long
 Config.ChaseGiveUpDistance = 150 -- owner gives up if the thief gets this far ahead
 Config.CatchDistance = 5 -- studs between owner and thief that counts as caught
+Config.OwnerReaction = 0.8 -- seconds the owner needs to notice a thief before he starts running
+Config.OwnerReactionPerRarity = 0.2 -- extra seconds per egg rarity step (Common = 1 step, Secret = 7): rarer eggs give a bigger head start
 Config.CaughtStunTime = 1.5 -- seconds the thief is slowed after being caught
 Config.MaxEggsHeld = 12 -- unhatched egg inventory cap
 Config.IncubatorSlots = 3 -- eggs hatching at the same time on a new base

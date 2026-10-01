@@ -304,6 +304,11 @@ local function wireCostumeShop(map: Instance)
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
 			prompt.Parent = pedestal
 			prompt.Triggered:Connect(function(player)
+				-- Prompts can be fired from anywhere with cheats, so check the player really is at the mannequin.
+				local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if not (root and (root.Position - pedestal.Position).Magnitude <= prompt.MaxActivationDistance + 14) then
+					return
+				end
 				local ok, message = runAction(player, "BuyCostume", costume.Id)
 				Remotes.Notify:FireClient(player, message, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
 			end)

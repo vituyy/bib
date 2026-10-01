@@ -13,7 +13,8 @@ local FACE_FORWARD = CFrame.Angles(0, math.pi, 0)
 function Art.Get(category: string, name: string): Model?
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
 	local folder = assets and assets:FindFirstChild(category)
-	local template = folder and folder:FindFirstChild(name)
+	-- A mutated pet id ("Bat+Golden") uses the plain pet's art.
+	local template = folder and folder:FindFirstChild(string.match(name, "^([^+]+)") or name)
 	if template and template:IsA("Model") then
 		return template
 	end
@@ -132,6 +133,25 @@ function Art.Egg(eggId: string, petId: string?, withNest: boolean?, unanchored: 
 		base.Anchored = not unanchored
 		base.CFrame = CFrame.new(0, height * 0.05, 0)
 		base.Parent = model
+	end
+
+	-- Mutated eggs (Golden, Diamond) glow in the mutation's colour.
+	local _, mutationName = Config.SplitPet(petId or "")
+	local mutation = mutationName and Config.Mutations[mutationName]
+	if mutation then
+		local glow = Instance.new("Highlight")
+		glow.Name = "MutationGlow"
+		glow.FillColor = mutation.Color
+		glow.FillTransparency = 0.6
+		glow.OutlineColor = mutation.Color
+		glow.OutlineTransparency = 0
+		glow.DepthMode = Enum.HighlightDepthMode.Occluded
+		glow.Parent = model
+		local light = Instance.new("PointLight")
+		light.Color = mutation.Color
+		light.Range = 12
+		light.Brightness = 2
+		light.Parent = root
 	end
 
 	-- Pivot at the bottom centre (the root sits half an egg above the ground).

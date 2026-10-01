@@ -90,7 +90,7 @@ Walk up to a front door and knock to get Candy (20 s cooldown per house). If you
 ### 2.5 Stealing eggs
 
 - Climb in through a window, pick an egg by its look and hold the prompt for 1 s.
-- The owner starts the chase from wherever they stand, even inside the house. They follow a planned path through rooms, doors, windows and stairs while a wall is in the way, pass through props outside so they never get stuck, and walk back to their spot afterwards. The closest thief is chased. Bigger, rarer eggs slow you down (95% down to 82% of your speed).
+- The owner needs a moment to notice you (a red "!" over their head): 0.8 s plus 0.2 s per egg rarity step, so a Common egg gives a 1 s head start and a Secret egg 2.2 s. They can't catch you during that time. Then the owner starts the chase from wherever they stand, even inside the house. They follow a planned path through rooms, doors, windows and stairs while a wall is in the way, pass through props outside so they never get stuck, and walk back to their spot afterwards. The closest thief is chased. Bigger, rarer eggs slow you down (95% down to 82% of your speed).
 - Get past the Level 1 line and walk the egg to your base to keep it. If the owner touches you, they take the egg back and you are stunned for 1.5 s. Owners also give up after 30 s or when you are 150 studs ahead.
 
 ### 2.6 Day and night
@@ -145,6 +145,8 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 | Shadow Clown | Mythic | 4,000 | Black egg with a ruff collar and purple diamonds |
 | Headless Horseman | Secret | 8,000 | Black egg with ears and red flame cracks |
 | Pumpkin King | Secret | 15,000 | Orange-gold egg with a crown and a glowing carved face |
+
+**Mutations (added 1 October 2026):** every egg has a 3% chance to be **Golden** (earns x2) and a 0.5% chance to be **Diamond** (earns x4). Mutated eggs glow gold or light blue in the house, and the pet that hatches keeps the glow on your base. A mutated pet is stored as "Bat+Golden" and counts as its plain pet in the Index. Chances and multipliers are in `Config.Mutations`.
 
 **Wandering pets:** pets walk slowly around inside your base, stop now and then to idle, and never leave the base. Money pops up above each pet as it earns. Pets don't block players.
 
@@ -227,6 +229,13 @@ The main copy is the **SpookyStealV3.2** place in Roblox Studio (a copy lives in
 - One egg design per pet, rarity signs removed.
 - Wandering pets.
 - 10-second day.
+
+**Safety (added 1 October 2026)**
+
+- **Save lock:** a player's save is stamped with the server that has it open, so two servers can't both load it (no duplicating items by rejoining quickly). A crashed server blocks a player for at most 4 minutes. A loaded save is repaired (NaN or negative numbers, unknown pets, eggs or costumes are fixed or removed) so one bad value can't break the game.
+- **Prompt range checks:** doors, eggs, mannequins and the upgrade sign check that the player is really standing next to them, because cheats can fire prompts from anywhere.
+- **Movement check:** if a player keeps moving much faster than the speed the server gave them for 2 seconds, they are put back where they were last fine.
+- Every purchase and menu action already goes through one server function that re-checks costs, ownership and rate.
 
 ## 4. Execution plan
 

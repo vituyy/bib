@@ -55,6 +55,8 @@ type HouseState = {
 	PathAt: number,
 	PathGoal: Vector3?,
 	ReturnStart: number?,
+	PathGen: number, -- bumped whenever navigation resets, so a late path result for an old goal is ignored
+	AlertUntil: number?, -- the owner is still noticing the thief until this time (os.clock)
 	DoorSetup: any?, -- set while the front door is held open for the chase
 }
 
@@ -84,6 +86,17 @@ end
 local function rootOf(model: Model?): BasePart?
 	return model and model:FindFirstChild("HumanoidRootPart") :: BasePart?
 end
+
+-- Players can fire prompts from anywhere with cheats, so the server checks they really are standing nearby.
+local function isNear(player: Player, prompt: ProximityPrompt): boolean
+	local root = rootOf(player.Character)
+	local part = prompt.Parent
+	return root ~= nil and part ~= nil and part:IsA("BasePart") and (root.Position - part.Position).Magnitude <= prompt.MaxActivationDistance + 14
+end
+
+-- Owners run through props with a body that does not collide. If that ever makes one fall through the floor,
+-- this turns off and owners collide with props again (they may snag, but the chase keeps working).
+local ghostWorks = true
 
 local function studs(p: BasePart)
 	p.Material = Enum.Material.Plastic
@@ -185,8 +198,9 @@ local function resetOwner(state: HouseState)
 	end
 	owner.Parent = house
 	local root = rootOf(owner)
-	state.Goal, state.Waypoints, state.ReturnStart = nil, nil, nil
+	state.Goal, state.Waypoints, state.ReturnStart, state.AlertUntil = nil, nil, nil, nil
 	state.PathGoal, state.PathFailed = nil, false
+	state.PathGen += 1
 	closeChaseDoor(state, true)
 	if root then
 		root.CanCollide = true
@@ -253,6 +267,10 @@ local function spawnEggs(state: HouseState)
 		local eggId = rolled[spotIndex]
 		-- The pet is decided now, so the egg can look like what is inside it.
 		local petId = PlotService.RollPet(eggId)
+		local mutation = Config.RollMutation() -- a small chance of a Golden or Diamond (glowing) egg
+		if mutation then
+			petId ..= "+" .. mutation
+		end
 		local eggModel = Art.Egg(eggId, petId, true)
 		eggModel.Name = "Egg"
 		eggModel:PivotTo(spot.CFrame + Vector3.new(0, spot.Size.Y / 2, 0))
@@ -267,7 +285,9 @@ local function spawnEggs(state: HouseState)
 		prompt.KeyboardKeyCode = Enum.KeyCode.F
 		prompt.Parent = eggModel.PrimaryPart
 		prompt.Triggered:Connect(function(player)
-			onStealTriggered(state, spotIndex, player)
+			if isNear(player, prompt) then
+				onStealTriggered(state, spotIndex, player)
+			end
 		end)
 
 		eggModel:SetAttribute("EggId", eggId)
@@ -325,7 +345,9 @@ local function finishTheft(player: Player, outcome: string)
 		DataService.Update(player, function(data)
 			table.insert(data.Eggs, Config.MakeEggEntry(carry.EggId, carry.PetId))
 		end)
-		notify(player, "You escaped with a " .. egg.Name .. "! Put it in an incubator from the Eggs menu.", GREEN)
+		local _, mutation = Config.SplitPet(carry.PetId or "")
+		local eggName = if mutation then mutation .. " " .. egg.Name else egg.Name
+		notify(player, "You escaped with a " .. eggName .. "! Put it in an incubator from the Eggs menu.", GREEN)
 	elseif outcome == "caught" then
 		notify(player, state.OwnerName .. " caught you and took the " .. egg.Name .. " back!", RED)
 		CharacterService.Stun(player, Config.CaughtStunTime)
@@ -344,6 +366,7 @@ local PATH_PARAMS = { AgentRadius = 1.5, AgentHeight = 5, AgentCanJump = true, W
 
 local function requestPath(state: HouseState, from: Vector3, goal: Vector3)
 	state.PathPending = true
+	local gen = state.PathGen
 	local fromFeet = from - Vector3.new(0, state.GroundOffset, 0)
 	local goalFeet = goal - Vector3.new(0, state.GoalOffset, 0)
 	task.spawn(function()
@@ -351,6 +374,10 @@ local function requestPath(state: HouseState, from: Vector3, goal: Vector3)
 		local ok = pcall(function()
 			path:ComputeAsync(fromFeet, goalFeet)
 		end)
+		if gen ~= state.PathGen then
+			state.PathPending = false -- the owner reset while this was computing; the result is for an old goal
+			return
+		end
 		if ok and path.Status == Enum.PathStatus.Success then
 			state.Waypoints = path:GetWaypoints()
 			state.WpIndex = 2
@@ -435,13 +462,52 @@ local function arriveHome(state: HouseState)
 			humanoid:MoveTo(root.Position)
 		end
 	end
-	state.Goal, state.Waypoints, state.ReturnStart = nil, nil, nil
+	state.Goal, state.Waypoints, state.ReturnStart, state.AlertUntil = nil, nil, nil, nil
 	state.PathGoal, state.PathFailed = nil, false
+	state.PathGen += 1
 	state.OwnerHome = true
 	closeChaseDoor(state, false)
 end
 
+-- A red "!" pops up over the owner's head while he notices the thief.
+local function alertMarker(owner: Model, scale: number, duration: number)
+	local root = rootOf(owner)
+	if not root then
+		return
+	end
+	local old = owner:FindFirstChild("AlertMarker")
+	if old then
+		old:Destroy()
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "AlertMarker"
+	gui.Adornee = root
+	gui.Size = UDim2.fromOffset(0, 0)
+	gui.StudsOffset = Vector3.new(0, 4.5 * scale, 0)
+	gui.AlwaysOnTop = true
+	gui.LightInfluence = 0
+	gui.MaxDistance = 120
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBlack
+	label.Text = "!"
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 70, 70)
+	label.TextStrokeTransparency = 0
+	label.Parent = gui
+	gui.Parent = owner
+	TweenService:Create(gui, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(70, 90) }):Play()
+	Debris:AddItem(gui, duration + 0.2)
+end
+
 local function startChase(state: HouseState, player: Player, eggId: string, petId: string?)
+	local alreadyChasing = false
+	for _, other in carrying do
+		if other.House == state and other.Chased then
+			alreadyChasing = true
+		end
+	end
 	carrying[player] = {
 		House = state,
 		EggId = eggId,
@@ -461,9 +527,23 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 		local root = rootOf(state.Owner)
 		if root then
 			root.Anchored = false
-			root.CanCollide = false
+			root.CanCollide = not ghostWorks
 		end
 		openChaseDoor(state)
+	end
+	-- The owner needs a moment to notice; a rarer (heavier) egg gives a longer head start.
+	if not alreadyChasing and state.Owner then
+		local egg = Config.Eggs[eggId]
+		local reaction = Config.OwnerReaction + Config.OwnerReactionPerRarity * Config.Rarities[egg.Rarity].Order
+		state.AlertUntil = os.clock() + reaction
+		state.Goal, state.Waypoints = nil, nil
+		state.PathGen += 1
+		local humanoid = state.Owner:FindFirstChildOfClass("Humanoid")
+		local root = rootOf(state.Owner)
+		if humanoid and root then
+			humanoid:MoveTo(root.Position)
+		end
+		alertMarker(state.Owner, 1 + state.Index * 0.05, reaction)
 	end
 	Remotes.ChaseState:FireClient(player, true, state.OwnerName)
 	notify(player, state.OwnerName .. " saw you! RUN back to your base!", RED)
@@ -487,6 +567,18 @@ local function chaseStep()
 		local ownerHumanoid = owner and owner:FindFirstChildOfClass("Humanoid")
 		if not (ownerRoot and ownerHumanoid) then
 			continue
+		end
+
+		if not state.OwnerHome then
+			local home = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
+			if home and ownerRoot.Position.Y < home.Position.Y - 40 then
+				if ghostWorks then
+					ghostWorks = false
+					warn("[HouseService] an owner fell through the floor while passing through props; owners collide with props again")
+				end
+				resetOwner(state)
+				continue
+			end
 		end
 
 		-- Chase the nearest thief of this house.
@@ -514,7 +606,11 @@ local function chaseStep()
 
 		if target then
 			state.ReturnStart = nil
-			if targetDistance <= Config.CatchDistance then
+			if os.clock() < (state.AlertUntil or 0) then
+				-- Still noticing the thief: he stands there for a moment (and can not catch anyone yet).
+				state.Goal, state.Waypoints = nil, nil
+				ownerHumanoid:MoveTo(ownerRoot.Position)
+			elseif targetDistance <= Config.CatchDistance then
 				finishTheft(target, "caught")
 			else
 				local thiefHumanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
@@ -543,7 +639,8 @@ end
 onStealTriggered = function(state: HouseState, spotIndex: number, player: Player)
 	local data = DataService.Get(player)
 	local eggModel = state.Eggs[spotIndex]
-	if not (data and eggModel) then
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if not (data and eggModel and humanoid and humanoid.Health > 0) then
 		return
 	end
 	if not DayNightService.IsNight() then
@@ -1036,6 +1133,7 @@ local function setupHouse(house: Model, index: number)
 		GroundOffset = 3,
 		GoalOffset = 3,
 		WpIndex = 1,
+		PathGen = 0,
 		PathPending = false,
 		PathFailed = false,
 		PathAt = 0,
@@ -1087,7 +1185,9 @@ local function setupHouse(house: Model, index: number)
 		prompt.Parent = door
 		state.Prompt = prompt
 		prompt.Triggered:Connect(function(player)
-			onKnock(state, player)
+			if isNear(player, prompt) then
+				onKnock(state, player)
+			end
 		end)
 	else
 		warn("[HouseService] House has no Door part:", house:GetFullName())

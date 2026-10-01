@@ -141,7 +141,61 @@ function CharacterService.Stun(player: Player, seconds: number)
 	end)
 end
 
+-- Anti-cheat: the client moves its own character, so a cheat can run far faster than the speed the server gave
+-- it (or fly). Every half second the server compares how far each player moved with how far they could have.
+-- Four checks in a row over the limit (2 seconds) put them back where they were last fine. One slow frame, a
+-- lag burst or a server teleport only ever causes a single check to fail, so normal play is never touched.
+local WATCH_INTERVAL = 0.5
+local WATCH_STRIKES = 4
+local lastFine: { [Player]: { Character: Model, Last: Vector3, Good: Vector3, At: number, Strikes: number } } = {}
+
+local function watchMovement()
+	local now = os.clock()
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not (character and root and humanoid and humanoid.Health > 0) then
+			lastFine[player] = nil
+			continue
+		end
+		local record = lastFine[player]
+		if not record or record.Character ~= character then
+			lastFine[player] = { Character = character, Last = root.Position, Good = root.Position, At = now, Strikes = 0 }
+			continue
+		end
+		-- Distance since the previous check, against what this player's speed allows (plus room for slopes, lag
+		-- and the treadmill belt's 10 studs/s).
+		local flat = Vector3.new(root.Position.X - record.Last.X, 0, root.Position.Z - record.Last.Z).Magnitude
+		local allowed = (humanoid.WalkSpeed * 1.3 + 25) * (now - record.At)
+		if flat <= allowed then
+			record.Strikes = 0
+			record.Good = root.Position
+		else
+			record.Strikes += 1
+			if record.Strikes >= WATCH_STRIKES then
+				character:PivotTo(CFrame.new(record.Good + Vector3.new(0, 3, 0)))
+				record.Strikes = 0
+				record.Last = record.Good
+				record.At = now
+				continue
+			end
+		end
+		record.Last = root.Position
+		record.At = now
+	end
+end
+
 function CharacterService.Start()
+	task.spawn(function()
+		while true do
+			task.wait(WATCH_INTERVAL)
+			local ok, err = pcall(watchMovement)
+			if not ok then
+				warn("[CharacterService] movement check error:", err)
+			end
+		end
+	end)
 	local function onPlayerAdded(player: Player)
 		player.CharacterAdded:Connect(function(character)
 			character:WaitForChild("Humanoid")
@@ -164,6 +218,7 @@ function CharacterService.Start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		stunnedUntil[player] = nil
+		lastFine[player] = nil
 	end)
 	DataService.OnChanged(function(player)
 		CharacterService.Refresh(player)

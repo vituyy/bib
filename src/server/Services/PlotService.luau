@@ -164,6 +164,17 @@ local function renderPets(player: Player, data)
 				model.PrimaryPart = body
 			end
 			model.Name = petId
+			local mutation = pet.Mutation and Config.Mutations[pet.Mutation]
+			if mutation then
+				local glow = Instance.new("Highlight")
+				glow.Name = "MutationGlow"
+				glow.FillColor = mutation.Color
+				glow.FillTransparency = 0.7
+				glow.OutlineColor = mutation.Color
+				glow.OutlineTransparency = 0
+				glow.DepthMode = Enum.HighlightDepthMode.Occluded
+				glow.Parent = model
+			end
 			local start = randomSpot(base)
 			model:PivotTo(CFrame.new(start + Vector3.new(0, height / 2, 0)))
 			model.Parent = visuals
@@ -414,14 +425,18 @@ local function hatchReady(player: Player, data)
 		for _, h in hatched do
 			table.remove(d.Incubators, h.Index)
 			table.insert(if h.ToBase then d.Pets else d.Storage, h.Pet)
-			if not table.find(d.Discovered, h.Pet) then
-				table.insert(d.Discovered, h.Pet)
+			local baseId = Config.SplitPet(h.Pet) -- the Index counts plain pets, not their mutated versions
+			if not table.find(d.Discovered, baseId) then
+				table.insert(d.Discovered, baseId)
 			end
 		end
 	end)
 	for _, h in hatched do
 		local pet = Config.Pets[h.Pet]
 		local text = string.format("Your egg hatched into a %s %s!", pet.Rarity, pet.Name)
+		if pet.Mutation then
+			text = string.format("MUTATION! Your egg hatched into a %s %s (earns x%d)!", pet.Rarity, pet.Name, Config.Mutations[pet.Mutation].Multiplier)
+		end
 		if not h.ToBase then
 			text ..= " (base full: it's in your Pets inventory)"
 		end
@@ -449,6 +464,12 @@ function PlotService.Start(map: Instance)
 
 	game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt, player)
 		if not prompt:GetAttribute("UpgradeBase") then
+			return
+		end
+		-- Players can fire prompts from anywhere with cheats, so check they are really standing at the sign.
+		local signPart = prompt.Parent
+		local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if not (signPart and signPart:IsA("BasePart") and playerRoot and (playerRoot.Position - signPart.Position).Magnitude <= prompt.MaxActivationDistance + 15) then
 			return
 		end
 		local plot = prompt
