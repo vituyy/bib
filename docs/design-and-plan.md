@@ -90,7 +90,7 @@ Walk up to a front door and knock to get Candy (20 s cooldown per house). If you
 ### 2.5 Stealing eggs
 
 - Climb in through a window, pick an egg by its look and hold the prompt for 1 s.
-- The owner bursts out and chases the closest thief. Bigger, rarer eggs slow you down (95% down to 82% of your speed).
+- The owner starts the chase from wherever they stand, even inside the house. They follow a planned path through rooms, doors, windows and stairs while a wall is in the way, pass through props outside so they never get stuck, and walk back to their spot afterwards. The closest thief is chased. Bigger, rarer eggs slow you down (95% down to 82% of your speed).
 - Get past the Level 1 line and walk the egg to your base to keep it. If the owner touches you, they take the egg back and you are stunned for 1.5 s. Owners also give up after 30 s or when you are 150 studs ahead.
 
 ### 2.6 Day and night
@@ -244,7 +244,7 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 - ○ Animations: owner run and grab, pet walk and idle, hatch reveal, costume change
 - ○ Sounds and music: night ambience, door knock, alarm when an owner spots you, chase music, hatch fanfare
 - ○ Feedback: "RUN!" banner, screen shake on catch, Candy and Money flying to the HUD
-- ○ Owner pathfinding through doors and stairs
+- ✓ Owner pathfinding through rooms, doors, windows and stairs (untested in Studio)
 - ○ UI polish and a mobile-friendly layout
 
 ### Phase 5: Balance

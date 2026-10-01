@@ -4,6 +4,8 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local PathfindingService = game:GetService("PathfindingService")
+local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -41,6 +43,19 @@ type HouseState = {
 	Door: BasePart?,
 	Prompt: ProximityPrompt?,
 	Busy: boolean, -- a door scene is playing
+	-- Chase navigation
+	Solid: RaycastParams?, -- walls, floors and roofs of this house (for "is the way blocked?")
+	GroundOffset: number, -- root height above the floor
+	Goal: Vector3?, -- where the owner is heading (the thief, or his spot)
+	GoalOffset: number, -- height of that goal's root above its floor
+	Waypoints: { PathWaypoint }?,
+	WpIndex: number,
+	PathPending: boolean,
+	PathFailed: boolean,
+	PathAt: number,
+	PathGoal: Vector3?,
+	ReturnStart: number?,
+	DoorSetup: any?, -- set while the front door is held open for the chase
 }
 
 type Carry = {
@@ -53,6 +68,8 @@ type Carry = {
 }
 
 local houses: { HouseState } = {}
+local openChaseDoor: (HouseState) -> () -- defined with the door code below
+local closeChaseDoor: (HouseState, boolean) -> () -- (state, instant)
 local carrying: { [Player]: Carry } = {}
 local chaseLimitZ = -math.huge -- the Level 1 line; set from the map in Start
 
@@ -168,7 +185,17 @@ local function resetOwner(state: HouseState)
 	end
 	owner.Parent = house
 	local root = rootOf(owner)
+	state.Goal, state.Waypoints, state.ReturnStart = nil, nil, nil
+	state.PathGoal, state.PathFailed = nil, false
+	closeChaseDoor(state, true)
 	if root then
+		root.CanCollide = true
+		-- How high the root floats above the floor, so the way home can be planned on the floor.
+		local params = RaycastParams.new()
+		params.FilterDescendantsInstances = { owner }
+		params.RespectCanCollide = true
+		local hit = workspace:Raycast(root.Position, Vector3.new(0, -15, 0), params)
+		state.GroundOffset = if hit then root.Position.Y - hit.Position.Y else 3 * (1 + state.Index * 0.05)
 		root.AssemblyLinearVelocity = Vector3.zero
 		pcall(function()
 			root:SetNetworkOwner(nil) -- server drives the chase
@@ -307,6 +334,113 @@ local function finishTheft(player: Player, outcome: string)
 	end
 end
 
+---------------------------------------------------------------------------
+-- Owner navigation
+---------------------------------------------------------------------------
+-- The owner is a Humanoid whose body does not collide, so props and furniture never snag him, and he still
+-- stands on floors. While a wall or floor of his house is in the way he follows a planned path (through
+-- rooms, doors, windows and stairs); in the open he runs straight at his goal.
+local PATH_PARAMS = { AgentRadius = 1.5, AgentHeight = 5, AgentCanJump = true, WaypointSpacing = 4 }
+
+local function requestPath(state: HouseState, from: Vector3, goal: Vector3)
+	state.PathPending = true
+	local fromFeet = from - Vector3.new(0, state.GroundOffset, 0)
+	local goalFeet = goal - Vector3.new(0, state.GoalOffset, 0)
+	task.spawn(function()
+		local path = PathfindingService:CreatePath(PATH_PARAMS)
+		local ok = pcall(function()
+			path:ComputeAsync(fromFeet, goalFeet)
+		end)
+		if ok and path.Status == Enum.PathStatus.Success then
+			state.Waypoints = path:GetWaypoints()
+			state.WpIndex = 2
+			state.PathGoal = goal
+			state.PathFailed = false
+		else
+			state.Waypoints = nil
+			state.PathFailed = true -- he heads straight for the goal instead
+		end
+		state.PathAt = os.clock()
+		state.PathPending = false
+	end)
+end
+
+-- Decide how to reach `goal` (called about ten times a second).
+local function navigate(state: HouseState, goal: Vector3, goalOffset: number)
+	local root = rootOf(state.Owner)
+	if not root then
+		return
+	end
+	state.Goal = goal
+	state.GoalOffset = goalOffset
+	local from = root.Position
+	local blocked = state.Solid ~= nil and workspace:Raycast(from, goal - from, state.Solid) ~= nil
+	if not blocked then
+		state.Waypoints = nil
+		return
+	end
+	local moved = not state.PathGoal or (state.PathGoal - goal).Magnitude > 6
+	local wait = if state.PathFailed then 1.5 else 0.5
+	if not state.PathPending and (moved or not state.Waypoints) and os.clock() - state.PathAt > wait then
+		requestPath(state, from, goal)
+	end
+end
+
+-- Every frame: walk toward the next waypoint (or the goal).
+local function followGoal(state: HouseState)
+	local owner = state.Owner
+	local root = rootOf(owner)
+	local humanoid = owner and owner:FindFirstChildOfClass("Humanoid")
+	local goal = state.Goal
+	if not (root and humanoid and goal) then
+		return
+	end
+	local target = goal
+	local waypoints = state.Waypoints
+	if waypoints then
+		local index = state.WpIndex
+		local reach = math.max(2.5, humanoid.WalkSpeed * 0.06)
+		while index <= #waypoints do
+			local p = waypoints[index].Position + Vector3.new(0, state.GroundOffset, 0)
+			if Vector3.new(p.X - root.Position.X, 0, p.Z - root.Position.Z).Magnitude < reach then
+				index += 1
+			else
+				break
+			end
+		end
+		state.WpIndex = index
+		if index <= #waypoints then
+			local wp = waypoints[index]
+			target = wp.Position + Vector3.new(0, state.GroundOffset, 0)
+			if wp.Action == Enum.PathWaypointAction.Jump then
+				humanoid.Jump = true
+			end
+		else
+			state.Waypoints = nil
+		end
+	end
+	humanoid:MoveTo(target)
+end
+
+local function arriveHome(state: HouseState)
+	local owner = state.Owner
+	local root = rootOf(owner)
+	local spawnPart = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
+	if owner and root and spawnPart then
+		owner:PivotTo(spawnPart.CFrame) -- only the last step is snapped, so he stands exactly on his spot
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.CanCollide = true
+		local humanoid = owner:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid:MoveTo(root.Position)
+		end
+	end
+	state.Goal, state.Waypoints, state.ReturnStart = nil, nil, nil
+	state.PathGoal, state.PathFailed = nil, false
+	state.OwnerHome = true
+	closeChaseDoor(state, false)
+end
+
 local function startChase(state: HouseState, player: Player, eggId: string, petId: string?)
 	carrying[player] = {
 		House = state,
@@ -319,13 +453,17 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 	player:SetAttribute("CarryingEgg", eggId)
 	attachCarriedEgg(player, eggId, petId)
 
-	-- The owner bursts out of the front door if they were at home.
+	-- The owner starts the chase right where they stand. They pass through props and furniture, and the
+	-- front door swings open so they can run out.
 	if state.OwnerHome and state.Owner then
-		local exit = state.House:FindFirstChild("OwnerExit") :: BasePart?
-		if exit then
-			state.Owner:PivotTo(exit.CFrame)
-		end
 		state.OwnerHome = false
+		state.ReturnStart = nil
+		local root = rootOf(state.Owner)
+		if root then
+			root.Anchored = false
+			root.CanCollide = false
+		end
+		openChaseDoor(state)
 	end
 	Remotes.ChaseState:FireClient(player, true, state.OwnerName)
 	notify(player, state.OwnerName .. " saw you! RUN back to your base!", RED)
@@ -375,13 +513,29 @@ local function chaseStep()
 		end
 
 		if target then
+			state.ReturnStart = nil
 			if targetDistance <= Config.CatchDistance then
 				finishTheft(target, "caught")
 			else
-				ownerHumanoid:MoveTo((rootOf(target.Character) :: BasePart).Position)
+				local thiefHumanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+				local thiefRoot = rootOf(target.Character) :: BasePart
+				navigate(state, thiefRoot.Position, if thiefHumanoid then thiefHumanoid.HipHeight + thiefRoot.Size.Y / 2 else 3)
 			end
 		elseif not state.OwnerHome then
-			resetOwner(state)
+			-- Nobody left to chase: walk back to his spot.
+			local home = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
+			state.ReturnStart = state.ReturnStart or os.clock()
+			if not home or os.clock() - state.ReturnStart > 45 then
+				resetOwner(state) -- couldn't get home; put him back
+			else
+				local flat = Vector3.new(home.Position.X - ownerRoot.Position.X, 0, home.Position.Z - ownerRoot.Position.Z).Magnitude
+				if flat < 2.5 and math.abs(home.Position.Y - ownerRoot.Position.Y) < 4 then
+					arriveHome(state)
+				else
+					openChaseDoor(state)
+					navigate(state, home.Position, state.GroundOffset)
+				end
+			end
 		end
 	end
 end
@@ -653,6 +807,56 @@ local function swingDoor(setup, from: number, to: number, duration: number, styl
 	end
 end
 
+-- The front door swings open when a chase starts (and stays open while the owner is out), then shuts after
+-- he is back on his spot. Everything mounted on the door swings with it.
+openChaseDoor = function(state: HouseState)
+	local door = state.Door
+	if not door or state.DoorSetup or state.Busy then
+		return
+	end
+	local ok, setup = pcall(doorSetup, state, door)
+	if not ok then
+		return
+	end
+	state.DoorSetup = setup
+	for _, d in setup.Parts do
+		d.Part.CanCollide = false
+	end
+	task.spawn(function()
+		pcall(swingDoor, setup, 0, 1, 0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	end)
+end
+
+closeChaseDoor = function(state: HouseState, instant: boolean)
+	local setup = state.DoorSetup
+	if not setup then
+		return
+	end
+	state.DoorSetup = nil
+	local function restore()
+		placeDoor(setup, 0)
+		for _, d in setup.Parts do
+			d.Part.CanCollide = d.Collide
+		end
+	end
+	if instant then
+		restore()
+		return
+	end
+	state.Busy = true
+	if state.Prompt then
+		state.Prompt.Enabled = false
+	end
+	task.spawn(function()
+		pcall(swingDoor, setup, 1, 0, 0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		restore()
+		state.Busy = false
+		if state.Prompt then
+			state.Prompt.Enabled = true
+		end
+	end)
+end
+
 -- The door scene: the door opens, the owner steps into the middle of the doorway and talks, then everything
 -- goes back. It stops quietly if the owner leaves to chase a thief or the sun comes up.
 local function playDoorScene(state: HouseState, player: Player, happy: boolean, line: string)
@@ -829,8 +1033,38 @@ local function setupHouse(house: Model, index: number)
 		KnockCooldowns = {},
 		Door = house:FindFirstChild("Door") :: BasePart?,
 		Busy = false,
+		GroundOffset = 3,
+		GoalOffset = 3,
+		WpIndex = 1,
+		PathPending = false,
+		PathFailed = false,
+		PathAt = 0,
 	}
 	table.insert(houses, state)
+
+	-- The walls, floors and roofs: used to tell whether the owner can run straight at someone or must find a way.
+	local solid = {}
+	for _, d in house:GetDescendants() do
+		if d:IsA("BasePart") and d.Anchored and d.CanCollide then
+			local skip = false
+			local ancestor = d.Parent
+			while ancestor and ancestor ~= house do
+				if ancestor.Name == "Decor" or ancestor.Name == "Yard" or ancestor.Name == "EggSpots" or ancestor.Name == "Owner" then
+					skip = true
+					break
+				end
+				ancestor = ancestor.Parent
+			end
+			if not skip then
+				table.insert(solid, d)
+			end
+		end
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = solid
+	params.RespectCanCollide = true
+	state.Solid = params
 
 	-- Decoration taller than a floor slab never blocks the owner (players still bump into it).
 	local decor = house:FindFirstChild("Decor")
@@ -898,6 +1132,14 @@ function HouseService.Start(map: Instance)
 		finishTheft(player, "lost")
 		for _, s in houses do
 			s.KnockCooldowns[player] = nil
+		end
+	end)
+
+	RunService.Heartbeat:Connect(function()
+		for _, state in houses do
+			if not state.OwnerHome and state.Goal then
+				followGoal(state)
+			end
 		end
 	end)
 
