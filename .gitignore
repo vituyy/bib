@@ -5,3 +5,5 @@
 # Files built by `rojo build`
 build/
 .DS_Store
+__pycache__/
+*.pyc
