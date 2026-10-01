@@ -124,7 +124,7 @@ function Art.Egg(eggId: string, petId: string?, withNest: boolean?, unanchored: 
 	local egg = Config.Eggs[eggId]
 	local _, sizeName, materialName = Config.SplitPet(petId or "")
 	local sizeInfo = sizeName and Config.Sizes[sizeName]
-	local scale = if sizeInfo then math.min(sizeInfo.Scale, scaleCap or math.huge) else 1
+	local scale = if sizeInfo then math.min(sizeInfo.EggScale, scaleCap or math.huge) else Config.DefaultEggScale
 	local height = (if egg then egg.Size else 2) * 1.8 * scale -- sized for the scaled-up houses
 	local model = Instance.new("Model")
 	model.Name = "EggModel"

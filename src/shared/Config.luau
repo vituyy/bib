@@ -208,10 +208,14 @@ Config.Pets = {
 -- "Bat+Rainbow". Config.Pets understands those ids too, so scripts that look a pet up by id need no changes;
 -- use Config.SplitPet when you need the plain pet id (art, Index).
 ---------------------------------------------------------------------------
+-- EggScale / PetScale: how big the egg and the pet are drawn compared with the normal size. A normal egg is
+-- drawn at DefaultEggScale (smaller than before) so a Big egg is clearly bigger next to it. Normal pets keep
+-- their size (1); variant pets grow by PetScale.
+Config.DefaultEggScale = 0.7
 Config.Sizes = {
-	Big = { Name = "Big", Chance = 0.20, Multiplier = 3, Scale = 1.2 },
-	Huge = { Name = "Huge", Chance = 0.04, Multiplier = 8, Scale = 1.45 },
-	Gigantic = { Name = "Gigantic", Chance = 0.005, Multiplier = 30, Scale = 1.8 },
+	Big = { Name = "Big", Chance = 0.20, Multiplier = 3, EggScale = 1.56, PetScale = 1.6 },
+	Huge = { Name = "Huge", Chance = 0.04, Multiplier = 8, EggScale = 1.89, PetScale = 2.1 },
+	Gigantic = { Name = "Gigantic", Chance = 0.005, Multiplier = 30, EggScale = 2.34, PetScale = 2.8 },
 }
 Config.Materials = {
 	Golden = { Name = "Golden", Chance = 0.15, Multiplier = 3, Color = Color3.fromRGB(255, 205, 50) },
@@ -288,7 +292,7 @@ setmetatable(Config.Pets, {
 		info.BaseId = baseId
 		info.Size = size
 		info.Material = material
-		info.Scale = if sizeInfo then sizeInfo.Scale else 1
+		info.Scale = if sizeInfo then sizeInfo.PetScale else 1
 		variantPets[id] = info
 		return info
 	end,

@@ -310,9 +310,11 @@ local function attachCarriedEgg(player: Player, eggId: string, petId: string?)
 	if not root then
 		return
 	end
-	local eggModel = Art.Egg(eggId, petId, false, true, 1.4) -- a Gigantic egg is not drawn bigger than this on your back
+	local eggModel = Art.Egg(eggId, petId, false, true, 1.4) -- a Gigantic egg is not drawn bigger than this in your arms
 	eggModel.Name = "CarriedEgg"
-	eggModel:PivotTo(root.CFrame * CFrame.new(0, 3, 0))
+	-- Held in front of the chest, like carrying it in both hands. The model's pivot is the egg's bottom centre.
+	local height = eggModel:GetAttribute("EggHeight") or 3
+	eggModel:PivotTo(root.CFrame * CFrame.new(0, 0.3 - height / 2, -(0.9 + 0.4 * height)))
 	for _, d in eggModel:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.Massless = true

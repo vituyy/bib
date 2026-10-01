@@ -148,11 +148,12 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 **Egg variants (added 1 October 2026):** every egg rolls two separate things, and one result never changes the other, so an egg can have both, one or neither (a Big Diamond egg, a Gigantic egg, a Rainbow egg...). The egg and the pet it hatches look the part: bigger for a size, glowing and sparkling for a material.
 
-| Size | Chance | Pet size | Money/s |
-|---|---|---|---|
-| Big | 20% | 1.2x | x3 |
-| Huge | 4% | 1.45x | x8 |
-| Gigantic | 0.5% | 1.8x | x30 |
+| Size | Chance | Egg size | Pet size | Money/s |
+|---|---|---|---|---|
+| Normal | 75.5% | 0.7x | 1x | x1 |
+| Big | 20% | 1.56x | 1.6x | x3 |
+| Huge | 4% | 1.89x | 2.1x | x8 |
+| Gigantic | 0.5% | 2.34x | 2.8x | x30 |
 
 | Material | Chance | Look | Money/s |
 |---|---|---|---|
@@ -163,6 +164,8 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 Multipliers stack: a Gigantic Rainbow pet earns x750 (a Gigantic Rainbow Pumpkin King would earn $11.25M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big+Golden" and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
 
 Because variants raise the average pet income by about 3.4x, every Money price (costumes, trails, base upgrades, Index rewards) was multiplied by 3 so the pacing in 2.11 stays the same for an average-luck player. Lucky players are faster, unlucky ones a little slower.
+
+A thief carries the egg in front of their chest, like holding it in both hands.
 
 When the owner catches you (or you die while carrying), the egg goes back to the nest it was taken from, with the same pet, size and material, so another player can steal it.
 
