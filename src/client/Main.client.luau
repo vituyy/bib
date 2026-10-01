@@ -32,12 +32,10 @@ local PAINT = {
 	Green = { Color3.fromRGB(160, 245, 80), Color3.fromRGB(60, 185, 40) },
 	Red = { Color3.fromRGB(255, 110, 110), Color3.fromRGB(215, 35, 50) },
 	Grey = { Color3.fromRGB(195, 195, 205), Color3.fromRGB(125, 125, 140) },
-	Night = { Color3.fromRGB(160, 120, 255), Color3.fromRGB(85, 45, 185) },
-	Day = { Color3.fromRGB(255, 235, 120), Color3.fromRGB(255, 170, 40) },
 	Panel = { WHITE, Color3.fromRGB(230, 235, 245) },
 	Header = { Color3.fromRGB(100, 215, 255), Color3.fromRGB(25, 125, 230) },
-	CandyText = { Color3.fromRGB(255, 160, 185), Color3.fromRGB(235, 40, 85) },
-	MoneyText = { Color3.fromRGB(255, 245, 120), Color3.fromRGB(255, 160, 20) },
+	CandyText = { Color3.fromRGB(255, 175, 220), Color3.fromRGB(240, 60, 150) },
+	MoneyText = { Color3.fromRGB(255, 240, 60), Color3.fromRGB(255, 160, 0) },
 	LevelFill = { Color3.fromRGB(255, 100, 20), Color3.fromRGB(255, 235, 60) },
 	XpFill = { Color3.fromRGB(100, 215, 30), Color3.fromRGB(190, 250, 80) },
 }
@@ -183,30 +181,85 @@ local toggleMenu: (name: string, forceOpen: boolean?) -> ()
 ---------------------------------------------------------------------------
 local gui = new("ScreenGui", { Name = "SpookyHUD", ResetOnSpawn = false, IgnoreGuiInset = false, Parent = player:WaitForChild("PlayerGui") })
 
--- Candy and Money, right side in the middle: a round badge and a big number in gradient letters.
+-- Money and Candy, right side in the middle: a cartoon icon and a big number in gradient letters
+-- with a thick black outline. The icons are drawn from shapes; to use your own pictures instead,
+-- upload them to Roblox and put their ids here (e.g. "rbxassetid://123").
+local CURRENCY_IMAGES = { Money = "", Candy = "" }
+
+local function circle(props: { [string]: any }, paint: { Color3 }, outline: number?)
+	props.BackgroundColor3 = WHITE
+	return new("Frame", props, {
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		gradient(paint),
+		border(outline or 3),
+	})
+end
+
+-- A stack of gold coins with a big "$" coin in front.
+local function drawCoins(icon: Frame)
+	local gold = { Color3.fromRGB(255, 225, 60), Color3.fromRGB(245, 150, 10) }
+	for i = 3, 1, -1 do -- coin edges, bottom one first
+		circle({ Size = UDim2.fromScale(0.62, 0.24), Position = UDim2.fromScale(0.02, 0.12 + i * 0.17), ZIndex = 1, Parent = icon }, gold)
+	end
+	circle({ Size = UDim2.fromScale(0.62, 0.26), Position = UDim2.fromScale(0.02, 0.06), ZIndex = 1, Parent = icon }, { Color3.fromRGB(255, 240, 120), Color3.fromRGB(255, 190, 30) })
+	local coin = circle({ Size = UDim2.fromScale(0.64, 0.74), Position = UDim2.fromScale(0.36, 0.26), ZIndex = 2, Parent = icon }, gold)
+	new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.72, 0.72), BackgroundTransparency = 1, ZIndex = 2, Parent = coin }, {
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		new("UIStroke", { Color = Color3.fromRGB(215, 120, 10), Thickness = 2 }),
+	})
+	local dollar = outlined({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.6, 0.66), Text = "$", TextColor3 = Color3.fromRGB(255, 220, 50), ZIndex = 3, Parent = coin }, 1.5)
+	;(dollar:FindFirstChildOfClass("UIStroke") :: UIStroke).Color = Color3.fromRGB(190, 95, 10)
+end
+
+-- A round pink sweet in a twisted wrapper.
+local function drawCandy(icon: Frame)
+	local wrapper = { Color3.fromRGB(255, 140, 200), Color3.fromRGB(235, 50, 150) }
+	for i, x in { 0.17, 0.83 } do -- the two wrapper ends, as squashed diamonds
+		new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(x, 0.5),
+			Size = UDim2.fromScale(0.3, 0.42),
+			Rotation = if i == 1 then 45 else -45,
+			BackgroundColor3 = WHITE,
+			ZIndex = 1,
+			Parent = icon,
+		}, { new("UICorner", { CornerRadius = UDim.new(0, 4) }), gradient(wrapper), border(3) })
+	end
+	local ball = circle({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.6, 0.86), ZIndex = 2, Parent = icon },
+		{ Color3.fromRGB(255, 175, 220), Color3.fromRGB(235, 40, 140) })
+	new("Frame", { -- shine
+		Position = UDim2.fromScale(0.2, 0.14),
+		Size = UDim2.fromScale(0.36, 0.22),
+		Rotation = -25,
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.25,
+		ZIndex = 3,
+		Parent = ball,
+	}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+end
+
 local currencyStack = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0.5),
-	Size = UDim2.fromOffset(250, 124),
+	Size = UDim2.fromOffset(270, 140),
 	Position = UDim2.new(1, -16, 0.5, 0),
 	BackgroundTransparency = 1,
 	Parent = gui,
 }, {
-	new("UIListLayout", { Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+	new("UIListLayout", { Padding = UDim.new(0, 10), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
 })
-local function currencyRow(order: number, icon: string, badgePaint: { Color3 }, textPaint: { Color3 })
-	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 56), BackgroundTransparency = 1, LayoutOrder = order, Parent = currencyStack })
-	local badge = new("Frame", { Size = UDim2.fromOffset(50, 50), Position = UDim2.fromOffset(0, 3), BackgroundColor3 = WHITE, Parent = holder }, {
-		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-		gradient(badgePaint),
-		border(3),
-	})
-	new("TextLabel", { Size = UDim2.new(1, -14, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundTransparency = 1, Text = icon, TextScaled = true, Parent = badge })
-	local value = outlined({ Size = UDim2.new(1, -62, 1, 0), Position = UDim2.fromOffset(60, 0), Text = "0", TextXAlignment = Enum.TextXAlignment.Left, Parent = holder }, 3.5)
+local function currencyRow(order: number, image: string, draw: (Frame) -> (), textPaint: { Color3 })
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 62), BackgroundTransparency = 1, LayoutOrder = order, Parent = currencyStack })
+	if image ~= "" then
+		new("ImageLabel", { Size = UDim2.fromOffset(78, 62), BackgroundTransparency = 1, Image = image, ScaleType = Enum.ScaleType.Fit, Parent = holder })
+	else
+		draw(new("Frame", { Size = UDim2.fromOffset(74, 56), Position = UDim2.fromOffset(2, 3), BackgroundTransparency = 1, Parent = holder }))
+	end
+	local value = outlined({ Size = UDim2.new(1, -86, 1, -4), Position = UDim2.fromOffset(84, 2), Text = "0", TextXAlignment = Enum.TextXAlignment.Left, Parent = holder }, 4)
 	gradient(textPaint).Parent = value -- a UIGradient on a text label colours the letters
 	return value
 end
-local candyLabel = currencyRow(1, "🍬", PAINT.Red, PAINT.CandyText)
-local moneyLabel = currencyRow(2, "💰", PAINT.Orange, PAINT.MoneyText)
+local moneyLabel = currencyRow(1, CURRENCY_IMAGES.Money, drawCoins, PAINT.MoneyText)
+local candyLabel = currencyRow(2, CURRENCY_IMAGES.Candy, drawCandy, PAINT.CandyText)
 
 -- Friend boost, bottom left: +10% pet Money for each friend in this server.
 local friendHud = new("Frame", { AnchorPoint = Vector2.new(0, 1), Size = UDim2.fromOffset(270, 34), Position = UDim2.new(0, 16, 1, -16), BackgroundTransparency = 1, Parent = gui })
@@ -220,10 +273,8 @@ end
 player:GetAttributeChangedSignal("FriendBoost"):Connect(refreshFriendBoost)
 refreshFriendBoost()
 
--- Night / day timer, top centre
-local phasePill = box({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(250, 40), Position = UDim2.new(0.5, 0, 0, 10), Parent = gui }, PAINT.Night)
-local phaseGradient = phasePill:FindFirstChildOfClass("UIGradient") :: UIGradient
-local phaseLabel = outlined({ Size = UDim2.new(1, -20, 1, -12), Position = UDim2.fromOffset(10, 6), Text = "", ZIndex = 2, Parent = phasePill }, 2)
+-- Night / day timer, top centre: just outlined text.
+local phaseLabel = outlined({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(340, 40), Position = UDim2.new(0.5, 0, 0, 10), Text = "", Parent = gui }, 3)
 
 -- Chase / carrying banner. Pulses gently while shown.
 local banner = box({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(520, 48), Position = UDim2.new(0.5, 0, 0, 62), Visible = false, Parent = gui }, PAINT.Red)
@@ -285,29 +336,64 @@ local ICONS = {
 	Store = "rbxassetid://82681777153242",
 }
 
--- Light grey stud outlines on the white panel, like a Lego plate.
-local function studs(parent: Instance, cellSize: UDim2, count: number, color: Color3?, transparency: number?)
-	local layer = new("CanvasGroup", { Name = "Studs", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = parent }, {
-		new("UICorner", { CornerRadius = UDim.new(0, 22) }),
-		new("UIGridLayout", { CellSize = cellSize, CellPadding = UDim2.new(), SortOrder = Enum.SortOrder.LayoutOrder }),
+-- Stud outlines like a Lego plate. Fills the window with as many whole studs as fit, centred, so none
+-- poke past the edges; refills when the window changes size.
+local function studs(parent: GuiObject, cell: number, radius: number, color: Color3?, transparency: number?)
+	local inset = 6
+	local layer = new("CanvasGroup", {
+		Name = "Studs",
+		Size = UDim2.new(1, -inset * 2, 1, -inset * 2),
+		Position = UDim2.fromOffset(inset, inset),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	}, {
+		new("UICorner", { CornerRadius = UDim.new(0, math.max(radius - inset, 0)) }),
+		new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(cell, cell),
+			CellPadding = UDim2.new(),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
 	})
-	for _ = 1, count do
-		local cell = new("Frame", { BackgroundTransparency = 1, Parent = layer })
-		new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.6, 0.6),
-			BackgroundTransparency = 1, Parent = cell,
-		}, {
-			new("UICorner", { CornerRadius = UDim.new(0.25, 0) }),
-			new("UIStroke", { Color = color or Color3.fromRGB(215, 218, 228), Transparency = transparency or 0, Thickness = 2 }),
-		})
+	local built = 0
+	local function fill()
+		-- AbsoluteSize includes the pop-open UIScale; divide it out so the count doesn't change mid-animation.
+		local scale = parent:FindFirstChildOfClass("UIScale")
+		local size = layer.AbsoluteSize / (if scale and scale.Scale > 0 then scale.Scale else 1)
+		local columns = math.floor(size.X / cell)
+		local count = columns * math.floor(size.Y / cell)
+		if count == built or columns <= 0 then
+			return
+		end
+		built = count
+		local layout = layer:FindFirstChildOfClass("UIGridLayout") :: UIGridLayout
+		layout.FillDirectionMaxCells = columns
+		for _, child in layer:GetChildren() do
+			if child:IsA("Frame") then
+				child:Destroy()
+			end
+		end
+		for _ = 1, count do
+			local slot = new("Frame", { BackgroundTransparency = 1, Parent = layer })
+			new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.6, 0.6),
+				BackgroundTransparency = 1, Parent = slot,
+			}, {
+				new("UICorner", { CornerRadius = UDim.new(0.25, 0) }),
+				new("UIStroke", { Color = color or Color3.fromRGB(215, 218, 228), Transparency = transparency or 0, Thickness = 2 }),
+			})
+		end
 	end
+	layer:GetPropertyChangedSignal("AbsoluteSize"):Connect(fill)
+	fill()
 	return layer
 end
 
 local panel = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Size = UDim2.fromScale(0.62, 0.76),
-	Position = UDim2.fromScale(0.54, 0.54),
+	Position = UDim2.fromScale(0.5, 0.5),
 	BackgroundColor3 = WHITE,
 	Visible = false,
 	Parent = gui,
@@ -318,7 +404,7 @@ local panel = new("Frame", {
 	new("UISizeConstraint", { MaxSize = Vector2.new(620, 470), MinSize = Vector2.new(320, 260) }),
 })
 local panelScale = new("UIScale", { Parent = panel })
-studs(panel, UDim2.fromOffset(28, 28), 23 * 18)
+studs(panel, 28, 22)
 
 -- Title sticks out over the top-left corner: menu icon, then the name in big outlined letters.
 local panelIcon = new("ImageLabel", { Size = UDim2.fromOffset(68, 68), Position = UDim2.fromOffset(-14, -40), BackgroundTransparency = 1, ZIndex = 3, Parent = panel })
@@ -409,7 +495,7 @@ local INVENTORY_MENUS = { Pets = true, Eggs = true }
 invPanel = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Size = UDim2.fromScale(0.66, 0.78),
-	Position = UDim2.fromScale(0.54, 0.54),
+	Position = UDim2.fromScale(0.5, 0.5),
 	BackgroundColor3 = Color3.fromRGB(45, 28, 80),
 	BackgroundTransparency = 0.12,
 	Visible = false,
@@ -420,7 +506,7 @@ invPanel = new("Frame", {
 	new("UISizeConstraint", { MaxSize = Vector2.new(760, 520), MinSize = Vector2.new(360, 280) }),
 })
 local invScale = new("UIScale", { Parent = invPanel })
-studs(invPanel, UDim2.fromOffset(34, 34), 23 * 16, WHITE, 0.9)
+studs(invPanel, 34, 14, WHITE, 0.9)
 
 local invHeader = box({ Size = UDim2.new(1, 0, 0, 66), Parent = invPanel }, PAINT.Header)
 local invIcon = new("ImageLabel", { Size = UDim2.fromOffset(72, 72), Position = UDim2.fromOffset(-4, -8), BackgroundTransparency = 1, ZIndex = 3, Parent = invHeader })
@@ -1025,7 +1111,7 @@ end)
 ---------------------------------------------------------------------------
 local function refreshStats(d)
 	candyLabel.Text = formatNumber(d.Candy)
-	moneyLabel.Text = "$" .. formatNumber(d.Money)
+	moneyLabel.Text = formatNumber(d.Money)
 	speedLabel.Text = "Speed: " .. Config.WalkSpeedFor(d.SpeedLevel)
 	rebirthLabel.Text = "Rebirth: x" .. tostring(Config.XpMultiplier(d.Rebirths))
 	levelLabel.Text = "Level " .. d.SpeedLevel
@@ -1114,8 +1200,6 @@ task.spawn(function()
 		local endsAt = ReplicatedStorage:GetAttribute("PhaseEndsAt")
 		if endsAt then
 			local left = endsAt - workspace:GetServerTimeNow()
-			local paint = if isNight then PAINT.Night else PAINT.Day
-			phaseGradient.Color = ColorSequence.new(paint[1], paint[2])
 			phaseLabel.Text = if isNight then "🌙 NIGHT " .. formatTime(left) else "☀️ DAY " .. formatTime(left) .. " - street closed"
 		end
 		if openMenu == "Eggs" then
