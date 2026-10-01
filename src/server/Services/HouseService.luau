@@ -413,14 +413,6 @@ end
 ---------------------------------------------------------------------------
 -- Trick-or-Treat
 ---------------------------------------------------------------------------
-local CANDY_COLORS = {
-	Color3.fromRGB(255, 140, 0),
-	Color3.fromRGB(255, 80, 160),
-	Color3.fromRGB(120, 255, 120),
-	Color3.fromRGB(120, 200, 255),
-	Color3.fromRGB(255, 240, 90),
-}
-
 -- Smoothly move an anchored model. Returns false if `alive` says the scene should stop.
 local function glide(model: Model, toCF: CFrame, duration: number, style: Enum.EasingStyle, alive: () -> boolean): boolean
 	local fromCF = model:GetPivot()
@@ -438,84 +430,231 @@ local function glide(model: Model, toCF: CFrame, duration: number, style: Enum.E
 	end
 end
 
-local function speechBubble(owner: Model, text: string, color: Color3, scale: number): BillboardGui
+-- Speech bubble above the owner. Dark with white text so it reads at night too (LightInfluence 0).
+local function speechBubble(owner: Model, name: string, text: string, accent: Color3, scale: number): BillboardGui
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "SpeechBubble"
 	gui.Adornee = rootOf(owner)
 	gui.Size = UDim2.fromOffset(0, 0)
-	gui.StudsOffset = Vector3.new(0, 4.5 * scale, 0)
+	gui.StudsOffset = Vector3.new(0, 4.2 * scale, 0)
+	gui.SizeOffset = Vector2.new(0, 0.5) -- the bubble sits on top of the owner's head
 	gui.AlwaysOnTop = true
-	gui.MaxDistance = 80
+	gui.LightInfluence = 0
+	gui.MaxDistance = 90
 
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundColor3 = Color3.fromRGB(255, 250, 235)
-	label.TextColor3 = color
-	label.Font = Enum.Font.GothamBlack
-	label.TextScaled = true
-	label.TextWrapped = true
-	label.Text = text
-	local limit = Instance.new("UITextSizeConstraint")
-	limit.MaxTextSize = 22
-	limit.Parent = label
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
-	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
-	pad.Parent = label
+	local bubble = Instance.new("Frame")
+	bubble.Size = UDim2.fromScale(1, 1)
+	bubble.BackgroundColor3 = Color3.fromRGB(30, 18, 50)
+	bubble.BorderSizePixel = 0
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 16)
-	corner.Parent = label
+	corner.CornerRadius = UDim.new(0, 18)
+	corner.Parent = bubble
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = color
-	stroke.Thickness = 3
-	stroke.Parent = label
-	label.Parent = gui
+	stroke.Color = accent
+	stroke.Thickness = 5
+	stroke.Parent = bubble
 
+	local header = Instance.new("TextLabel")
+	header.BackgroundTransparency = 1
+	header.Position = UDim2.fromOffset(18, 10)
+	header.Size = UDim2.new(1, -36, 0, 24)
+	header.Font = Enum.Font.GothamBlack
+	header.TextSize = 20
+	header.TextColor3 = accent
+	header.TextXAlignment = Enum.TextXAlignment.Left
+	header.Text = name
+	header.Parent = bubble
+
+	local body = Instance.new("TextLabel")
+	body.BackgroundTransparency = 1
+	body.Position = UDim2.fromOffset(18, 38)
+	body.Size = UDim2.new(1, -36, 1, -48)
+	body.Font = Enum.Font.GothamBold
+	body.TextSize = 28
+	body.TextColor3 = Color3.new(1, 1, 1)
+	body.TextWrapped = true
+	body.TextXAlignment = Enum.TextXAlignment.Left
+	body.TextYAlignment = Enum.TextYAlignment.Top
+	body.Text = text
+	body.Parent = bubble
+
+	bubble.Parent = gui
 	gui.Parent = owner
-	TweenService:Create(gui, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(320, 90) }):Play()
-	Debris:AddItem(gui, 8)
+	TweenService:Create(gui, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(460, 170) }):Play()
+	Debris:AddItem(gui, 12)
 	return gui
+end
+
+-- A wrapped candy like the HUD icon: glossy pink ball with a bow on each side and a dark outline.
+local function buildCandy(): Model
+	local model = Instance.new("Model")
+	model.Name = "Candy"
+	local function piece(size: Vector3, offset: CFrame, color: Color3, round: boolean, transparency: number?): Part
+		local p = Instance.new("Part")
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+		p.Material = Enum.Material.SmoothPlastic
+		p.Color = color
+		p.Size = size
+		p.Transparency = transparency or 0
+		if round then
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.Sphere
+			mesh.Parent = p
+		end
+		p.CFrame = offset
+		p.Parent = model
+		return p
+	end
+	local body = piece(Vector3.one * 1.5, CFrame.new(), Color3.fromRGB(255, 110, 190), true)
+	model.PrimaryPart = body
+	for _, side in { -1, 1 } do
+		for _, tilt in { -32, 32 } do
+			piece(Vector3.new(1.5, 1.1, 0.18), CFrame.new(side * 1.3, 0, 0) * CFrame.Angles(math.rad(tilt), 0, math.rad(side * 10)), Color3.fromRGB(255, 60, 150), true)
+		end
+	end
+	piece(Vector3.new(0.5, 0.35, 0.2), CFrame.new(-0.3, 0.35, -0.62) * CFrame.Angles(0, 0, math.rad(35)), Color3.new(1, 1, 1), true, 0.25)
+	local outline = Instance.new("Highlight")
+	outline.Adornee = model
+	outline.FillTransparency = 1
+	outline.OutlineColor = Color3.new(0, 0, 0)
+	outline.OutlineTransparency = 0
+	outline.DepthMode = Enum.HighlightDepthMode.Occluded
+	outline.Parent = model
+	return model
 end
 
 -- Candy flies from the owner into the player's hands.
 local function tossCandy(from: Vector3, player: Player)
 	task.spawn(function()
-		local count = 7
-		local duration = 0.7
+		local count = 6
+		local duration = 0.8
 		local pieces = {}
 		for i = 1, count do
-			local p = Instance.new("Part")
-			p.Shape = Enum.PartType.Ball
-			p.Size = Vector3.one * 0.7
-			p.Material = Enum.Material.Neon
-			p.Color = CANDY_COLORS[(i - 1) % #CANDY_COLORS + 1]
-			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
-			p.Position = from
-			p.Parent = workspace
-			Debris:AddItem(p, 5)
-			pieces[i] = p
+			local candy = buildCandy()
+			candy:PivotTo(CFrame.new(from))
+			candy.Parent = workspace
+			Debris:AddItem(candy, 6)
+			pieces[i] = candy
 		end
 		local t0 = os.clock()
-		while os.clock() - t0 < duration + count * 0.06 do
+		while os.clock() - t0 < duration + count * 0.08 do
 			local targetRoot = rootOf(player.Character)
-			local target = targetRoot and targetRoot.Position or from
-			for i, p in pieces do
-				local a = math.clamp((os.clock() - t0 - (i - 1) * 0.06) / duration, 0, 1)
-				if p.Parent then
-					p.Position = from:Lerp(target, a) + Vector3.new(0, math.sin(a * math.pi) * 4, 0)
-					p.Transparency = if a > 0.85 then (a - 0.85) / 0.15 else 0
+			local target = if targetRoot then targetRoot.Position + Vector3.new(0, 1, 0) else from
+			for i, candy in pieces do
+				local a = math.clamp((os.clock() - t0 - (i - 1) * 0.08) / duration, 0, 1)
+				if candy.Parent then
+					local pos = from:Lerp(target, a) + Vector3.new(0, math.sin(a * math.pi) * 5, 0)
+					candy:PivotTo(CFrame.new(pos) * CFrame.Angles(a * 9 + i, a * 6, a * 12))
+					if a >= 1 then
+						candy:Destroy()
+					end
 				end
 			end
 			task.wait()
 		end
-		for _, p in pieces do
-			p:Destroy()
+		for _, candy in pieces do
+			candy:Destroy()
 		end
 	end)
 end
 
--- The door scene: the door opens, the owner steps up and talks, then everything goes back.
--- It stops quietly if the owner leaves to chase a thief or the sun comes up.
+-- Works out how a door is built, whatever its size or direction: which way it faces, how wide it is and
+-- which parts (handles, panels, bars...) are mounted on it, so they all swing together.
+local function doorSetup(state: HouseState, door: BasePart)
+	local cf = door.CFrame
+	local size = door.Size
+	local axes = { cf.RightVector, cf.UpVector, -cf.LookVector } -- the door's own X, Y, Z
+	local sizes = { size.X, size.Y, size.Z }
+	local tall = 1
+	for i = 2, 3 do
+		if math.abs(axes[i].Y) > math.abs(axes[tall].Y) then
+			tall = i
+		end
+	end
+	local thin, wide
+	for i = 1, 3 do
+		if i ~= tall then
+			if not thin then
+				thin = i
+			elseif sizes[i] < sizes[thin] then
+				wide = thin
+				thin = i
+			else
+				wide = i
+			end
+		end
+	end
+	local up = if axes[tall].Y < 0 then -axes[tall] else axes[tall]
+	local inward = axes[thin]
+	local spawnPart = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
+	if spawnPart and inward:Dot(spawnPart.Position - cf.Position) < 0 then
+		inward = -inward
+	end
+	-- Frame: +Z points into the house, +Y is up, X runs along the door's width.
+	local frame = CFrame.fromMatrix(cf.Position, up:Cross(inward), up, inward)
+
+	-- Anything small that sits on the door's face (inside its width and height, within a stud or so of it).
+	local limit = { size.X / 2, size.Y / 2, size.Z / 2 }
+	limit[thin] += 1.1
+	limit[tall] -= 0.5
+	local skip = { Structure = true, Yard = true, EggSpots = true, Wall = true, Floor = true }
+	local parts = { { Part = door, Rel = CFrame.identity, Collide = door.CanCollide } }
+	for _, d in state.House:GetDescendants() do
+		if d:IsA("BasePart") and d ~= door and d.Anchored and not (state.Owner and d:IsDescendantOf(state.Owner)) then
+			local excluded = skip[d.Name] or false
+			local parent = d.Parent
+			while parent and parent ~= state.House and not excluded do
+				excluded = skip[parent.Name] or false
+				parent = parent.Parent
+			end
+			local lp = cf:PointToObjectSpace(d.Position)
+			local onDoor = d:IsDescendantOf(door)
+				or (math.abs(lp.X) <= limit[1] and math.abs(lp.Y) <= limit[2] and math.abs(lp.Z) <= limit[3])
+			if onDoor and not excluded then
+				table.insert(parts, { Part = d, Rel = cf:ToObjectSpace(d.CFrame), Collide = d.CanCollide })
+			end
+		end
+	end
+	return {
+		Closed = cf,
+		Frame = frame,
+		Width = sizes[wide],
+		Thick = sizes[thin],
+		Inward = inward,
+		Parts = parts,
+	}
+end
+
+local DOOR_OPEN_ANGLE = 105
+
+-- The door (and everything on it) at a given openness: 0 = shut, 1 = fully open. Hinged on one edge, swinging inward.
+local function doorAt(setup, amount: number): CFrame
+	local hinge = setup.Frame * CFrame.new(-setup.Width / 2, 0, 0)
+	return hinge * CFrame.Angles(0, -math.rad(DOOR_OPEN_ANGLE) * amount, 0) * hinge:Inverse() * setup.Closed
+end
+
+local function placeDoor(setup, amount: number)
+	local doorCF = doorAt(setup, amount)
+	for _, d in setup.Parts do
+		d.Part.CFrame = doorCF * d.Rel
+	end
+end
+
+-- Animate openness from -> to. Blocks until done.
+local function swingDoor(setup, from: number, to: number, duration: number, style: Enum.EasingStyle, direction: Enum.EasingDirection)
+	local t0 = os.clock()
+	while true do
+		local a = math.min((os.clock() - t0) / duration, 1)
+		placeDoor(setup, from + (to - from) * TweenService:GetValue(a, style, direction))
+		if a >= 1 then
+			return
+		end
+		task.wait()
+	end
+end
+
+-- The door scene: the door opens, the owner steps into the middle of the doorway and talks, then everything
+-- goes back. It stops quietly if the owner leaves to chase a thief or the sun comes up.
 local function playDoorScene(state: HouseState, player: Player, happy: boolean, line: string)
 	local door, owner = state.Door, state.Owner
 	local root = rootOf(owner)
@@ -523,43 +662,56 @@ local function playDoorScene(state: HouseState, player: Player, happy: boolean, 
 		return
 	end
 	local scale = 1 + state.Index * 0.05
-	local closedCF = door.CFrame
 	local homeCF = owner:GetPivot()
 	local function alive()
 		return state.OwnerHome and state.Owner == owner and owner.Parent ~= nil
 	end
 
+	local setupOk, setup = pcall(doorSetup, state, door)
+	if not setupOk then
+		warn("[HouseService] door setup error:", setup)
+		return
+	end
 	state.Busy = true
 	if state.Prompt then
 		state.Prompt.Enabled = false
 	end
 	root.Anchored = true
-	door.CanCollide = false
+	for _, d in setup.Parts do
+		d.Part.CanCollide = false
+	end
 
-	-- The door swings inward on its left edge.
-	local openCF = closedCF * CFrame.new(-3.5, 0, 0) * CFrame.Angles(0, -math.rad(105), 0) * CFrame.new(3.5, 0, 0)
-	TweenService:Create(door, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { CFrame = openCF }):Play()
+	local opened = false
+	local ok, err = pcall(function()
+		task.spawn(function()
+			pcall(swingDoor, setup, 0, 1, 0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			opened = true
+		end)
 
-	-- The owner steps into the doorway, looking at the player.
-	local ahead = closedCF * CFrame.new(0, 0, 3)
-	local spot = Vector3.new(ahead.X, homeCF.Y, ahead.Z)
-	local lookAt = rootOf(player.Character)
-	local faceTo = if lookAt then Vector3.new(lookAt.Position.X, spot.Y, lookAt.Position.Z) else spot + closedCF.LookVector
-	local doorwayCF = CFrame.lookAt(spot, faceTo)
-	if glide(owner, doorwayCF, 0.6, Enum.EasingStyle.Quad, alive) then
-		local bubble = speechBubble(owner, line, if happy then Color3.fromRGB(235, 110, 0) else Color3.fromRGB(200, 40, 40), scale)
+		-- The owner steps into the middle of the doorway, looking at the player.
+		local spot = setup.Closed.Position + setup.Inward * (setup.Thick / 2 + 3.5)
+		spot = Vector3.new(spot.X, homeCF.Y, spot.Z)
+		local playerRoot = rootOf(player.Character)
+		local faceTo = if playerRoot
+			then Vector3.new(playerRoot.Position.X, spot.Y, playerRoot.Position.Z)
+			else spot - setup.Inward
+		local doorwayCF = CFrame.lookAt(spot, faceTo)
+		if not glide(owner, doorwayCF, 0.6, Enum.EasingStyle.Quad, alive) then
+			return
+		end
+
+		local accent = if happy then Color3.fromRGB(255, 150, 40) else Color3.fromRGB(255, 80, 80)
+		local bubble = speechBubble(owner, state.OwnerName, line, accent, scale)
 		if happy then
 			tossCandy(spot + Vector3.new(0, 3, 0), player)
-			-- A happy double hop.
-			for _ = 1, 2 do
+			for _ = 1, 2 do -- a happy double hop
 				if not (glide(owner, doorwayCF + Vector3.new(0, 1.5, 0), 0.15, Enum.EasingStyle.Quad, alive)
 					and glide(owner, doorwayCF, 0.15, Enum.EasingStyle.Quad, alive)) then
 					break
 				end
 			end
 		else
-			-- An angry shake.
-			for i = 1, 6 do
+			for i = 1, 6 do -- an angry shake
 				local sway = doorwayCF * CFrame.Angles(0, math.rad(if i % 2 == 0 then 14 else -14), 0)
 				if not glide(owner, sway, 0.08, Enum.EasingStyle.Linear, alive) then
 					break
@@ -567,29 +719,39 @@ local function playDoorScene(state: HouseState, player: Player, happy: boolean, 
 			end
 			glide(owner, doorwayCF, 0.08, Enum.EasingStyle.Linear, alive)
 		end
-		-- Let the player read it.
-		local readUntil = os.clock() + (if happy then 2 else 2.4)
+
+		-- Long enough to read the line.
+		local words = #string.split(line, " ")
+		local readUntil = os.clock() + 1.8 + words * 0.4
 		while os.clock() < readUntil and alive() do
 			task.wait(0.1)
 		end
 		bubble:Destroy()
+
+		if alive() then
+			glide(owner, homeCF, 0.6, Enum.EasingStyle.Quad, alive)
+		end
+	end)
+	if not ok then
+		warn("[HouseService] door scene error:", err)
 	end
 
-	-- Back to normal. If the owner left for a chase, only the door is put back.
-	if alive() then
-		glide(owner, homeCF, 0.6, Enum.EasingStyle.Quad, alive)
-	end
+	-- Always put everything back, even if the scene was cut short.
 	if root.Parent then
 		root.Anchored = false
 	end
-	local closeInfo = if happy
-		then TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		else TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In) -- slam!
-	local closing = TweenService:Create(door, closeInfo, { CFrame = closedCF })
-	closing:Play()
-	closing.Completed:Wait()
-	door.CFrame = closedCF
-	door.CanCollide = true
+	while not opened do
+		task.wait()
+	end
+	if happy then
+		swingDoor(setup, 1, 0, 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	else -- slam!
+		swingDoor(setup, 1, 0, 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	end
+	placeDoor(setup, 0)
+	for _, d in setup.Parts do
+		d.Part.CanCollide = d.Collide
+	end
 	state.Busy = false
 	if state.Prompt then
 		state.Prompt.Enabled = true
