@@ -212,12 +212,17 @@ Config.Rarities = {
 	Swamp = { Order = 1, Color = Color3.fromRGB(120, 220, 90) },
 	Pyramid = { Order = 2, Color = Color3.fromRGB(240, 200, 100) },
 	Harvest = { Order = 3, Color = Color3.fromRGB(255, 150, 40) },
+	Bakery = { Order = 4, Color = Color3.fromRGB(232, 141, 160) },
 }
 
 ---------------------------------------------------------------------------
 -- Pets: hatched from eggs, placed on the base, earn Money per second.
 ---------------------------------------------------------------------------
 Config.Pets = {
+	CroissantBat = { Name = "Croissant Bat", Rarity = "Bakery", MoneyPerSecond = 300, Color = Color3.fromRGB(221, 155, 76) },
+	CupcakeGhost = { Name = "Cupcake Ghost", Rarity = "Bakery", MoneyPerSecond = 380, Color = Color3.fromRGB(227, 200, 236) },
+	DonutSpider = { Name = "Doughnut Spider", Rarity = "Bakery", MoneyPerSecond = 500, Color = Color3.fromRGB(232, 141, 160) },
+	GingerbreadZombie = { Name = "Gingerbread Zombie", Rarity = "Bakery", MoneyPerSecond = 700, Color = Color3.fromRGB(128, 187, 160) },
 	Bat = { Name = "Bat", Rarity = "Common", MoneyPerSecond = 1, Color = Color3.fromRGB(60, 50, 70) },
 	Spider = { Name = "Candy Spider", Rarity = "Uncommon", MoneyPerSecond = 4, Color = Color3.fromRGB(120, 40, 160) },
 	Pumpkling = { Name = "Pumpkling", Rarity = "Uncommon", MoneyPerSecond = 6, Color = Color3.fromRGB(255, 130, 0) },
@@ -380,6 +385,8 @@ Config.IndexRewards = {
 -- Pool weights are relative; they do not need to add up to 100.
 ---------------------------------------------------------------------------
 Config.Eggs = {
+	BakeryEgg = { Name = "Bakery Egg", Rarity = "Bakery", HatchSeconds = 90, Size = 3, CarrySpeed = 0.90, Color = Color3.fromRGB(232, 141, 160),
+		Pool = { { Pet = "CroissantBat", Weight = 40 }, { Pet = "CupcakeGhost", Weight = 30 }, { Pet = "DonutSpider", Weight = 20 }, { Pet = "GingerbreadZombie", Weight = 10 } } },
 	-- Level eggs: houses 1-3 drop only their own egg. Cheaper pets hatch more often.
 	SwampEgg = {
 		Name = "Swamp Egg", Rarity = "Swamp", HatchSeconds = 10, Size = 2, CarrySpeed = 0.95,
@@ -459,7 +466,7 @@ Config.Houses = {
 	{ Owner = "Scarecrow", OwnerSpeed = 53, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { HarvestEgg = 100 } },
 	{ Owner = "Zombie Chef", OwnerSpeed = 55, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
-		EggWeights = { PumpkinEgg = 40, BatEgg = 40, GhostEgg = 18, MoonEgg = 2 } },
+		EggWeights = { BakeryEgg = 100 } },
 	{ Owner = "Gravedigger", OwnerSpeed = 70, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
 		EggWeights = { PumpkinEgg = 20, BatEgg = 45, GhostEgg = 30, MoonEgg = 5 } },
 	{ Owner = "Count Vlad", OwnerSpeed = 88, CandyPerKnock = 160, CostumeTier = 4, Floors = 2, Scale = 1.25, EggCount = 6,

@@ -7,7 +7,7 @@ A Halloween "steal and collect" Roblox game: Trick-or-Treat for Candy, steal egg
 | Path | What it is |
 |---|---|
 | `src/` | All of the game's scripts, as plain files you can edit and review |
-| `place/SpookyStealV3.2.rbxl` | The full place: map, models, houses, lighting and everything else |
+| `place/SpookySteal-V5.0.rbxl` | The full place: map, models, houses, lighting and everything else |
 | `docs/design-and-plan.md` | Game design and execution plan |
 | `default.project.json` | Rojo config that links `src/` to the right spots in Studio |
 
@@ -23,7 +23,7 @@ File names follow the Rojo rules: `Name.server.luau` is a Script, `Name.client.l
 
 ## How to play the latest version
 
-1. Download `place/SpookyStealV3.2.rbxl` from this repo (open the file on GitHub and click the download button).
+1. Download `place/SpookySteal-V5.0.rbxl` from this repo (open the file on GitHub and click the download button).
 2. Double-click it to open it in Roblox Studio, then press **Play**.
 
 Every code change is copied into the place file for you (`tools/sync_place.py`), so the download always has the latest scripts.

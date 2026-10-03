@@ -57,6 +57,7 @@ type HouseState = {
 	ReturnStart: number?,
 	PathGen: number, -- bumped whenever navigation resets, so a late path result for an old goal is ignored
 	AlertUntil: number?, -- the owner is still noticing the thief until this time (os.clock)
+	Target: Player?, -- the thief being chased right now (read live every frame, not sampled)
 	DoorSetup: any?, -- set while the front door is held open for the chase
 }
 
@@ -199,7 +200,7 @@ local function resetOwner(state: HouseState)
 	end
 	owner.Parent = house
 	local root = rootOf(owner)
-	state.Goal, state.Waypoints, state.ReturnStart, state.AlertUntil = nil, nil, nil, nil
+	state.Goal, state.Waypoints, state.ReturnStart, state.AlertUntil, state.Target = nil, nil, nil, nil, nil
 	state.PathGoal, state.PathFailed = nil, false
 	state.PathGen += 1
 	closeChaseDoor(state, true)
@@ -393,8 +394,22 @@ local function requestPath(state: HouseState, from: Vector3, goal: Vector3)
 			return
 		end
 		if ok and path.Status == Enum.PathStatus.Success then
-			state.Waypoints = path:GetWaypoints()
-			state.WpIndex = 2
+			local waypoints = path:GetWaypoints()
+			state.Waypoints = waypoints
+			-- Start at the waypoint nearest to where he is now (he kept running while this computed).
+			local root = rootOf(state.Owner)
+			local index = 2
+			if root then
+				local best = math.huge
+				for i = 1, math.min(#waypoints, 5) do
+					local p = waypoints[i].Position
+					local d = Vector3.new(p.X - root.Position.X, 0, p.Z - root.Position.Z).Magnitude
+					if d < best then
+						best, index = d, math.max(i, 2)
+					end
+				end
+			end
+			state.WpIndex = index
 			state.PathGoal = goal
 			state.PathFailed = false
 		else
@@ -427,8 +442,10 @@ local function navigate(state: HouseState, goal: Vector3, goalOffset: number)
 	end
 end
 
--- Every frame: walk toward the next waypoint (or the goal).
-local function followGoal(state: HouseState)
+-- Every frame: run toward the next waypoint (or straight at the goal). While chasing, the goal is the thief's
+-- live position, and the owner's speed is enforced here so nothing (physics, network ownership, the Humanoid
+-- state) can make him slower than his stat.
+local function followGoal(state: HouseState, dt: number)
 	local owner = state.Owner
 	local root = rootOf(owner)
 	local humanoid = owner and owner:FindFirstChildOfClass("Humanoid")
@@ -436,11 +453,16 @@ local function followGoal(state: HouseState)
 	if not (root and humanoid and goal) then
 		return
 	end
+	local thief = state.Target
+	local thiefRoot = thief and rootOf(thief.Character)
+	if thiefRoot then
+		goal = thiefRoot.Position
+	end
 	local target = goal
 	local waypoints = state.Waypoints
 	if waypoints then
 		local index = state.WpIndex
-		local reach = math.max(2.5, humanoid.WalkSpeed * 0.06)
+		local reach = math.max(3, state.Info.OwnerSpeed * dt * 1.5)
 		while index <= #waypoints do
 			local p = waypoints[index].Position + Vector3.new(0, state.GroundOffset, 0)
 			if Vector3.new(p.X - root.Position.X, 0, p.Z - root.Position.Z).Magnitude < reach then
@@ -453,7 +475,7 @@ local function followGoal(state: HouseState)
 		if index <= #waypoints then
 			local wp = waypoints[index]
 			target = wp.Position + Vector3.new(0, state.GroundOffset, 0)
-			if wp.Action == Enum.PathWaypointAction.Jump then
+			if wp.Action == Enum.PathWaypointAction.Jump and not ghostWorks then
 				humanoid.Jump = true
 			end
 		else
@@ -461,6 +483,16 @@ local function followGoal(state: HouseState)
 		end
 	end
 	humanoid:MoveTo(target)
+
+	-- Guaranteed pace: horizontal velocity straight at the target at his full speed (never overshooting it).
+	local flat = Vector3.new(target.X - root.Position.X, 0, target.Z - root.Position.Z)
+	local distance = flat.Magnitude
+	if distance > 0.25 then
+		local speed = math.min(state.Info.OwnerSpeed, distance / math.max(dt, 1 / 120))
+		local direction = flat / distance
+		local velocity = root.AssemblyLinearVelocity
+		root.AssemblyLinearVelocity = Vector3.new(direction.X * speed, velocity.Y, direction.Z * speed)
+	end
 end
 
 local function arriveHome(state: HouseState)
@@ -476,7 +508,7 @@ local function arriveHome(state: HouseState)
 			humanoid:MoveTo(root.Position)
 		end
 	end
-	state.Goal, state.Waypoints, state.ReturnStart, state.AlertUntil = nil, nil, nil, nil
+	state.Goal, state.Waypoints, state.ReturnStart, state.AlertUntil, state.Target = nil, nil, nil, nil, nil
 	state.PathGoal, state.PathFailed = nil, false
 	state.PathGen += 1
 	state.OwnerHome = true
@@ -543,6 +575,13 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 		if root then
 			root.Anchored = false
 			root.CanCollide = not ghostWorks
+			pcall(function()
+				root:SetNetworkOwner(nil) -- unanchoring hands him to a nearby client; the server drives the chase
+			end)
+		end
+		local ownerHumanoid = state.Owner:FindFirstChildOfClass("Humanoid")
+		if ownerHumanoid then
+			ownerHumanoid.WalkSpeed = state.Info.OwnerSpeed
 		end
 		openChaseDoor(state)
 	end
@@ -585,6 +624,14 @@ local function chaseStep()
 		end
 
 		if not state.OwnerHome then
+			if not ownerRoot.Anchored and ownerRoot:GetNetworkOwner() ~= nil then
+				pcall(function()
+					ownerRoot:SetNetworkOwner(nil) -- a client simulating him would lag behind the server's view
+				end)
+			end
+			if ownerHumanoid.WalkSpeed ~= state.Info.OwnerSpeed then
+				ownerHumanoid.WalkSpeed = state.Info.OwnerSpeed
+			end
 			local home = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
 			if home and ownerRoot.Position.Y < home.Position.Y - 40 then
 				if ghostWorks then
@@ -619,6 +666,7 @@ local function chaseStep()
 			end
 		end
 
+		state.Target = nil
 		if target then
 			state.ReturnStart = nil
 			if os.clock() < (state.AlertUntil or 0) then
@@ -628,6 +676,7 @@ local function chaseStep()
 			elseif targetDistance <= Config.CatchDistance then
 				finishTheft(target, "caught")
 			else
+				state.Target = target
 				local thiefHumanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
 				local thiefRoot = rootOf(target.Character) :: BasePart
 				navigate(state, thiefRoot.Position, if thiefHumanoid then thiefHumanoid.HipHeight + thiefRoot.Size.Y / 2 else 3)
@@ -1250,11 +1299,22 @@ function HouseService.Start(map: Instance)
 		end
 	end)
 
-	RunService.Heartbeat:Connect(function()
+	RunService.Heartbeat:Connect(function(dt)
 		for _, state in houses do
-			if not state.OwnerHome and state.Goal then
-				followGoal(state)
+			if state.OwnerHome or not state.Goal then
+				continue
 			end
+			local thief = state.Target
+			local thiefRoot = thief and rootOf(thief.Character)
+			local ownerRoot = rootOf(state.Owner)
+			if thief and thiefRoot and ownerRoot and carrying[thief] and os.clock() >= (state.AlertUntil or 0) then
+				-- Catch on the live positions every frame, not only ten times a second.
+				if (ownerRoot.Position - thiefRoot.Position).Magnitude <= Config.CatchDistance then
+					finishTheft(thief, "caught")
+					continue
+				end
+			end
+			followGoal(state, dt)
 		end
 	end)
 

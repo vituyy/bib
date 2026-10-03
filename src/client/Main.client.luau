@@ -1056,45 +1056,201 @@ function menus.Index(d)
 	end
 end
 
--- The Speed Shop has two tabs: Treadmills (Candy) and Trails (Money).
+-- The Speed Shop has two tabs: Treadmills and Trails (both paid with Money). Every item is a studded card with a
+-- little 3D picture of it, its XP multiplier on a badge and a price / equip button underneath.
 local shopTab = "Treadmills"
+local SHOP_TABS = { { Name = "Treadmills", Paint = PAINT.Orange }, { Name = "Trails", Paint = PAINT.Purple } }
 local function tabRow(order: number)
-	local frame = spacer(order, 48)
-	for i, name in { "Treadmills", "Trails" } do
-		chunkyButton({
-			Size = UDim2.new(0.5, -6, 1, -6),
-			Position = UDim2.new((i - 1) * 0.5, (i - 1) * 6 + 3, 0, 3),
-			Text = name,
+	local frame = spacer(order, 54)
+	for i, tab in SHOP_TABS do
+		local active = shopTab == tab.Name
+		local b = chunkyButton({
+			Size = UDim2.new(0.5, -10, 1, if active then -4 else -12),
+			Position = UDim2.new((i - 1) * 0.5, (i - 1) * 6 + 4, 0, if active then 2 else 8),
+			Text = tab.Name,
 			Parent = frame,
-		}, if shopTab == name then PAINT.Orange else PAINT.Grey, function()
-			shopTab = name
+		}, if active then tab.Paint else PAINT.Grey, function()
+			shopTab = tab.Name
 			renderMenu()
 		end)
+		if active then
+			studs(b, 16, 12, WHITE, 0.6)
+		end
 	end
+end
+
+-- Builds a small blocky model for a shop picture. Parts get studded tops like the rest of the game.
+local function pictureBuilder(model: Model)
+	return function(size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, transparency: number?, shape: Enum.PartType?)
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.Size = size
+		p.CFrame = cf
+		p.Color = color
+		p.Material = material or Enum.Material.Plastic
+		p.Transparency = transparency or 0
+		p.TopSurface = Enum.SurfaceType.Studs
+		p.BottomSurface = Enum.SurfaceType.Inlet
+		if shape then
+			p.Shape = shape
+		end
+		p.Parent = model
+		return p
+	end
+end
+
+-- A mini treadmill in the tier's colour, with a little Halloween topper on the better ones.
+local function treadmillPicture(info, tier: number): Model
+	-- Use the real treadmill model for this tier (Assets.Treadmills.<tier>), seen from the console's front corner.
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("Treadmills")
+	local real = folder and folder:FindFirstChild(tostring(tier))
+	if real and real:IsA("Model") then
+		local copy = real:Clone()
+		for _, d in copy:GetDescendants() do
+			if d:IsA("LuaSourceContainer") or d:IsA("ProximityPrompt") or d:IsA("LayerCollector") then
+				d:Destroy()
+			end
+		end
+		copy.PrimaryPart = nil -- so the picture angle comes from WorldPivot, not the belt
+		copy.WorldPivot = CFrame.new(copy:GetBoundingBox().Position) * CFrame.Angles(0, math.rad(-40), 0)
+		copy:SetAttribute("Zoom", 0.8)
+		return copy
+	end
+	-- No model for this tier: draw a simple one instead.
+	local m = Instance.new("Model")
+	local p = pictureBuilder(m)
+	local c = info.Color
+	local light = c:Lerp(WHITE, 0.15)
+	local ghostly = if tier == 6 then 0.3 else 0
+	p(Vector3.new(4, 0.8, 7), CFrame.new(0, 0.4, 0), c:Lerp(BLACK, 0.15), nil, ghostly)
+	p(Vector3.new(3.2, 0.2, 6.6), CFrame.new(0, 0.9, 0), Color3.fromRGB(35, 30, 40), Enum.Material.SmoothPlastic)
+	for i = -2, 2 do
+		p(Vector3.new(3.2, 0.1, 0.35), CFrame.new(0, 1.04, i * 1.3), Color3.fromRGB(75, 70, 85), Enum.Material.SmoothPlastic)
+	end
+	for _, x in { -1.8, 1.8 } do
+		p(Vector3.new(0.5, 3.2, 0.5), CFrame.new(x, 2.4, -3), light, nil, ghostly)
+		p(Vector3.new(0.4, 0.4, 2.2), CFrame.new(x, 3.8, -2.1), light, nil, ghostly)
+		p(Vector3.new(0.15, 0.3, 7), CFrame.new(x * 1.14, 0.45, 0), light, Enum.Material.Neon)
+	end
+	p(Vector3.new(4, 0.4, 0.4), CFrame.new(0, 3.9, -3), light, nil, ghostly)
+	p(Vector3.new(2.6, 1.1, 0.7), CFrame.new(0, 4.3, -3.2), c:Lerp(BLACK, 0.55))
+	p(Vector3.new(2, 0.7, 0.1), CFrame.new(0, 4.35, -3.58), light, Enum.Material.Neon)
+	if tier == 4 then -- pumpkin
+		p(Vector3.new(1.3, 1.1, 1.3), CFrame.new(0, 5.4, -3.2), Color3.fromRGB(255, 120, 0), nil, nil, Enum.PartType.Ball)
+		p(Vector3.new(0.25, 0.5, 0.25), CFrame.new(0, 6.1, -3.2), Color3.fromRGB(90, 160, 50))
+	elseif tier == 5 then -- crossed bones
+		for _, a in { 35, -35 } do
+			p(Vector3.new(1.8, 0.3, 0.3), CFrame.new(0, 5.2, -3.2) * CFrame.Angles(0, 0, math.rad(a)), Color3.fromRGB(240, 235, 215))
+		end
+	elseif tier >= 6 then -- a tiny ghost, or a skull on the cursed one
+		local head = p(Vector3.new(1.1, 1.1, 1.1), CFrame.new(0, 5.4, -3.2), if tier == 6 then WHITE else Color3.fromRGB(235, 230, 215), nil, if tier == 6 then 0.15 else 0)
+		for _, x in { -0.25, 0.25 } do
+			p(Vector3.new(0.25, 0.3, 0.1), CFrame.new(x, 5.5, -3.78), if tier == 6 then BLACK else Color3.fromRGB(170, 60, 255), if tier == 6 then nil else Enum.Material.Neon)
+		end
+		head.TopSurface = Enum.SurfaceType.Smooth
+	end
+	m.WorldPivot = CFrame.new(0, 2.2, 0) * CFrame.Angles(0, math.rad(-35), 0)
+	return m
+end
+
+-- A blocky runner with a glowing streak of the trail's colour behind it.
+local function trailPicture(info, index: number): Model
+	local m = Instance.new("Model")
+	local p = pictureBuilder(m)
+	local skin = Color3.fromRGB(225, 225, 235)
+	p(Vector3.new(1.6, 1.8, 1), CFrame.new(0, 2.7, 0), skin)
+	p(Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 4.3, 0), skin)
+	for _, x in { -0.35, 0.35 } do
+		p(Vector3.new(0.25, 0.35, 0.1), CFrame.new(x, 4.4, -0.72), BLACK)
+	end
+	for i, x in { -0.45, 0.45 } do
+		local swing = if i == 1 then 35 else -35
+		p(Vector3.new(0.7, 1.7, 0.7), CFrame.new(x, 1.1, 0) * CFrame.Angles(math.rad(swing), 0, 0), skin)
+		p(Vector3.new(0.5, 1.5, 0.5), CFrame.new(x * 2.5, 2.8, 0) * CFrame.Angles(math.rad(-swing), 0, 0), skin)
+	end
+	local c = info.Color
+	for i = 1, 7 do
+		local s = 1.8 - i * 0.17
+		p(Vector3.new(s, s, s), CFrame.new(0, 2.8 + math.sin(i * 0.9) * 0.45, 0.7 + i * 1.05), c:Lerp(BLACK, i * 0.06), Enum.Material.Neon, (i - 1) * 0.09)
+	end
+	for i = 1, 2 + index do -- sparkles, more on the better trails
+		local a = i * 2.4
+		p(Vector3.new(0.35, 0.35, 0.35), CFrame.new(math.cos(a) * 1.4, 2.8 + math.sin(a * 1.7) * 1.6, 1.5 + (i % 6) * 1.1), c:Lerp(WHITE, 0.5), Enum.Material.Neon)
+	end
+	m.WorldPivot = CFrame.new(0, 2.8, 3) * CFrame.Angles(0, math.rad(-60), 0)
+	m:SetAttribute("Zoom", 0.82)
+	return m
+end
+
+local function shopGrid(order: number)
+	return new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order, Parent = list }, {
+		new("UIGridLayout", {
+			CellSize = UDim2.new(1 / 3, -8, 0, 226),
+			CellPadding = UDim2.fromOffset(8, 10),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+		new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
+	})
+end
+
+-- One shop item: studded card in the item's colour, name on top, picture window, XP badge and a button.
+local function shopCard(grid: Instance, order: number, name: string, color: Color3, model: Model, multiplier: number, buttonText: string, buttonPaint: { Color3 }, dim: boolean, onClick: (() -> ())?)
+	local top = if dim then Color3.fromRGB(175, 175, 190) else color:Lerp(WHITE, 0.45)
+	local bottom = if dim then Color3.fromRGB(110, 110, 125) else color:Lerp(BLACK, 0.15)
+	local card = box({ LayoutOrder = order, Parent = grid }, { top, bottom })
+	studs(card, 18, 12, WHITE, 0.72)
+	outlined({ Size = UDim2.new(1, -16, 0, 24), Position = UDim2.fromOffset(8, 6), Text = name, ZIndex = 3, Parent = card }, 2)
+	local window = new("Frame", {
+		Size = UDim2.new(1, -16, 1, -98),
+		Position = UDim2.fromOffset(8, 34),
+		BackgroundColor3 = Color3.fromRGB(35, 22, 60),
+		BackgroundTransparency = 0.2,
+		ZIndex = 2,
+		Parent = card,
+	}, { corner(10), new("UIStroke", { Color = BLACK, Thickness = 2.5 }) })
+	local viewport = modelViewport(model, window, { Size = UDim2.fromScale(1, 1), ZIndex = 3, ImageTransparency = if dim then 0.4 else 0 })
+	local camera = viewport.CurrentCamera
+	if camera then -- frame the picture tighter than the default
+		local center = model:GetBoundingBox().Position
+		camera.CFrame = CFrame.lookAt(center + (camera.CFrame.Position - center) * (model:GetAttribute("Zoom") or 0.68), center)
+	end
+	local badge = box({ AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(84, 30), Position = UDim2.new(1, -2, 1, -58), Rotation = -6, ZIndex = 4, Parent = card }, PAINT.Cyan)
+	outlined({ Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3), Text = "x" .. tostring(multiplier) .. " XP", ZIndex = 5, Parent = badge }, 2)
+	for _, child in badge:GetChildren() do
+		if child:IsA("Frame") then
+			child.ZIndex = 4
+		end
+	end
+	chunkyButton({ Size = UDim2.new(1, -16, 0, 44), Position = UDim2.new(0, 8, 1, -52), Text = buttonText, ZIndex = 2, Parent = card }, buttonPaint, onClick or function() end)
+	return card
 end
 
 function menus.Treadmills(d)
 	tabRow(-1)
 	if shopTab == "Trails" then
 		header(0, "Trails: paid with Money, multiply your Speed XP")
+		local grid = shopGrid(1)
 		for index, info in Config.Trails do
 			local owned = table.find(d.OwnedTrails or {}, index) ~= nil
 			local equipped = d.Trail == index
-			local text = string.format("%s  x%s XP", info.Name, tostring(info.Multiplier))
 			local buttonText = if equipped then "Equipped" elseif owned then "Equip" else "$" .. formatNumber(info.Price)
-			row(index, text, info.Color, buttonText, if equipped then PAINT.Grey elseif owned then PAINT.Orange else PAINT.Green, function()
+			local paint = if equipped then PAINT.Grey elseif owned then PAINT.Orange elseif d.Money >= info.Price then PAINT.Green else PAINT.Red
+			shopCard(grid, index, info.Name, info.Color, trailPicture(info, index), info.Multiplier, buttonText, paint, false, function()
 				request("BuyTrail", index)
 			end)
 		end
 		return
 	end
 	header(0, "Treadmills: paid with Money, multiply your costume's XP while you run on them")
+	local grid = shopGrid(1)
 	for tier, info in Config.Treadmills do
-		local text = string.format("%s  x%s XP", info.Name, tostring(info.XpMultiplier))
+		local picture = treadmillPicture(info, tier)
 		if tier <= d.Treadmill then
-			row(tier, text, info.Color, if tier == d.Treadmill then "Owned" else "-", PAINT.Grey)
+			shopCard(grid, tier, info.Name, info.Color, picture, info.XpMultiplier, if tier == d.Treadmill then "Owned" else "-", PAINT.Grey, tier < d.Treadmill)
 		else
-			row(tier, text, info.Color, "$" .. formatNumber(info.Price), PAINT.Green, function()
+			shopCard(grid, tier, info.Name, info.Color, picture, info.XpMultiplier, "$" .. formatNumber(info.Price), if d.Money >= info.Price then PAINT.Green else PAINT.Red, false, function()
 				request("BuyTreadmill", tier)
 			end)
 		end
@@ -1215,6 +1371,14 @@ end)
 ---------------------------------------------------------------------------
 local tutorialFolder: Folder? = nil
 local tutorialMessage: Frame? = nil
+-- The on-screen "Buy a Costume!" message hides while a menu is open so it doesn't cover the menu title.
+local function updateTutorialMessage()
+	if tutorialMessage then
+		tutorialMessage.Visible = not (panel.Visible or invPanel.Visible)
+	end
+end
+panel:GetPropertyChangedSignal("Visible"):Connect(updateTutorialMessage)
+invPanel:GetPropertyChangedSignal("Visible"):Connect(updateTutorialMessage)
 local tutorialRender: RBXScriptConnection? = nil
 
 local function stopTutorial()
@@ -1304,6 +1468,7 @@ local function startTutorial()
 		Parent = gui,
 	})
 	tutorialMessage = message
+	message.Visible = not (panel.Visible or invPanel.Visible)
 	local scale = new("UIScale", { Parent = message })
 	outlined({ Size = UDim2.new(1, 0, 0, 56), Text = "Buy a Costume!", TextColor3 = Color3.fromRGB(255, 225, 60), Parent = message }, 3)
 	outlined({ Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 60), Text = "Follow the arrows, then press E at the glowing costume", Parent = message }, 2)

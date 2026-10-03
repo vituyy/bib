@@ -2,7 +2,7 @@
 
 > The Word version of this document is `docs/Spooky-Steal-Design-and-Plan.docx`. Both files have the same text; update them together.
 
-Working title. **Version 5**, updated 3 October 2026 to match the place file **SpookySteal-House V4.2** and the rework of Candy, costumes, treadmills, base upgrades and the first-time tutorial.
+Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal-V5.0**, built on SpookySteal-House V4.2 / House 4), with the rework of Candy, costumes, treadmills, base upgrades and the first-time tutorial.
 
 ## What changed in this version (since Version 4)
 
@@ -15,6 +15,7 @@ Working title. **Version 5**, updated 3 October 2026 to match the place file **S
 | Base upgrades | The one base upgrade is now two separate ones, each with its own sign: **Pet Capacity** (6 to 18 pets) and **Hatching Pads** (2 to 7). Both are bought with Money. |
 | Tutorial | New players spawn in front of the Costume Shop with exactly enough Candy for the cheapest costume. Arrows on the ground and a "Buy a Costume!" message lead them to it. |
 | From V4.2 (the owner's own changes) | Speed grows by the same amount every level (20 at level 0, 170 at level 100); a Custom speed panel lets you run slower; houses 1 to 3 drop only their own "level" eggs and pets; owner speeds were raised for the new speed scale; a DEV03 code. |
+| Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
 
 ## 1. Overview
@@ -104,6 +105,7 @@ Walk up to a front door at night and knock to get Candy (20 s cooldown per house
 - **Then the chase starts from wherever the owner stands**, even inside the house, and the front door swings open. While a wall or floor is in the way the owner follows a planned path through rooms, doors, windows and stairs; in the open they run straight at you and pass through props, so they never get stuck. The closest thief is chased.
 - Get past the Level 1 line and walk the egg to your base to keep it. Owners give up after 30 s or when you are 150 studs ahead.
 - **If the owner touches you**, they take the egg back and you are stunned for 1.5 s. The egg goes back to the nest it came from, with the same pet, size and material, so another player can steal it. The same happens if you die or leave while carrying.
+- **A faster owner always catches a moving thief** (House 3 bug fixed in 5.0): he runs at his full speed straight at your live position, so he gains on you whenever he is faster.
 - **After the chase** the owner walks back to their spot (no teleporting) and the door closes behind them. If they can't get home within 45 s they are put back.
 
 ### 2.6 Day and night
