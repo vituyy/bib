@@ -63,13 +63,14 @@ function Config.FormatSpeed(speed: number): string
 end
 
 -- XP needed to reach each Speed Level: XP_TO_REACH[1] is the cost of level 1.
--- Each level costs 12% more than the one before up to level 70, then 5% more, so the last levels stay
--- reachable. With the right treadmill, rebirth and trail a level takes roughly 10 to 40 seconds.
+-- Each level costs 20% more than the one before up to level 30, then 8% more up to level 70 and 4% more
+-- after that. The first levels are cheap, the steep part makes levels 20 to 30 (houses 3 and 4) take about
+-- 20 and 35 minutes, and the flatter end keeps up with the big treadmill, costume and trail multipliers.
 local XP_TO_REACH = {}
-local xpCost = 6
+local xpCost = 20
 for level = 1, 100 do
 	XP_TO_REACH[level] = math.floor(xpCost + 0.5)
-	xpCost *= if level < 70 then 1.12 else 1.05
+	xpCost *= if level < 30 then 1.2 elseif level < 70 then 1.08 else 1.04
 end
 
 -- XP needed to go from this Speed Level to the next one.
@@ -100,25 +101,23 @@ Config.TreadmillTick = 0.5 -- seconds between XP payouts
 -- (a costume with 10 XP/s on a x2 treadmill earns 20 XP/s while you run on it).
 Config.Treadmills = {
 	{ Name = "Rusty Treadmill", Price = 0, XpMultiplier = 1, Color = Color3.fromRGB(110, 90, 80) },
-	{ Name = "Wooden Treadmill", Price = 500, XpMultiplier = 1.25, Color = Color3.fromRGB(130, 85, 45) },
-	{ Name = "Iron Treadmill", Price = 3000, XpMultiplier = 1.5, Color = Color3.fromRGB(120, 125, 135) },
-	{ Name = "Pumpkin Treadmill", Price = 20000, XpMultiplier = 2, Color = Color3.fromRGB(255, 120, 0) },
-	{ Name = "Bone Treadmill", Price = 120000, XpMultiplier = 2.5, Color = Color3.fromRGB(230, 225, 200) },
-	{ Name = "Ghostly Treadmill", Price = 800000, XpMultiplier = 3, Color = Color3.fromRGB(170, 230, 255) },
-	{ Name = "Cursed Treadmill", Price = 5000000, XpMultiplier = 4, Color = Color3.fromRGB(140, 40, 200) },
+	{ Name = "Wooden Treadmill", Price = 500, XpMultiplier = 2, Color = Color3.fromRGB(130, 85, 45) },
+	{ Name = "Iron Treadmill", Price = 3000, XpMultiplier = 3, Color = Color3.fromRGB(120, 125, 135) },
+	{ Name = "Pumpkin Treadmill", Price = 15000, XpMultiplier = 5, Color = Color3.fromRGB(255, 120, 0) },
+	{ Name = "Bone Treadmill", Price = 80000, XpMultiplier = 8, Color = Color3.fromRGB(230, 225, 200) },
+	{ Name = "Ghostly Treadmill", Price = 500000, XpMultiplier = 13, Color = Color3.fromRGB(170, 230, 255) },
+	{ Name = "Cursed Treadmill", Price = 3000000, XpMultiplier = 21, Color = Color3.fromRGB(140, 40, 200) },
 }
 
 -- Trails: bought with Money in the Speed Shop's Trails tab. You keep every trail you buy and equip one.
 -- A trail multiplies your Speed XP (a costume rate of 30 XP/s with a 1.5x trail gives 45 XP/s),
 -- stacks with the rebirth multiplier, and shows as a glowing trail behind you.
 Config.Trails = {
-	{ Name = "Candle Smoke", Price = 1800, Multiplier = 1.25, Color = Color3.fromRGB(200, 190, 180) },
-	{ Name = "Bat Swarm", Price = 18000, Multiplier = 1.5, Color = Color3.fromRGB(120, 60, 200) },
-	{ Name = "Candy Sparkle", Price = 135000, Multiplier = 2, Color = Color3.fromRGB(255, 120, 200) },
-	{ Name = "Ghost Wisp", Price = 1050000, Multiplier = 2.5, Color = Color3.fromRGB(200, 240, 255) },
-	{ Name = "Pumpkin Fire", Price = 6600000, Multiplier = 3, Color = Color3.fromRGB(255, 130, 20) },
-	{ Name = "Blood Moon", Price = 42000000, Multiplier = 4, Color = Color3.fromRGB(230, 30, 50) },
-	{ Name = "Nightmare Shadow", Price = 225000000, Multiplier = 5, Color = Color3.fromRGB(60, 0, 90) },
+	{ Name = "Candle Smoke", Price = 1500, Multiplier = 1.5, Color = Color3.fromRGB(200, 190, 180) },
+	{ Name = "Bat Swarm", Price = 15000, Multiplier = 2, Color = Color3.fromRGB(120, 60, 200) },
+	{ Name = "Candy Sparkle", Price = 120000, Multiplier = 3, Color = Color3.fromRGB(255, 120, 200) },
+	{ Name = "Blood Moon", Price = 900000, Multiplier = 4, Color = Color3.fromRGB(230, 30, 50) },
+	{ Name = "Nightmare Shadow", Price = 6000000, Multiplier = 5, Color = Color3.fromRGB(60, 0, 90) },
 }
 function Config.TrailMultiplier(trail: number?): number
 	local info = trail and Config.Trails[trail]
@@ -132,17 +131,17 @@ end
 -- "None" is what a brand-new player wears: x1 Candy and the lowest XP rate.
 ---------------------------------------------------------------------------
 Config.Costumes = {
-	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyMultiplier = 1, XpPerSecond = 0.7, Color = Color3.fromRGB(200, 200, 200) },
-	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 100, CandyMultiplier = 2, XpPerSecond = 1, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
-	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 250, CandyMultiplier = 3, XpPerSecond = 1.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
-	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1000, CandyMultiplier = 4, XpPerSecond = 2.2, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
-	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 4500, CandyMultiplier = 6, XpPerSecond = 3.2, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
-	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 18000, CandyMultiplier = 8, XpPerSecond = 4.5, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
-	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 70000, CandyMultiplier = 12, XpPerSecond = 6.5, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
-	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 280000, CandyMultiplier = 16, XpPerSecond = 9, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
-	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 1000000, CandyMultiplier = 24, XpPerSecond = 12, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
-	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 2500000, CandyMultiplier = 32, XpPerSecond = 16, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
-	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 4000000, CandyMultiplier = 50, XpPerSecond = 22, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
+	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyMultiplier = 1, XpPerSecond = 1, Color = Color3.fromRGB(200, 200, 200) },
+	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 100, CandyMultiplier = 2, XpPerSecond = 1.5, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
+	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 400, CandyMultiplier = 3, XpPerSecond = 2.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
+	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1500, CandyMultiplier = 4, XpPerSecond = 4, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
+	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 6000, CandyMultiplier = 6, XpPerSecond = 7, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
+	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 24000, CandyMultiplier = 8, XpPerSecond = 12, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
+	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 90000, CandyMultiplier = 12, XpPerSecond = 20, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
+	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 300000, CandyMultiplier = 16, XpPerSecond = 35, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
+	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 1000000, CandyMultiplier = 24, XpPerSecond = 60, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
+	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 2500000, CandyMultiplier = 32, XpPerSecond = 100, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
+	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 5000000, CandyMultiplier = 50, XpPerSecond = 170, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
 }
 
 -- A brand-new player starts with exactly enough Candy for the cheapest costume (the tutorial sends them to buy it).
@@ -465,9 +464,9 @@ Config.Houses = {
 		EggWeights = { PyramidEgg = 100 } },
 	{ Owner = "Scarecrow", OwnerSpeed = 53, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { HarvestEgg = 100 } },
-	{ Owner = "Zombie Chef", OwnerSpeed = 55, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
+	{ Owner = "Zombie Chef", OwnerSpeed = 72, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
 		EggWeights = { BakeryEgg = 100 } },
-	{ Owner = "Gravedigger", OwnerSpeed = 70, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
+	{ Owner = "Gravedigger", OwnerSpeed = 84, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
 		EggWeights = { PumpkinEgg = 20, BatEgg = 45, GhostEgg = 30, MoonEgg = 5 } },
 	{ Owner = "Count Vlad", OwnerSpeed = 88, CandyPerKnock = 160, CostumeTier = 4, Floors = 2, Scale = 1.25, EggCount = 6,
 		EggWeights = { BatEgg = 40, GhostEgg = 40, MoonEgg = 18, CursedEgg = 2 } },

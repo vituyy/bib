@@ -10,11 +10,12 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 |---|---|
 | Currencies swapped | **Costumes are bought with Candy. Treadmills are bought with Money.** Trails, base upgrades and Index rewards stay in Money. |
 | Costumes | Every costume has a Candy multiplier (the first one is x2, the best x50) and a base Speed XP per second. |
-| Treadmills | A treadmill no longer gives XP by itself. It multiplies the XP rate of the costume you wear (x1 to x4). |
+| Treadmills | A treadmill no longer gives XP by itself. It multiplies the XP rate of the costume you wear (x1 to x21). |
 | Running XP | You earn Speed XP while running anywhere in the game, at your costume's rate. Standing still earns 0. On a treadmill, running in place counts and the treadmill's multiplier applies. |
 | Base upgrades | The one base upgrade is now two separate ones, each with its own sign: **Pet Capacity** (6 to 18 pets) and **Hatching Pads** (2 to 7). Both are bought with Money. |
 | Tutorial | New players spawn in front of the Costume Shop with exactly enough Candy for the cheapest costume. Arrows on the ground and a "Buy a Costume!" message lead them to it. |
 | From V4.2 (the owner's own changes) | Speed grows by the same amount every level (20 at level 0, 170 at level 100); a Custom speed panel lets you run slower; houses 1 to 3 drop only their own "level" eggs and pets; owner speeds were raised for the new speed scale; a DEV03 code. |
+| Speed balance (5.0) | Treadmills are x1, x2, x3, x5, x8, x13, x21; trails x1.5, x2, x3, x4, x5 (5 trails); costume Speed XP per second grows 1, 1.5, 2.5, 4, 7, 12, 20, 35, 60, 100, 170. Speed Levels cost much more XP (20% more per level up to level 30, then 8%, then 4%) so house 3 comes at about 20 min and house 4 at about 35 min. The Zombie Chef now runs at 72 and the Gravedigger at 84 so house 4 is not reachable right after house 3. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
 
@@ -79,8 +80,8 @@ Houses 1 (swamp) and 2 (desert) are built and themed; the themes for houses 3 to
 | 1 | Old Witch | 17 | 5 | None | 1 | 4 | Swamp Egg (5 level pets) | Built: swamp cottage with chimney smoke, cauldrons and reeds |
 | 2 | Friendly Mummy | 38 | 10 | None | 1 | 4 | Pyramid Egg (5 level pets) | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
 | 3 | Scarecrow | 53 | 20 | Bedsheet Ghost | 1 | 5 | Harvest Egg (5 level pets) | Placeholder |
-| 4 | Zombie Chef | 55 | 40 | Pumpkin Head | 2 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
-| 5 | Gravedigger | 70 | 80 | Witch | 1 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
+| 4 | Zombie Chef | 72 | 40 | Pumpkin Head | 2 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
+| 5 | Gravedigger | 84 | 80 | Witch | 1 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
 | 6 | Count Vlad | 88 | 160 | Vampire | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
 | 7 | Banshee | 105 | 320 | Glowing Skeleton | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
 | 8 | Headless Horseman | 125 | 650 | Werewolf | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
@@ -221,29 +222,27 @@ Old saves keep what they had: the single base level of Version 4 is converted in
 | Treadmill | XP multiplier | Price (Money) |
 |---|---|---|
 | Rusty | x1 | free |
-| Wooden | x1.25 | $500 |
-| Iron | x1.5 | $3,000 |
-| Pumpkin | x2 | $20,000 |
-| Bone | x2.5 | $120,000 |
-| Ghostly | x3 | $800,000 |
-| Cursed | x4 | $5,000,000 |
+| Wooden | x2 | $500 |
+| Iron | x3 | $3,000 |
+| Pumpkin | x5 | $15,000 |
+| Bone | x8 | $80,000 |
+| Ghostly | x13 | $500,000 |
+| Cursed | x21 | $3,000,000 |
 
-- **Trails (Money):** sold in the Trails tab of the Speed Shop. A trail multiplies your Speed XP everywhere (a costume rate of 30 XP/s with a 1.5x trail gives 45 XP/s). You keep every trail you buy and equip one at a time; it shows as a visible trail behind your character.
-- **Speed Levels:** speed grows by the same amount every level: 20 at level 0, +1.5 per level, 170 at level 100. Each level costs 12% more XP than the last up to level 70 (6 XP for level 1, about 15,000 for level 70), then 5% more (about 65,000 for level 100).
+- **Trails (Money):** sold in the Trails tab of the Speed Shop. A trail multiplies your Speed XP everywhere (a costume rate of 30 XP/s with a 2x trail gives 60 XP/s). You keep every trail you buy and equip one at a time; it shows as a visible trail behind your character.
+- **Speed Levels:** speed grows by the same amount every level: 20 at level 0, +1.5 per level, 170 at level 100. Each level costs 20% more XP than the last up to level 30 (20 XP for level 1, about 3,956 for level 30), then 8% more up to level 70 (about 85,948), then 4% more (about 278,764 for level 100). The steep start is what puts houses 3 and 4 at about 20 and 35 minutes; the big multipliers keep the later levels moving.
 - **Custom speed (V4.2):** a panel lets you run slower than your max speed (down to 16), for example to stay under control. It does not change your XP.
 - **Rebirth:** opens at Speed Level 10, then 20, 30, 40, 55, 70, 85 and 100 (8 rebirths). It resets your Speed Level and XP and raises your XP multiplier: x2 after the first rebirth, x3 after the second, up to x9. Pets, eggs, Money, Candy, treadmills, trails and costumes are kept.
 
-Suggested trail ladder (the build in Studio may tune these):
+Trail ladder (5 trails, the last one is x5):
 
 | Trail | XP boost | Price (Money) |
 |---|---|---|
-| Candle Smoke | 1.25x | 1,800 |
-| Bat Swarm | 1.5x | 18,000 |
-| Candy Sparkle | 2x | 135,000 |
-| Ghost Wisp | 2.5x | 1,050,000 |
-| Pumpkin Fire | 3x | 6,600,000 |
-| Blood Moon | 4x | 42,000,000 |
-| Nightmare Shadow | 5x | 225,000,000 |
+| Candle Smoke | 1.5x | 1,500 |
+| Bat Swarm | 2x | 15,000 |
+| Candy Sparkle | 3x | 120,000 |
+| Blood Moon | 4x | 900,000 |
+| Nightmare Shadow | 5x | 6,000,000 |
 
 ### 2.10 Costumes (bought with Candy)
 
@@ -253,21 +252,21 @@ Candy buys costumes from the mannequins in the Costume Shop (walk up and press E
 - a **base Speed XP per second** while you run,
 - the **tier** that decides which doors give you Candy (see 2.3).
 
-A new player wears no costume (x1 Candy, 0.7 XP/s) and starts with 100 Candy, exactly the price of the cheapest costume.
+A new player wears no costume (x1 Candy, 1 XP/s) and starts with 100 Candy, exactly the price of the cheapest costume.
 
 | Tier | Costume | Price (Candy) | Candy multiplier | Speed XP/s |
 |---|---|---|---|---|
-| 0 | No Costume | free | x1 | 0.7 |
-| 1 | Bedsheet Ghost | 100 | x2 | 1 |
-| 2 | Pumpkin Head | 250 | x3 | 1.5 |
-| 3 | Witch | 1,000 | x4 | 2.2 |
-| 4 | Vampire | 4,500 | x6 | 3.2 |
-| 5 | Glowing Skeleton | 18,000 | x8 | 4.5 |
-| 6 | Werewolf | 70,000 | x12 | 6.5 |
-| 7 | Grim Reaper | 280,000 | x16 | 9 |
-| 8 | Mummy | 1,000,000 | x24 | 12 |
-| 9 | Frankenstein | 2,500,000 | x32 | 16 |
-| 10 | Red Devil | 4,000,000 | x50 | 22 |
+| 0 | No Costume | free | x1 | 1 |
+| 1 | Bedsheet Ghost | 100 | x2 | 1.5 |
+| 2 | Pumpkin Head | 400 | x3 | 2.5 |
+| 3 | Witch | 1,500 | x4 | 4 |
+| 4 | Vampire | 6,000 | x6 | 7 |
+| 5 | Glowing Skeleton | 24,000 | x8 | 12 |
+| 6 | Werewolf | 90,000 | x12 | 20 |
+| 7 | Grim Reaper | 300,000 | x16 | 35 |
+| 8 | Mummy | 1,000,000 | x24 | 60 |
+| 9 | Frankenstein | 2,500,000 | x32 | 100 |
+| 10 | Red Devil | 5,000,000 | x50 | 170 |
 
 The shop signs show each costume's Candy multiplier, XP rate and Candy price; the price changes to WEARING or OWNED once you have it.
 
@@ -278,16 +277,17 @@ These come from a simulation of an active player (about 40% of the time on the t
 | Milestone | Active player | Casual player |
 |---|---|---|
 | First costume (starting Candy) | at once | at once |
-| Second costume (Pumpkin Head, 250 Candy) | 7 min | 11 min |
-| Steal from house 2 | 4 min | 7 min |
-| Steal from house 4 | 17 min | 27 min |
-| Costume 5 (Skeleton) | 37 min | 1 h |
-| Steal from house 6 | 52 min | 1.2 h |
-| Steal from house 9 | about 2 h | 3.3 h |
-| Treadmills 2 to 7 | 7 min to 1.3 h | 12 min to 1.4 h |
-| Pet Capacity 1 to 4 | 5 min to 1.5 h | 8 min to 1.6 h |
-| Hatching Pads 1 to 5 | 8 min to 2.5 h | 14 min to 3 h |
-| All 10 costumes | 3.9 h | 6.5 h |
+| Second costume (Pumpkin Head, 400 Candy) | 11 min | 18 min |
+| Steal from house 2 | 8 min | 13 min |
+| Steal from house 3 | 18 min (target about 20) | 29 min |
+| Steal from house 4 | 36 min (target about 35) | 58 min |
+| Costume 5 (Skeleton) | 52 min | 1.4 h |
+| Steal from house 6 | 41 min | 1.1 h |
+| Steal from house 9 | about 1.5 h | 2.4 h |
+| Treadmills 2 to 7 | 2 min to 57 min | 3 min to 1.5 h |
+| Pet Capacity 1 to 4 | 3 min to 1.1 h | 5 min to 1.7 h |
+| Hatching Pads 1 to 5 | 8 min to 1.8 h | 13 min to 2.9 h |
+| All 10 costumes | 4.6 h | 7.4 h |
 
 Candy now has a real job: it buys all 10 costumes, and the multipliers make each knock worth far more. Money buys treadmills, trails, both base upgrades and gets Index rewards. Candy still has nothing to buy after the Red Devil (see 5.1).
 
@@ -368,6 +368,7 @@ The main copy is the **SpookySteal-House V4.2** place, kept in the GitHub repo v
 - Base Level became two saved values, `PetCapLevel` and `PadLevel`, with two signs, separate prices and separate base visuals (`Config.PetCapacityUpgrades`, `Config.HatchPadUpgrades`). Old saves are converted.
 - First-time tutorial (2.13): spawn at the Costume Shop, 100 starting Candy, ground arrows and a "Buy a Costume!" message.
 - Removed: Candy-priced treadmills, Money-priced costumes, `CandyBonus` percentages, `XpPerSecond` on treadmills and the single `BaseLevel` upgrade.
+- Speed balance (5.0): new treadmill, trail and costume XP ladders, a steeper XP curve, five trails (Ghost Wisp and Pumpkin Fire removed; saved trails above number 5 are dropped and an equipped one is unequipped), Zombie Chef 72 and Gravedigger 84.
 
 **Safety (added 1 October 2026)**
 
@@ -466,6 +467,8 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 **2. Rebirth vs. speed.** Rebirth resets Speed Level to 0, so a player who rebirths becomes too slow for the houses they were stealing from. The XP multiplier (x2, x3, ...) and trails help them climb back faster but don't fix it. Decide what rebirth keeps (e.g. a speed floor, or reset only XP) and what else it gives.
 
 3. **New-player escape.** *(Done: house 1's owner, the Old Witch, runs at 14 and house 2's, the Mummy, at 17; the owner also needs a moment to notice you.)* A new player carrying the smallest egg runs at about 15, so house 1 can always be escaped. Check in Studio that the owner starting inside the house still feels fair.
+
+**3b. Houses 4 to 6 come close together.** In the simulation houses 4, 5 and 6 open at about 36, 39 and 41 minutes because the owner speeds (72, 84, 88) are close and the big multipliers add speed fast. Spread the speeds of houses 5 to 8 if you want a longer gap between them.
 
 **4. Endgame.** With the V4.2 speed scale (max 170) the Lich King runs at 145. Carrying a Ghost egg (x0.89) you need speed 163 (level 96), a Blood Moon egg (x0.87) speed 167 (level 98); a Cursed egg (x0.85) needs 171 and a Nightmare egg (x0.82) 177, more than the maximum, so those can only be taken by outlasting the 30 s chase. Decide whether that is intended, or lower the last owners' speed or raise the max speed. Also decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
 
