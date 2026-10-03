@@ -73,7 +73,7 @@ function CharacterService.Refresh(player: Player)
 		return
 	end
 
-	local speed = Config.WalkSpeedFor(data.SpeedLevel)
+	local speed = Config.ChosenSpeed(data)
 	local carriedEgg = Config.Eggs[player:GetAttribute("CarryingEgg") or ""]
 	if carriedEgg then
 		speed *= carriedEgg.CarrySpeed

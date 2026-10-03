@@ -273,6 +273,84 @@ end
 player:GetAttributeChangedSignal("FriendBoost"):Connect(refreshFriendBoost)
 refreshFriendBoost()
 
+-- Custom speed, under Money and Candy: run slower than your max speed if you want. Type a number or use - / +.
+-- The server clamps it between Config.MinCustomSpeed and your max and saves it.
+local customSpeedHud = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(270, 112), Position = UDim2.new(1, -16, 0.5, 80), BackgroundTransparency = 1, Parent = gui })
+outlined({ Size = UDim2.fromOffset(62, 62), Position = UDim2.fromOffset(0, 26), Text = "⚡", TextColor3 = Color3.fromRGB(255, 200, 30), Parent = customSpeedHud }, 3)
+outlined({ Size = UDim2.new(1, -66, 0, 30), Position = UDim2.fromOffset(66, 0), Text = "Custom speed", Parent = customSpeedHud }, 3)
+local speedBox = new("Frame", {
+	Size = UDim2.new(1, -66, 0, 54),
+	Position = UDim2.fromOffset(66, 32),
+	BackgroundColor3 = Color3.fromRGB(15, 70, 25),
+	BackgroundTransparency = 0.3,
+	Parent = customSpeedHud,
+}, { corner(12), new("UIStroke", { Color = Color3.fromRGB(10, 40, 15), Thickness = 2, Transparency = 0.3 }) })
+local speedInput = new("TextBox", {
+	Size = UDim2.new(1, -96, 1, -8),
+	Position = UDim2.fromOffset(48, 4),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.FredokaOne,
+	TextColor3 = WHITE,
+	TextScaled = true,
+	ClearTextOnFocus = false,
+	Text = "",
+	Parent = speedBox,
+}, { new("UIStroke", { Color = BLACK, Thickness = 2, LineJoinMode = Enum.LineJoinMode.Round }) })
+local maxSpeedLabel = outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.new(1, -66, 0, 22), Position = UDim2.new(1, -4, 0, 89), Text = "Max: 0", TextXAlignment = Enum.TextXAlignment.Right, Parent = customSpeedHud }, 2)
+
+local shownSpeed: number? = nil -- what the panel shows; nil until the first data arrives
+local sendSpeedAt = 0
+local function speedLimits(): (number, number)
+	local max = if data then Config.WalkSpeedFor(data.SpeedLevel) else Config.BaseWalkSpeed
+	return math.min(Config.MinCustomSpeed, max), max
+end
+local function showSpeed(speed: number)
+	local low, max = speedLimits()
+	shownSpeed = math.clamp(math.floor(speed * 2 + 0.5) / 2, low, max)
+	speedInput.Text = Config.FormatSpeed(shownSpeed :: number)
+	maxSpeedLabel.Text = "Max: " .. Config.FormatSpeed(max)
+end
+-- Wait a moment after the last change before telling the server, so holding/clicking fast sends one request.
+local function pickSpeed(speed: number)
+	showSpeed(speed)
+	local at = os.clock()
+	sendSpeedAt = at
+	task.delay(0.35, function()
+		if sendSpeedAt == at and shownSpeed then
+			Remotes.Request:InvokeServer("SetCustomSpeed", shownSpeed)
+		end
+	end)
+end
+for _, step in { -1, 1 } do
+	chunkyButton({
+		AnchorPoint = Vector2.new(if step < 0 then 0 else 1, 0.5),
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(if step < 0 then 0 else 1, if step < 0 then 6 else -6, 0.5, 0),
+		Text = if step < 0 then "-" else "+",
+		ZIndex = 2,
+		Parent = speedBox,
+	}, if step < 0 then PAINT.Red else PAINT.Green, function()
+		if shownSpeed then
+			pickSpeed(if step > 0 then math.floor(shownSpeed) + 1 else math.ceil(shownSpeed) - 1)
+		end
+	end)
+end
+speedInput.FocusLost:Connect(function()
+	local typed = tonumber(speedInput.Text)
+	if typed and typed == typed then
+		pickSpeed(typed)
+	elseif shownSpeed then
+		showSpeed(shownSpeed)
+	end
+end)
+local function refreshCustomSpeed(d)
+	if speedInput:IsFocused() or os.clock() - sendSpeedAt < 1 then
+		maxSpeedLabel.Text = "Max: " .. Config.FormatSpeed(Config.WalkSpeedFor(d.SpeedLevel))
+		return -- the player is changing it right now
+	end
+	showSpeed(Config.ChosenSpeed(d))
+end
+
 -- Night / day timer, top centre: just outlined text.
 local phaseLabel = outlined({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(340, 40), Position = UDim2.new(0.5, 0, 0, 10), Text = "", Parent = gui }, 3)
 
@@ -1134,7 +1212,8 @@ end)
 local function refreshStats(d)
 	candyLabel.Text = formatNumber(d.Candy)
 	moneyLabel.Text = formatNumber(d.Money)
-	speedLabel.Text = "Speed: " .. Config.WalkSpeedFor(d.SpeedLevel)
+	speedLabel.Text = "Speed: " .. Config.FormatSpeed(Config.ChosenSpeed(d))
+	refreshCustomSpeed(d)
 	rebirthLabel.Text = "Rebirth: x" .. tostring(Config.XpMultiplier(d.Rebirths))
 	levelLabel.Text = "Level " .. d.SpeedLevel
 	if d.SpeedLevel >= Config.MaxSpeedLevel then
@@ -1185,33 +1264,129 @@ player:GetAttributeChangedSignal("CarryingEgg"):Connect(function()
 end)
 
 ---------------------------------------------------------------------------
--- Treadmill auto-run: standing on your own treadmill makes your character run by itself. Jump to get off.
+-- Treadmill: step onto your own belt and you are held in the middle, running in place while the belt scrolls.
+-- Press a move key or jump to step off; leave the belt and walk back on to start again.
 ---------------------------------------------------------------------------
-local jumpedOff = false
-RunService:BindToRenderStep("TreadmillAutoRun", Enum.RenderPriority.Character.Value + 1, function()
+local locked = false -- held on the belt, running
+local armed = false -- move keys let go since locking, so the next press steps off
+local released = false -- stepped off; stays free until leaving the belt
+local runTrack: AnimationTrack? = nil
+local runTrackOwner: Humanoid? = nil
+local beltScroll: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: any
+local jumpRequested = false
+game:GetService("UserInputService").JumpRequest:Connect(function()
+	jumpRequested = true
+end)
+
+local function playRun(character: Model, humanoid: Humanoid)
+	if runTrackOwner ~= humanoid then
+		runTrackOwner = humanoid
+		runTrack = nil
+		local animate = character:FindFirstChild("Animate")
+		local run = animate and animate:FindFirstChild("run")
+		local anim = run and run:FindFirstChildOfClass("Animation")
+		local animator = humanoid:FindFirstChildOfClass("Animator")
+		if anim and animator then
+			runTrack = animator:LoadAnimation(anim)
+			runTrack.Priority = Enum.AnimationPriority.Action
+			runTrack.Looped = true
+		end
+	end
+	if runTrack and not runTrack.IsPlaying then
+		runTrack:Play(0.2)
+	end
+end
+
+local function unlock()
+	locked = false
+	Remotes.TreadmillRunning:FireServer(false)
+	if runTrack then
+		runTrack:Stop(0.2)
+	end
+end
+
+-- Scroll the slats of every belt someone is running on (the server marks those treadmills "Running";
+-- our own belt follows our local state so it stops the instant we step off).
+local function scrollBelts(plots: Instance, dt: number)
+	for _, plot in plots:GetChildren() do
+		local treadmill = plot:FindFirstChild("Treadmill")
+		local belt = treadmill and treadmill:FindFirstChild("Belt") :: BasePart?
+		local slats = treadmill and treadmill:FindFirstChild("Slats")
+		if belt and slats then
+			local active = if plot.Name == player:GetAttribute("Plot") then locked else treadmill:GetAttribute("Running") == true
+			if active then
+				local len = belt.Size.Z
+				local list = slats:GetChildren()
+				local gap = len / #list
+				local off = ((beltScroll[belt] or 0) + dt * Config.TreadmillBeltSpeed * 1.4) % len
+				beltScroll[belt] = off
+				for i, s in list do
+					(s :: BasePart).CFrame = belt.CFrame * CFrame.new(0, belt.Size.Y / 2 + 0.03, -len / 2 + ((i - 0.5) * gap + off) % len)
+				end
+			end
+		end
+	end
+end
+
+RunService:BindToRenderStep("TreadmillAutoRun", Enum.RenderPriority.Character.Value + 1, function(dt)
+	local map = workspace:FindFirstChild("Map")
+	local plots = map and map:FindFirstChild("Plots")
+	if plots then
+		scrollBelts(plots, dt)
+	end
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local plotName = player:GetAttribute("Plot")
-	local map = workspace:FindFirstChild("Map")
-	local plots = map and map:FindFirstChild("Plots")
 	local plot = plots and plotName and plots:FindFirstChild(plotName)
 	local treadmill = plot and plot:FindFirstChild("Treadmill")
 	local belt = treadmill and treadmill:FindFirstChild("Belt") :: BasePart?
-	if not (humanoid and root and belt) then
+	local jumped = jumpRequested
+	jumpRequested = false
+	if not (character and humanoid and root and belt) or humanoid.Health <= 0 then
+		if locked then
+			unlock()
+		end
 		return
 	end
 	local offset = belt.CFrame:PointToObjectSpace(root.Position)
-	local onBelt = math.abs(offset.X) <= belt.Size.X / 2 + 0.5 and math.abs(offset.Z) <= belt.Size.Z / 2 + 0.5 and offset.Y > 0 and offset.Y < 6
-	if not onBelt then
-		jumpedOff = false
+	local overBelt = math.abs(offset.X) <= belt.Size.X / 2 + 0.5 and math.abs(offset.Z) <= belt.Size.Z / 2 + 0.5
+	if not overBelt then
+		released = false -- stepping off the treadmill re-arms it
+	end
+	if not overBelt or offset.Y <= 0 or offset.Y >= 6 or player:GetAttribute("CarryingEgg") then
+		if locked then
+			unlock()
+		end
 		return
 	end
-	if humanoid.Jump then
-		jumpedOff = true -- the belt carries you off the back once you stop running
+	if released then
+		return
 	end
-	if not jumpedOff then
-		humanoid:Move(belt.CFrame.LookVector, false)
+	local moving = humanoid.MoveDirection.Magnitude > 0.1
+	if locked and (jumped or (armed and moving)) then
+		unlock()
+		released = true
+		return
+	end
+	if not locked then
+		locked = true
+		armed = false
+		Remotes.TreadmillRunning:FireServer(true)
+		playRun(character, humanoid)
+	end
+	if not moving then
+		armed = true
+	end
+	-- Hold the runner in the middle of the belt, facing the console.
+	humanoid:Move(Vector3.zero, false)
+	local target = belt.CFrame * CFrame.new(0, belt.Size.Y / 2 + humanoid.HipHeight + root.Size.Y / 2, 0)
+	if (root.Position - target.Position).Magnitude > 0.2 or root.CFrame.LookVector:Dot(target.LookVector) < 0.99 then
+		root.CFrame = target
+	end
+	root.AssemblyLinearVelocity = Vector3.zero
+	if runTrack then
+		runTrack:AdjustSpeed(math.clamp(humanoid.WalkSpeed / 16, 1, 2.5))
 	end
 end)
 

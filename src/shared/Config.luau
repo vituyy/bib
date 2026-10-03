@@ -25,6 +25,7 @@ Config.StartingData = {
 	Discovered = {}, -- pet ids hatched at least once (the Index)
 	IndexClaimed = {}, -- Index milestone counts already claimed (5, 10, 15, 20)
 	RedeemedCodes = {}, -- codes this player has already used (see CODES in ShopService)
+	CustomSpeed = 0, -- speed the player chose with the Custom speed panel (0 = always run at their max speed)
 }
 
 ---------------------------------------------------------------------------
@@ -35,15 +36,29 @@ Config.DaySeconds = 10
 
 ---------------------------------------------------------------------------
 -- Player speed: run on a treadmill for XP, each Speed Level makes you faster.
--- Speed grows exponentially so maxed players look (and are) way faster than new ones.
+-- Speed grows by the same amount every level: 20 at level 0, 170 at level 100.
 ---------------------------------------------------------------------------
-Config.BaseWalkSpeed = 16 -- Roblox default walk speed; new players start here
+Config.BaseWalkSpeed = 20 -- new players start here
+Config.SpeedPerLevel = 1.5 -- extra walk speed for every Speed Level
 Config.SpeedBonus = 0 -- flat extra speed on top of the curve
-Config.SpeedGrowth = 1.0185 -- walk speed multiplier per Speed Level (about 100 speed at level 100)
 Config.MaxSpeedLevel = 100
+Config.MinCustomSpeed = 16 -- lowest speed the Custom speed panel can pick (Roblox default walk speed)
 
+-- A player's max speed at this Speed Level.
 function Config.WalkSpeedFor(speedLevel: number): number
-	return math.floor(Config.BaseWalkSpeed * Config.SpeedGrowth ^ speedLevel + 0.5) + Config.SpeedBonus
+	return Config.BaseWalkSpeed + Config.SpeedPerLevel * speedLevel + Config.SpeedBonus
+end
+
+-- The speed a player actually runs at: their Custom speed if they picked one below their max, else their max.
+function Config.ChosenSpeed(data: { [string]: any }): number
+	local max = Config.WalkSpeedFor(data.SpeedLevel)
+	local custom = tonumber(data.CustomSpeed) or 0
+	return if custom > 0 then math.clamp(custom, math.min(Config.MinCustomSpeed, max), max) else max
+end
+
+-- 21.5 -> "21.5", 23 -> "23".
+function Config.FormatSpeed(speed: number): string
+	return if speed % 1 == 0 then string.format("%d", speed) else string.format("%.1f", speed)
 end
 
 -- XP needed to reach each Speed Level: XP_TO_REACH[1] is the cost of level 1.
@@ -169,6 +184,10 @@ Config.Rarities = {
 	Legendary = { Order = 5, Color = Color3.fromRGB(255, 190, 40) },
 	Mythic = { Order = 6, Color = Color3.fromRGB(255, 60, 90) },
 	Secret = { Order = 7, Color = Color3.fromRGB(20, 255, 220) },
+	-- Level pets have no tier: the label is their level's place, and better pets just earn more.
+	Swamp = { Order = 1, Color = Color3.fromRGB(120, 220, 90) },
+	Pyramid = { Order = 2, Color = Color3.fromRGB(240, 200, 100) },
+	Harvest = { Order = 3, Color = Color3.fromRGB(255, 150, 40) },
 }
 
 ---------------------------------------------------------------------------
@@ -176,10 +195,8 @@ Config.Rarities = {
 ---------------------------------------------------------------------------
 Config.Pets = {
 	Bat = { Name = "Bat", Rarity = "Common", MoneyPerSecond = 1, Color = Color3.fromRGB(60, 50, 70) },
-	BlackCat = { Name = "Black Cat", Rarity = "Common", MoneyPerSecond = 2, Color = Color3.fromRGB(20, 20, 20) },
 	Spider = { Name = "Candy Spider", Rarity = "Uncommon", MoneyPerSecond = 4, Color = Color3.fromRGB(120, 40, 160) },
 	Pumpkling = { Name = "Pumpkling", Rarity = "Uncommon", MoneyPerSecond = 6, Color = Color3.fromRGB(255, 130, 0) },
-	Crow = { Name = "Scarecrow Crow", Rarity = "Uncommon", MoneyPerSecond = 9, Color = Color3.fromRGB(30, 30, 35) },
 	CandyCorn = { Name = "Candy Corn Critter", Rarity = "Rare", MoneyPerSecond = 15, Color = Color3.fromRGB(255, 220, 60) },
 	VampBat = { Name = "Vampire Bat", Rarity = "Rare", MoneyPerSecond = 22, Color = Color3.fromRGB(120, 0, 30) },
 	Zombie = { Name = "Zombie Pup", Rarity = "Rare", MoneyPerSecond = 32, Color = Color3.fromRGB(110, 160, 90) },
@@ -195,6 +212,25 @@ Config.Pets = {
 	ShadowClown = { Name = "Shadow Clown", Rarity = "Mythic", MoneyPerSecond = 4000, Color = Color3.fromRGB(40, 0, 60) },
 	HeadlessHorse = { Name = "Headless Horseman", Rarity = "Secret", MoneyPerSecond = 8000, Color = Color3.fromRGB(40, 0, 0) },
 	PumpkinKing = { Name = "Pumpkin King", Rarity = "Secret", MoneyPerSecond = 15000, Color = Color3.fromRGB(255, 90, 0) },
+
+	-- Level 1: the Old Witch's swamp.
+	BogToad = { Name = "Bog Toad", Rarity = "Swamp", MoneyPerSecond = 3, Color = Color3.fromRGB(90, 130, 60) },
+	BlackCat = { Name = "Black Cat", Rarity = "Swamp", MoneyPerSecond = 4, Color = Color3.fromRGB(20, 20, 20) },
+	MushroomImp = { Name = "Mushroom Imp", Rarity = "Swamp", MoneyPerSecond = 5, Color = Color3.fromRGB(200, 60, 60) },
+	CauldronSlime = { Name = "Cauldron Slime", Rarity = "Swamp", MoneyPerSecond = 7, Color = Color3.fromRGB(120, 255, 80) },
+	HexedOwl = { Name = "Hexed Owl", Rarity = "Swamp", MoneyPerSecond = 11, Color = Color3.fromRGB(110, 70, 160) },
+	-- Level 2: the Friendly Mummy's pyramid.
+	SandScarab = { Name = "Sand Scarab", Rarity = "Pyramid", MoneyPerSecond = 15, Color = Color3.fromRGB(40, 140, 150) },
+	Camel = { Name = "Camel", Rarity = "Pyramid", MoneyPerSecond = 20, Color = Color3.fromRGB(205, 165, 105) },
+	CanopicJar = { Name = "Canopic Jar Critter", Rarity = "Pyramid", MoneyPerSecond = 25, Color = Color3.fromRGB(225, 205, 160) },
+	MiniSphinx = { Name = "Mini Sphinx", Rarity = "Pyramid", MoneyPerSecond = 35, Color = Color3.fromRGB(230, 190, 110) },
+	AnubisPup = { Name = "Anubis Pup", Rarity = "Pyramid", MoneyPerSecond = 55, Color = Color3.fromRGB(30, 30, 40) },
+	-- Level 3: the Scarecrow's harvest barn.
+	HayMouse = { Name = "Hay Mouse", Rarity = "Harvest", MoneyPerSecond = 70, Color = Color3.fromRGB(170, 150, 130) },
+	Crow = { Name = "Scarecrow Crow", Rarity = "Harvest", MoneyPerSecond = 90, Color = Color3.fromRGB(30, 30, 35) },
+	CiderRaccoon = { Name = "Cider Barrel Raccoon", Rarity = "Harvest", MoneyPerSecond = 115, Color = Color3.fromRGB(120, 110, 100) },
+	LanternMoth = { Name = "Lantern Moth", Rarity = "Harvest", MoneyPerSecond = 160, Color = Color3.fromRGB(255, 200, 90) },
+	StrawGolem = { Name = "Straw Golem", Rarity = "Harvest", MoneyPerSecond = 250, Color = Color3.fromRGB(220, 180, 80) },
 }
 
 ---------------------------------------------------------------------------
@@ -320,15 +356,31 @@ Config.IndexRewards = {
 -- Pool weights are relative; they do not need to add up to 100.
 ---------------------------------------------------------------------------
 Config.Eggs = {
+	-- Level eggs: houses 1-3 drop only their own egg. Cheaper pets hatch more often.
+	SwampEgg = {
+		Name = "Swamp Egg", Rarity = "Swamp", HatchSeconds = 10, Size = 2, CarrySpeed = 0.95,
+		Color = Color3.fromRGB(110, 170, 70),
+		Pool = { { Pet = "BogToad", Weight = 35 }, { Pet = "BlackCat", Weight = 27 }, { Pet = "MushroomImp", Weight = 20 }, { Pet = "CauldronSlime", Weight = 12 }, { Pet = "HexedOwl", Weight = 6 } },
+	},
+	PyramidEgg = {
+		Name = "Pyramid Egg", Rarity = "Pyramid", HatchSeconds = 30, Size = 2.4, CarrySpeed = 0.93,
+		Color = Color3.fromRGB(230, 190, 110),
+		Pool = { { Pet = "SandScarab", Weight = 35 }, { Pet = "Camel", Weight = 27 }, { Pet = "CanopicJar", Weight = 20 }, { Pet = "MiniSphinx", Weight = 12 }, { Pet = "AnubisPup", Weight = 6 } },
+	},
+	HarvestEgg = {
+		Name = "Harvest Egg", Rarity = "Harvest", HatchSeconds = 60, Size = 2.8, CarrySpeed = 0.91,
+		Color = Color3.fromRGB(255, 150, 40),
+		Pool = { { Pet = "HayMouse", Weight = 35 }, { Pet = "Crow", Weight = 27 }, { Pet = "CiderRaccoon", Weight = 20 }, { Pet = "LanternMoth", Weight = 12 }, { Pet = "StrawGolem", Weight = 6 } },
+	},
 	CandyEgg = {
 		Name = "Candy Egg", Rarity = "Common", HatchSeconds = 10, Size = 2, CarrySpeed = 0.95,
 		Color = Color3.fromRGB(255, 180, 200),
-		Pool = { { Pet = "Bat", Weight = 55 }, { Pet = "BlackCat", Weight = 35 }, { Pet = "Spider", Weight = 10 } },
+		Pool = { { Pet = "Bat", Weight = 85 }, { Pet = "Spider", Weight = 15 } },
 	},
 	PumpkinEgg = {
 		Name = "Pumpkin Egg", Rarity = "Uncommon", HatchSeconds = 30, Size = 2.4, CarrySpeed = 0.93,
 		Color = Color3.fromRGB(255, 140, 20),
-		Pool = { { Pet = "Pumpkling", Weight = 55 }, { Pet = "Crow", Weight = 35 }, { Pet = "CandyCorn", Weight = 10 } },
+		Pool = { { Pet = "Pumpkling", Weight = 85 }, { Pet = "CandyCorn", Weight = 15 } },
 	},
 	BatEgg = {
 		Name = "Bat Egg", Rarity = "Rare", HatchSeconds = 120, Size = 2.8, CarrySpeed = 0.91,
@@ -376,23 +428,23 @@ end
 -- CostumeTier: the minimum costume tier that gets Candy at the door.
 ---------------------------------------------------------------------------
 Config.Houses = {
-	{ Owner = "Old Witch", OwnerSpeed = 14, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
-		EggWeights = { CandyEgg = 70, PumpkinEgg = 25, BatEgg = 5 } },
-	{ Owner = "Friendly Mummy", OwnerSpeed = 17, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
-		EggWeights = { CandyEgg = 50, PumpkinEgg = 35, BatEgg = 13, GhostEgg = 2 } },
-	{ Owner = "Scarecrow", OwnerSpeed = 21, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
-		EggWeights = { CandyEgg = 30, PumpkinEgg = 40, BatEgg = 25, GhostEgg = 5 } },
-	{ Owner = "Zombie Chef", OwnerSpeed = 25, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
+	{ Owner = "Old Witch", OwnerSpeed = 17, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
+		EggWeights = { SwampEgg = 100 } },
+	{ Owner = "Friendly Mummy", OwnerSpeed = 38, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
+		EggWeights = { PyramidEgg = 100 } },
+	{ Owner = "Scarecrow", OwnerSpeed = 53, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
+		EggWeights = { HarvestEgg = 100 } },
+	{ Owner = "Zombie Chef", OwnerSpeed = 55, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
 		EggWeights = { PumpkinEgg = 40, BatEgg = 40, GhostEgg = 18, MoonEgg = 2 } },
-	{ Owner = "Gravedigger", OwnerSpeed = 30, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
+	{ Owner = "Gravedigger", OwnerSpeed = 70, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
 		EggWeights = { PumpkinEgg = 20, BatEgg = 45, GhostEgg = 30, MoonEgg = 5 } },
-	{ Owner = "Count Vlad", OwnerSpeed = 37, CandyPerKnock = 160, CostumeTier = 4, Floors = 2, Scale = 1.25, EggCount = 6,
+	{ Owner = "Count Vlad", OwnerSpeed = 88, CandyPerKnock = 160, CostumeTier = 4, Floors = 2, Scale = 1.25, EggCount = 6,
 		EggWeights = { BatEgg = 40, GhostEgg = 40, MoonEgg = 18, CursedEgg = 2 } },
-	{ Owner = "Banshee", OwnerSpeed = 46, CandyPerKnock = 320, CostumeTier = 5, Floors = 2, Scale = 1.3, EggCount = 6,
+	{ Owner = "Banshee", OwnerSpeed = 105, CandyPerKnock = 320, CostumeTier = 5, Floors = 2, Scale = 1.3, EggCount = 6,
 		EggWeights = { BatEgg = 20, GhostEgg = 45, MoonEgg = 30, CursedEgg = 5 } },
-	{ Owner = "Headless Horseman", OwnerSpeed = 58, CandyPerKnock = 650, CostumeTier = 6, Floors = 2, Scale = 1.35, EggCount = 6,
+	{ Owner = "Headless Horseman", OwnerSpeed = 125, CandyPerKnock = 650, CostumeTier = 6, Floors = 2, Scale = 1.35, EggCount = 6,
 		EggWeights = { GhostEgg = 40, MoonEgg = 40, CursedEgg = 18, NightmareEgg = 2 } },
-	{ Owner = "Lich King", OwnerSpeed = 72, CandyPerKnock = 1300, CostumeTier = 7, Floors = 2, Scale = 1.45, EggCount = 6,
+	{ Owner = "Lich King", OwnerSpeed = 145, CandyPerKnock = 1300, CostumeTier = 7, Floors = 2, Scale = 1.45, EggCount = 6,
 		EggWeights = { GhostEgg = 20, MoonEgg = 45, CursedEgg = 30, NightmareEgg = 5 } },
 }
 

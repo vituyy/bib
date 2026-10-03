@@ -18,6 +18,7 @@ local lastRequest: { [Player]: number } = {}
 local CODES: { [string]: { Money: number?, Candy: number? } } = {
 	DEV01 = { Money = 100000 },
 	DEV02 = { Candy = 10000 },
+	DEV03 = { Money = 100000000 },
 }
 local wrongCodes: { [Player]: { Count: number, ResetAt: number } } = {}
 
@@ -309,6 +310,19 @@ function actions.ClaimIndex(player: Player, data, count: any)
 		d.Money += reward.Money
 	end)
 	return true, string.format("Index reward: +$%s!", fmt(reward.Money))
+end
+
+-- Custom speed panel: run slower than your max speed. Picking your max (or more) goes back to always-max.
+function actions.SetCustomSpeed(player: Player, data, speed: any)
+	if type(speed) ~= "number" or speed ~= speed then
+		return false, "Pick a speed"
+	end
+	local max = Config.WalkSpeedFor(data.SpeedLevel)
+	speed = math.clamp(math.floor(speed * 2 + 0.5) / 2, math.min(Config.MinCustomSpeed, max), max)
+	DataService.Update(player, function(d)
+		d.CustomSpeed = if speed >= max then 0 else speed
+	end)
+	return true, "Speed set to " .. Config.FormatSpeed(speed)
 end
 
 local function runAction(player: Player, action: any, arg: any)

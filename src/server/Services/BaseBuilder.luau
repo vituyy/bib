@@ -15,8 +15,8 @@ local GAP = 10 -- entrance gap in the front fence
 local PLINTH_H = 1.2
 local POST_H = 5
 
-local STONE = Color3.fromRGB(112, 104, 112)
-local WOOD = Color3.fromRGB(92, 42, 30)
+local STONE = Color3.fromRGB(93, 85, 108)
+local WOOD = Color3.fromRGB(60, 37, 32)
 local PLANK = Color3.fromRGB(125, 72, 42)
 local ORANGE = Color3.fromRGB(255, 140, 30)
 local PURPLE = Color3.fromRGB(150, 60, 220)
@@ -146,7 +146,7 @@ function BaseBuilder.Build(plot: Model, level: number)
 	structure.Name = "Structure"
 	structure.Parent = plot
 
-	-- Floor area (invisible: the tattersall floor shows through). Pets, the owner check and the owner sign use it.
+	-- Logical ownership bounds stay separate from the decorative courtyard.
 	local base = deco({ Name = "Base", Size = Vector3.new(W, 1, D), CFrame = at(0, -0.4, D / 2), Transparency = 1, Parent = plot })
 	local ownerSign = Instance.new("BillboardGui")
 	ownerSign.Name = "OwnerSign"
@@ -165,12 +165,52 @@ function BaseBuilder.Build(plot: Model, level: number)
 	ownerLabel.Parent = ownerSign
 	ownerSign.Parent = base
 	-- Pets roam the front part of the base, clear of the hatching stall.
-	local roamDepth = math.max(D - 26, 12)
-	deco({ Name = "PetArea", Size = Vector3.new(W - 8, 1, roamDepth), CFrame = at(0, -0.4, 3 + roamDepth / 2), Transparency = 1, Parent = plot })
+	local roamDepth = math.max(D - (if level == 0 then 18 else 27), 12)
+	deco({ Name = "PetArea", Size = Vector3.new(W - 16, 1, roamDepth), CFrame = at(0, -0.2, 3 + roamDepth / 2), Transparency = 1, Parent = plot })
+
+	-- Studded courtyard and inset flagstone path grow from the fixed front edge.
+	local function box(name, x, y, z, sx, sy, sz, color, solid, frame)
+		return (if solid then part else deco)({
+			Name = name, Size = Vector3.new(sx, sy, sz), CFrame = at(x, y, z) * (frame or CFrame.identity),
+			Color = color, Parent = structure,
+		})
+	end
+	local dark = Color3.fromRGB(47, 35, 57)
+	local trim = Color3.fromRGB(83, 54, 42)
+	local gold = Color3.fromRGB(193, 121, 47)
+	local roofColors = { Color3.fromRGB(73, 42, 101), Color3.fromRGB(88, 49, 118), Color3.fromRGB(64, 36, 86) }
+	local pavilionDepth = if level == 0 then 12 else 21
+	local stallFront = D - pavilionDepth
+	local stallZ = D - 2.5
+	-- Keep the floor flush enough for pets and character movement.
+	for ix = 0, 9 do
+		for iz = 0, D / 4 - 1 do
+			local x, z = -18 + ix * 4, 2 + iz * 4
+			box("CourtyardTile", x, 0.1, z, 3.96, 0.4, 3.96,
+				if (ix + iz) % 2 == 0 then Color3.fromRGB(65, 78, 55) else Color3.fromRGB(54, 65, 48), true)
+		end
+	end
+	for z = 2, stallFront - 2, 4 do
+		for _, x in { -2, 2 } do
+			box("PathStone", x, 0.33, z, 3.8, 0.16, 3.75,
+				if (math.floor(z / 4) + x) % 2 == 0 then Color3.fromRGB(126, 111, 128) else Color3.fromRGB(108, 95, 113), false)
+		end
+	end
+	for _, side in { -1, 1 } do
+		box("PathBorder", side * 4.2, 0.37, stallFront / 2, 0.32, 0.14, stallFront, gold, false)
+		box("CourtyardCoping", side * 20.4, 0.5, D / 2, 1, 0.4, D, dark, true)
+	end
+	-- A shallow timber deck marks the hatching area; upgrades extend its canopy.
+	box("HatchDeckFoundation", 0, 0.42, (stallFront + stallZ) / 2, 36, 0.64, stallZ - stallFront + 2, dark, true)
+	for z = stallFront, stallZ, 1.5 do
+		box("HatchDeckPlank", 0, 0.8, z, 35.4, 0.18, 1.43,
+			if math.floor(z / 1.5) % 2 == 0 then PLANK else Color3.fromRGB(112, 63, 40), false)
+	end
+	box("HatchDeckStep", 0, 0.42, stallFront - 1.4, 35.8, 0.28, 1.5, STONE, true)
 
 	-- Stone-brick plinth around the edge, with the entrance gap at the front
 	local function plinth(cx: number, cz: number, sx: number, sz: number)
-		part({ Name = "Plinth", Size = Vector3.new(sx, PLINTH_H, sz), CFrame = at(cx, PLINTH_H / 2, cz), Color = STONE, Material = Enum.Material.Brick, Parent = structure })
+		part({ Name = "Plinth", Size = Vector3.new(sx, PLINTH_H, sz), CFrame = at(cx, PLINTH_H / 2, cz), Color = STONE, Material = Enum.Material.Plastic, Parent = structure })
 	end
 	plinth(0, D - 1, W, 2)
 	plinth(-W / 2 + 1, D / 2, 2, D - 4)
@@ -190,10 +230,14 @@ function BaseBuilder.Build(plot: Model, level: number)
 		posts[key] = true
 		part({ Name = "Post", Size = Vector3.new(2.2, POST_H, 2.2), CFrame = at(x, PLINTH_H + POST_H / 2, z), Color = STONE, Material = Enum.Material.Brick, Parent = structure })
 		part({ Name = "PostCap", Size = Vector3.new(2.8, 0.5, 2.8), CFrame = at(x, PLINTH_H + POST_H + 0.25, z), Color = Color3.fromRGB(80, 74, 82), Parent = structure })
+
+		box("PostFoot", x, 1.6, z, 2.7, 0.55, 2.7, dark, true)
+		box("PostCollar", x, 5.8, z, 2.5, 0.35, 2.5, gold, false)
+		box("PostInset", x, 3.65, z - 1.12, 1.2, 1.8, 0.09, Color3.fromRGB(56, 47, 67), false)
 		local lantern = art("GenLantern", at(x, PLINTH_H + POST_H + 0.5, z), 2.4, structure)
-		if withLight and lantern then
+		if lantern and (withLight or (z > 10 and z < D - 10 and math.floor(z / 10) % 2 == 0)) then
 			lit += 1
-			light(lantern:FindFirstChildWhichIsA("BasePart", true) :: BasePart, Color3.fromRGB(255, 160, 60), 18, 1.4)
+			light(lantern:FindFirstChildWhichIsA("BasePart", true) :: BasePart, Color3.fromRGB(255, 174, 92), 18, if withLight then 1.1 else 0.7)
 		end
 	end
 	local function fence(x0: number, z0: number, x1: number, z1: number)
@@ -204,6 +248,13 @@ function BaseBuilder.Build(plot: Model, level: number)
 			local p = a:Lerp(b, i / n)
 			post(p.X, p.Z, i == 0 or i == n)
 		end
+		-- Narrow iron pickets and spear tips make the low fence feel like a haunted garden.
+		for i = 1, math.floor(len / 2) - 1 do
+			local p = a:Lerp(b, i / math.floor(len / 2))
+			box("IronPicket", p.X, 3.2, p.Z, 0.18, 3.7, 0.18, dark, false)
+			box("PicketTip", p.X, 5.15, p.Z, 0.42, 0.42, 0.42, gold, false, CFrame.Angles(0, 0, math.pi / 4))
+		end
+
 		local mid = (a + b) / 2
 		local dir = CFrame.lookAt(Vector3.zero, b - a)
 		for _, y in { PLINTH_H + 1.5, PLINTH_H + 3.6 } do
@@ -212,7 +263,7 @@ function BaseBuilder.Build(plot: Model, level: number)
 				Size = Vector3.new(0.5, 0.7, len),
 				CFrame = at(mid.X, y, mid.Z) * dir,
 				Color = WOOD,
-				Material = Enum.Material.Wood,
+				Material = Enum.Material.Plastic,
 				Parent = structure,
 			})
 		end
@@ -225,9 +276,18 @@ function BaseBuilder.Build(plot: Model, level: number)
 	fence(GAP / 2 + 1, 1, R, 1)
 
 	-- Wooden steps at the entrance
-	part({ Name = "Step", Size = Vector3.new(GAP, 0.4, 2.5), CFrame = at(0, 0.2, -1.5), Color = PLANK, Material = Enum.Material.WoodPlanks, Parent = structure })
-	part({ Name = "Step", Size = Vector3.new(GAP, 0.8, 2), CFrame = at(0, 0.4, 1), Color = PLANK, Material = Enum.Material.WoodPlanks, Parent = structure })
+	part({ Name = "Step", Size = Vector3.new(GAP, 0.4, 2.5), CFrame = at(0, 0.2, -1.5), Color = PLANK, Material = Enum.Material.Plastic, Parent = structure })
+	part({ Name = "Step", Size = Vector3.new(GAP, 0.8, 2), CFrame = at(0, 0.4, 1), Color = PLANK, Material = Enum.Material.Plastic, Parent = structure })
 
+
+	-- Layered entrance piers stay fixed as the courtyard lengthens.
+	for _, side in { -1, 1 } do
+		local x = side * 6
+		box("GatePier", x, 4.2, 1, 2.5, 6.4, 2.5, STONE, true)
+		box("GatePierCap", x, 7.6, 1, 3.3, 0.45, 3.3, dark, true)
+		box("GatePierBand", x, 6.8, 1, 2.7, 0.4, 2.7, gold, false)
+		box("GateInset", x, 4.3, -0.3, 1.3, 2.5, 0.1, dark, false)
+	end
 	-- Dead trees at the corners, jack-o'-lanterns by the entrance
 	for _, side in { -1, 1 } do
 		art("GenTree", at(side * (W / 2 + 3.5), 0, 3) * CFrame.Angles(0, side * 0.8, 0), 13, structure)
@@ -258,8 +318,7 @@ function BaseBuilder.Build(plot: Model, level: number)
 	end
 	crate(L + 2.8, 5)
 	crate(R - 2.8, 5)
-	crate(L + 2.8, D / 2)
-	crate(R - 2.8, D / 2)
+	-- Side garden beds occupy the middle bays as the base grows.
 
 	-- Purple spiderwebs in the four corners of the fence
 	for _, c in { { L, 1, 1, 1 }, { R, 1, -1, 1 }, { L, D - 1, 1, -1 }, { R, D - 1, -1, -1 } } do
@@ -278,73 +337,143 @@ function BaseBuilder.Build(plot: Model, level: number)
 		end
 	end
 
-	-- HATCH EGGS stall at the back: plank wall, two posts, peaked roof, sign with a witch hat, bunting, lanterns
-	local stallZ = D - 2.5 -- back wall
-	local stallFront = D - 11
-	local stallW = 32
-	part({ Name = "StallWall", Size = Vector3.new(stallW, 10, 0.8), CFrame = at(0, 5, stallZ), Color = PLANK, Material = Enum.Material.WoodPlanks, Parent = structure })
-	for _, x in { -stallW / 2 + 0.6, stallW / 2 - 0.6 } do
-		part({ Name = "StallPost", Size = Vector3.new(1.2, 10, 1.2), CFrame = at(x, 5, stallFront + 0.6), Color = WOOD, Material = Enum.Material.Wood, Parent = structure })
-		part({ Name = "StallSide", Size = Vector3.new(0.6, 4, stallZ - stallFront), CFrame = at(x, 2, (stallZ + stallFront) / 2), Color = PLANK, Material = Enum.Material.WoodPlanks, Parent = structure })
-	end
-	local roofD = stallZ - stallFront + 3
-	local roofC = (stallZ + stallFront) / 2
-	local rise = 4
-	for _, side in { -1, 1 } do
-		part({
-			ClassName = "WedgePart",
-			Name = "StallRoof",
-			Size = Vector3.new(stallW + 3, rise, roofD / 2),
-			CFrame = at(0, 10 + rise / 2, roofC + side * roofD / 4) * (if side == 1 then CFrame.Angles(0, math.pi, 0) else CFrame.identity),
-			Color = Color3.fromRGB(105, 45, 35),
-			Material = Enum.Material.WoodPlanks,
-			Parent = structure,
-		})
-	end
-	part({ Name = "StallBeam", Size = Vector3.new(stallW + 1, 0.8, 0.8), CFrame = at(0, 9.6, stallFront + 0.6), Color = WOOD, Material = Enum.Material.Wood, Parent = structure })
-	local board = part({ Name = "HatchSign", Size = Vector3.new(17, 3.6, 0.6), CFrame = at(0, 12.2, stallFront - 1.1), Color = Color3.fromRGB(70, 35, 25), Material = Enum.Material.Wood, Parent = structure })
-	surfaceText(board, { { Name = "Title", Text = "HATCH EGGS", Color = ORANGE, Height = 0.9 } })
-	art("GenHat", at(0, 14, stallFront - 1.1) * CFrame.Angles(0, math.pi, 0), 5, structure)
-	local flags = 16
-	for i = 0, flags - 1 do
-		local x = -stallW / 2 + 1 + i * (stallW - 2) / (flags - 1)
-		deco({ Name = "Bunting", Size = Vector3.new(1.1, 1.1, 0.15), CFrame = at(x, 9.2, stallFront - 0.1) * CFrame.Angles(0, 0, math.pi / 4), Color = if i % 2 == 0 then ORANGE else PURPLE, Parent = structure })
-	end
-	for _, x in { -stallW / 2 + 3, stallW / 2 - 3 } do
-		local lantern = art("GenLantern", at(x, 6.6, stallFront + 1), 2.4, structure)
-		if lantern then
-			light(lantern:FindFirstChildWhichIsA("BasePart", true) :: BasePart, Color3.fromRGB(255, 160, 60), 16, 1.5)
-		end
-		deco({ Name = "Chain", Size = Vector3.new(0.15, 1.1, 0.15), CFrame = at(x, 9.1, stallFront + 1), Color = Color3.fromRGB(40, 40, 45), Parent = structure })
-	end
-	local fill = deco({ Name = "PurpleFill", Size = Vector3.new(1, 1, 1), CFrame = at(0, 12, D / 2), Transparency = 1, Parent = structure })
-	light(fill, Color3.fromRGB(150, 80, 255), 40, 0.8)
 
-	-- Hatching pedestals: 3 under the stall, one more in front of it per upgrade
+	-- Timber-framed haunted hatchery: open front, layered purple studded roof,
+	-- stained glass, warm lanterns and clearly numbered ritual pedestals.
+	local stallW = 36
+	box("StallWall", 0, 5.5, stallZ, stallW, 9.4, 0.8, dark, true)
+	for i = 0, 11 do
+		box("WallPanel", -16.5 + i * 3, 5.2, stallZ - 0.46, 2.88, 8.4, 0.22,
+			if i % 2 == 0 then PLANK else Color3.fromRGB(106, 58, 39), false)
+	end
+	box("WallStoneFoot", 0, 1.5, stallZ - 0.6, stallW, 1.3, 0.55, STONE, true)
+	for _, x in { -17, 17 } do
+		for _, z in { stallFront + 0.5, stallZ - 0.5 } do
+			box("PavilionPierFoot", x, 1.4, z, 2.6, 1.6, 2.6, STONE, true)
+			box("StallPost", x, 5.65, z, 1.25, 9.7, 1.25, WOOD, true)
+			box("PavilionCapital", x, 10.1, z, 2, 0.55, 2, gold, false)
+			box("PierInset", x, 5.4, z - 0.67, 0.55, 4, 0.1, PLANK, false)
+		end
+		box("SideSill", x, 2.25, (stallFront + stallZ) / 2, 0.7, 0.65, stallZ - stallFront, WOOD, true)
+		box("SideBeam", x, 10.3, (stallFront + stallZ) / 2, 1.3, 0.85, stallZ - stallFront + 1.5, WOOD, true)
+		for _, z in { stallFront + 2.2, stallZ - 2.2 } do
+			box("CornerBrace", x - math.sign(x) * 0.8, 8.9, z, 0.65, 3.3, 0.7, WOOD, false, CFrame.Angles(0, 0, math.sign(x) * math.pi / 5))
+		end
+	end
+	for _, y in { 2.6, 10.1 } do
+		box("RearCrossBeam", 0, y, stallZ - 0.8, stallW, 0.65, 0.55, WOOD, false)
+	end
+	for _, x in { -12, -6, 0, 6, 12 } do
+		box("RearTimber", x, 6.35, stallZ - 0.7, 0.5, 7.3, 0.5, WOOD, false)
+	end
+	-- Three jewel-like windows visible above the eggs, with stone mullions.
+	for _, x in { -10, 0, 10 } do
+		box("WindowFrame", x, 6.7, stallZ - 0.83, 4.1, 4.6, 0.36, gold, false)
+		box("StainedGlass", x, 6.7, stallZ - 1.04, 3.5, 4, 0.12, Color3.fromRGB(91, 164, 137), false)
+		box("WindowMullion", x, 6.7, stallZ - 1.13, 0.22, 4, 0.12, dark, false)
+		box("WindowMullion", x, 6.65, stallZ - 1.13, 3.5, 0.22, 0.12, dark, false)
+		box("WindowCrown", x, 9.12, stallZ - 0.9, 1.1, 1.1, 0.35, gold, false, CFrame.Angles(0, 0, math.pi / 4))
+	end
+	local roofD = stallZ - stallFront + 4
+	local roofC = (stallZ + stallFront) / 2
+	local rise, halfWidth, eaveY = 5.5, 19.5, 10.8
+	local slope = math.atan(rise / halfWidth)
+	local slopeLength = math.sqrt(halfWidth * halfWidth + rise * rise)
+	local zCount = math.ceil(roofD / 3.2)
+	for _, side in { -1, 1 } do
+		local rotation = CFrame.Angles(0, 0, -side * slope)
+		box("RoofUnderlay", side * halfWidth / 2, eaveY + rise / 2, roofC, slopeLength, 0.65, roofD, dark, true, rotation)
+		for row = 0, 4 do
+			local t = (row + 0.5) / 5
+			for col = 0, zCount - 1 do
+				local z = roofC - roofD / 2 + (col + 0.5) * roofD / zCount
+				box("RoofShingle", side * halfWidth * t, eaveY + rise * (1 - t) + 0.4, z,
+					slopeLength / 5 + 0.08, 0.23, roofD / zCount - 0.09, roofColors[(row + col) % #roofColors + 1], false, rotation)
+			end
+		end
+		box("EaveTrim", side * halfWidth, eaveY, roofC, 0.7, 0.8, roofD + 0.8, WOOD, false)
+		for _, z in { roofC - roofD / 2, roofC + roofD / 2 } do
+			box("GableFascia", side * halfWidth / 2, eaveY + rise / 2 + 0.24, z,
+				slopeLength + 0.5, 0.5, 0.7, gold, false, rotation)
+		end
+	end
+	box("RoofRidge", 0, eaveY + rise + 0.52, roofC, 1.2, 0.65, roofD + 1.2, WOOD, false)
+	box("StallBeam", 0, 10.05, stallFront + 0.5, stallW + 1, 0.8, 0.8, WOOD, true)
+	box("GableKingPost", 0, 13, stallFront - 1.5, 0.7, 5.7, 0.65, WOOD, false)
+	-- Roof finials and witch's hat repeat the houses' playful Halloween silhouette.
+	for _, z in { roofC - roofD / 2, roofC + roofD / 2 } do
+		box("RidgeFinial", 0, 17.35, z, 0.7, 2, 0.7, gold, false)
+	end
+	art("GenHat", at(0, 16.7, stallFront - 1.4) * CFrame.Angles(0, math.pi, 0), 4.5, structure)
+	local board = box("HatchSign", 0, 11.2, stallFront - 1.9, 18, 3.25, 0.6, dark, false)
+	surfaceText(board, {
+		{ Name = "Title", Text = "HATCH EGGS", Color = Color3.fromRGB(255, 203, 97), Height = 0.61 },
+		{ Name = "Capacity", Text = tostring(Config.IncubatorsFor(level)) .. " HATCHING PADS", Color = Color3.fromRGB(212, 193, 231), Height = 0.25 },
+	})
+	for _, y in { 9.5, 12.9 } do box("SignFrame", 0, y, stallFront - 2.05, 18.8, 0.25, 0.3, gold, false) end
+	for _, x in { -9.25, 9.25 } do box("SignFrame", x, 11.2, stallFront - 2.05, 0.25, 3.6, 0.3, gold, false) end
+	for i = 0, 15 do
+		local x = -15 + i * 2
+		local sag = 0.8 * (1 - (x / 15) ^ 2)
+		box("BuntingCord", x, 9.55 - sag, stallFront - 0.4, 2.1, 0.08, 0.12, gold, false)
+		box("Bunting", x, 9.1 - sag, stallFront - 0.4, 0.75, 0.85, 0.16,
+			if i % 2 == 0 then ORANGE else PURPLE, false, CFrame.Angles(0, 0, math.pi / 4))
+	end
+	for _, x in { -14.5, 14.5 } do
+		local lantern = art("GenLantern", at(x, 6.2, stallFront + 1), 2.7, structure)
+		if lantern then light(lantern:FindFirstChildWhichIsA("BasePart", true), Color3.fromRGB(255, 166, 70), 15, 1.2) end
+		box("Chain", x, 9.2, stallFront + 1, 0.12, 1.4, 0.12, dark, false)
+	end
+	-- Border beds frame the pet courtyard, leaving its middle and entrance open.
+	for _, side in { -1, 1 } do
+		for z = 10, stallFront - 5, 12 do
+			box("GardenBed", side * 18.5, 0.85, z, 2.8, 0.7, 5, STONE, true)
+			box("GardenSoil", side * 18.5, 1.24, z, 2.35, 0.15, 4.5, Color3.fromRGB(43, 33, 36), false)
+			art("GenPumpkin", at(side * 18.5, 1.3, z - 0.8), 1.8, structure)
+			for i = 0, 2 do
+				box("SpookyGrass", side * 18.5 + (i - 1) * 0.55, 1.8, z + 1.2, 0.16, 1.1 + i * 0.25, 0.18,
+					Color3.fromRGB(104, 115, 69), false, CFrame.Angles(0, 0, (i - 1) * 0.3))
+			end
+		end
+	end
+
 	local pads = Instance.new("Folder")
 	pads.Name = "Incubators"
 	pads.Parent = plot
 	local spots = {
 		Vector2.new(-10, D - 7), Vector2.new(0, D - 7), Vector2.new(10, D - 7),
-		Vector2.new(-15, D - 16), Vector2.new(15, D - 16), Vector2.new(-5, D - 16), Vector2.new(5, D - 16),
+		Vector2.new(-13.5, D - 15.5), Vector2.new(13.5, D - 15.5),
+		Vector2.new(-4.5, D - 15.5), Vector2.new(4.5, D - 15.5),
 	}
 	for n = 1, Config.IncubatorsFor(level) do
-		local s = spots[n]
-		if not s then
-			break
+		local s = assert(spots[n], "Missing hatching pad layout")
+		local cylinderRotation = CFrame.Angles(0, 0, math.pi / 2)
+		deco({ Name = "PedestalFoot", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.45, 6.5, 6.5),
+			CFrame = at(s.X, 1.05, s.Y) * cylinderRotation, Color = dark, Parent = structure })
+		local pad = part({ Name = "Incubator" .. n, Size = Vector3.new(4.4, 1.05, 4.4), CFrame = at(s.X, 1.43, s.Y),
+			Color = STONE, Parent = pads })
+		deco({ Name = "PedestalRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 5.4, 5.4),
+			CFrame = at(s.X, 1.4, s.Y) * cylinderRotation, Color = gold, Parent = structure })
+		deco({ Name = "PedestalGlow", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 3.9, 3.9),
+			CFrame = at(s.X, 1.99, s.Y) * cylinderRotation, Color = Color3.fromRGB(191, 120, 247),
+			Material = Enum.Material.Neon, Parent = structure })
+		for i = 0, 3 do
+			local a = i * math.pi / 2
+			box("PedestalRune", s.X + math.cos(a) * 2.65, 1.32, s.Y + math.sin(a) * 2.65, 0.38, 0.13, 0.38, ORANGE, false,
+				CFrame.Angles(0, math.pi / 4, 0))
 		end
-		part({ Name = "Incubator" .. n, Size = Vector3.new(4.4, 1.6, 4.4), CFrame = at(s.X, 0.8, s.Y), Color = Color3.fromRGB(72, 66, 78), Material = Enum.Material.Slate, Parent = pads })
-		local ring = deco({ Name = "PedestalRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 6.4, 6.4), CFrame = at(s.X, 0.2, s.Y) * CFrame.Angles(0, 0, math.pi / 2), Color = ORANGE, Material = Enum.Material.Neon, Parent = structure })
-		deco({ Name = "PedestalGlow", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 3.8, 3.8), CFrame = at(s.X, 1.62, s.Y) * CFrame.Angles(0, 0, math.pi / 2), Color = Color3.fromRGB(255, 215, 80), Material = Enum.Material.Neon, Parent = structure })
-		light(ring, Color3.fromRGB(255, 170, 60), 9, 1.2)
+		local plaque = box("PadPlaque", s.X, 1.13, s.Y - 2.7, 1.8, 0.8, 0.16, dark, false)
+		surfaceText(plaque, { { Name = "Number", Text = string.format("%02d", n), Color = Color3.fromRGB(255, 212, 120), Height = 0.9 } })
 	end
-
 	-- UPGRADE BASE sign beside the entrance (the prompt is wired by PlotService)
 	local signX, signZ = -GAP / 2 - 9, -4
 	for _, dx in { -4.2, 4.2 } do
-		part({ Name = "SignPost", Size = Vector3.new(0.9, 9, 0.9), CFrame = at(signX + dx, 4.5, signZ + 0.4), Color = WOOD, Material = Enum.Material.Wood, Parent = structure })
+		part({ Name = "SignPost", Size = Vector3.new(0.9, 9, 0.9), CFrame = at(signX + dx, 4.5, signZ + 0.4), Color = WOOD, Material = Enum.Material.Plastic, Parent = structure })
 	end
-	local upgradeBoard = part({ Name = "UpgradeBoard", Size = Vector3.new(11, 6, 0.6), CFrame = at(signX, 6.5, signZ), Color = PLANK, Material = Enum.Material.WoodPlanks, Parent = structure })
+	local upgradeBoard = part({ Name = "UpgradeBoard", Size = Vector3.new(11, 6, 0.6), CFrame = at(signX, 6.5, signZ), Color = PLANK, Material = Enum.Material.Plastic, Parent = structure })
+
+	for _, y in { 3.4, 9.6 } do box("UpgradeFrame", signX, y, signZ - 0.38, 11.8, 0.3, 0.4, gold, false) end
+	for _, dx in { -5.75, 5.75 } do box("UpgradeFrame", signX + dx, 6.5, signZ - 0.38, 0.3, 6.5, 0.4, dark, false) end
 	upgradeBoard:SetAttribute("UpgradeBase", true)
 	surfaceText(upgradeBoard, {
 		{ Name = "Title", Text = "UPGRADE BASE", Color = Color3.fromRGB(255, 220, 90), Height = 0.34 },

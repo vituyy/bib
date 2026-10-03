@@ -92,6 +92,7 @@ local function sanitize(data: { [string]: any })
 	cleanNumber(data, "Treadmill", 1, #Config.Treadmills, true)
 	cleanNumber(data, "Trail", 0, #Config.Trails, true)
 	cleanNumber(data, "BaseLevel", 0, #Config.BaseUpgrades, true)
+	cleanNumber(data, "CustomSpeed", 0, Config.WalkSpeedFor(Config.MaxSpeedLevel))
 
 	data.OwnedTrails = cleanList(data.OwnedTrails, function(i)
 		return if isNumber(i) and Config.Trails[i] then i else nil
