@@ -2,21 +2,20 @@
 
 > The Word version of this document is `docs/Spooky-Steal-Design-and-Plan.docx`. Both files have the same text; update them together.
 
-Working title. **Version 4**, updated 2 October 2026 to match the place file **SpookyStealV3.2 (13)**: the new Old Witch house, the Trick-or-Treat door scene, the new owner chase, egg variants, the economy rebalance, codes and the safety fixes.
+Working title. **Version 5**, updated 3 October 2026 to match the place file **SpookySteal-House V4.2** and the rework of Candy, costumes, treadmills, base upgrades and the first-time tutorial.
 
-## What changed in this version (since Version 3)
+## What changed in this version (since Version 4)
 
 | Change | Summary |
 |---|---|
-| New House 1 | The Old Witch's swamp cottage is built (swamp, trees, chimney smoke, cauldrons, reeds). The Friendly Mummy's tomb moved to House 2. Houses 3 to 9 are still placeholders. |
-| Door scene | Knocking opens the door (with everything on it), the owner steps into the doorway and talks in a speech bubble, then candy flies to you, or the owner roasts your costume, shakes with anger and slams the door. |
-| New owner chase | The owner starts from where they stand, even inside the house, navigates rooms, doors, windows and stairs, passes through props outside, needs a moment to notice you (a red "!") and walks back to their spot afterwards. |
-| Egg variants | Every egg rolls a Size (Big, Huge, Gigantic) and a Material (Golden, Diamond, Rainbow) separately, with big Money multipliers. Normal eggs are smaller, variant eggs and pets are bigger. |
-| Eggs and carrying | A caught thief's egg returns to its nest. The thief carries the egg in front of the chest. |
-| Rebalance | Steeper Speed XP, higher mid and late prices (Money prices x3 after the variants), slower owners for houses 1 and 2. A simulation shows the pacing. |
-| Codes | A Codes box in the Store menu: DEV01 gives $100,000, DEV02 gives 10,000 Candy. |
-| Safety | Save session lock and repair, prompt range checks, a movement check. |
-| Kept from Version 3 | Cartoon UI, pet inventory with Equip Best, Eggs menu with Hatch Best, friend boost. |
+| Currencies swapped | **Costumes are bought with Candy. Treadmills are bought with Money.** Trails, base upgrades and Index rewards stay in Money. |
+| Costumes | Every costume has a Candy multiplier (the first one is x2, the best x50) and a base Speed XP per second. |
+| Treadmills | A treadmill no longer gives XP by itself. It multiplies the XP rate of the costume you wear (x1 to x4). |
+| Running XP | You earn Speed XP while running anywhere in the game, at your costume's rate. Standing still earns 0. On a treadmill, running in place counts and the treadmill's multiplier applies. |
+| Base upgrades | The one base upgrade is now two separate ones, each with its own sign: **Pet Capacity** (6 to 18 pets) and **Hatching Pads** (2 to 7). Both are bought with Money. |
+| Tutorial | New players spawn in front of the Costume Shop with exactly enough Candy for the cheapest costume. Arrows on the ground and a "Buy a Costume!" message lead them to it. |
+| From V4.2 (the owner's own changes) | Speed grows by the same amount every level (20 at level 0, 170 at level 100); a Custom speed panel lets you run slower; houses 1 to 3 drop only their own "level" eggs and pets; owner speeds were raised for the new speed scale; a DEV03 code. |
+| Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
 
 ## 1. Overview
 
@@ -28,14 +27,14 @@ Working title. **Version 4**, updated 2 October 2026 to match the place file **S
 
 **Look:** Tattersall studs style (two-tone checkered studs tiles), with each level in its own colour theme under dark Halloween night lighting.
 
-**Core loop:** Trick-or-Treat → earn Candy → buy treadmills and train speed → steal eggs → escape the owner → hatch pets → earn Money → buy costumes and trails → unlock better houses → repeat at a higher level.
+**Core loop:** Trick-or-Treat → earn Candy → buy costumes (more Candy and faster Speed XP) → run anywhere to level up your speed → steal eggs → escape the owner → hatch pets → earn Money → buy treadmills, trails and base upgrades → unlock better houses → repeat at a higher level.
 
 **Two currencies:**
 
 | Currency | Earned from | Spent on |
 |---|---|---|
-| Candy | Trick-or-Treating at doors | Treadmills (speed training) |
-| Money | Pets on your base, every second | Costumes (unlock better doors) and trails (faster training) |
+| Candy | Trick-or-Treating at doors (times your costume's multiplier) | Costumes (more Candy, more Speed XP, better doors) |
+| Money | Pets on your base, every second | Treadmills, trails (faster training), Pet Capacity and Hatching Pads |
 
 ## 2. Game description
 
@@ -74,19 +73,19 @@ Houses 1 (swamp) and 2 (desert) are built and themed; the themes for houses 3 to
 
 ### 2.3 The houses and owners
 
-| # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs | Look |
-|---|---|---|---|---|---|---|---|
-| 1 | Old Witch | 14 | 5 | None | 1 | 4 | Built: swamp cottage with chimney smoke, cauldrons and reeds |
-| 2 | Friendly Mummy | 17 | 10 | None | 1 | 4 | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
-| 3 | Scarecrow | 21 | 20 | Bedsheet Ghost | 1 | 5 | Placeholder |
-| 4 | Zombie Chef | 25 | 40 | Pumpkin Head | 2 | 5 | Placeholder |
-| 5 | Gravedigger | 30 | 80 | Witch | 1 | 5 | Placeholder |
-| 6 | Count Vlad | 37 | 160 | Vampire | 2 | 6 | Placeholder |
-| 7 | Banshee | 46 | 320 | Glowing Skeleton | 2 | 6 | Placeholder |
-| 8 | Headless Horseman | 58 | 650 | Werewolf | 2 | 6 | Placeholder |
-| 9 | Lich King | 72 | 1,300 | Grim Reaper | 2 | 6 | Placeholder |
+| # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs | Drops | Look |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Old Witch | 17 | 5 | None | 1 | 4 | Swamp Egg (5 level pets) | Built: swamp cottage with chimney smoke, cauldrons and reeds |
+| 2 | Friendly Mummy | 38 | 10 | None | 1 | 4 | Pyramid Egg (5 level pets) | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
+| 3 | Scarecrow | 53 | 20 | Bedsheet Ghost | 1 | 5 | Harvest Egg (5 level pets) | Placeholder |
+| 4 | Zombie Chef | 55 | 40 | Pumpkin Head | 2 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
+| 5 | Gravedigger | 70 | 80 | Witch | 1 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
+| 6 | Count Vlad | 88 | 160 | Vampire | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
+| 7 | Banshee | 105 | 320 | Glowing Skeleton | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
+| 8 | Headless Horseman | 125 | 650 | Werewolf | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
+| 9 | Lich King | 145 | 1,300 | Grim Reaper | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
 
-Owner speed grows roughly exponentially so the last houses need a well-trained runner. House 1 is slower than a brand-new player (14 vs 16), so a first-timer can always get away from it. Owner names, speeds, Candy and egg odds live in `Config.Houses`; the house models carry the same `Index` and `Owner` attributes (House 1 = Old Witch, House 2 = Friendly Mummy).
+Owner speed rises with every house so the last houses need a well-trained runner. House 1's owner (17) is slower than a brand-new player (20), so a first-timer can always get away from it. The Candy you get from a knock is the number above times your costume's Candy multiplier. Owner names, speeds, Candy and egg odds live in `Config.Houses`; the house models carry the same `Index` and `Owner` attributes (House 1 = Old Witch, House 2 = Friendly Mummy).
 
 ### 2.4 Trick-or-Treat
 
@@ -136,10 +135,8 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 | Pet | Rarity | Money/s | Egg design hint |
 |---|---|---|---|
 | Bat | Common | 1 | Dark grey egg with two folded wing flaps |
-| Black Cat | Common | 2 | Black egg with pointed ear nubs and green eye slits |
 | Candy Spider | Uncommon | 4 | Purple egg wrapped in thin leg stripes |
 | Pumpkling | Uncommon | 6 | Orange ribbed egg with a green stem |
-| Scarecrow Crow | Uncommon | 9 | Black egg with a straw tuft and a yellow beak tip |
 | Candy Corn Critter | Rare | 15 | Yellow, orange and white bands |
 | Vampire Bat | Rare | 22 | Dark red egg with wing flaps and tiny fangs |
 | Zombie Pup | Rare | 32 | Green patchwork egg with stitches and a floppy ear |
@@ -175,23 +172,64 @@ Multipliers stack: a Gigantic Rainbow pet earns x750 (a Gigantic Rainbow Pumpkin
 
 Because variants raise the average pet income by about 3.4x, every Money price (costumes, trails, base upgrades, Index rewards) was multiplied by 3 so the pacing in 2.11 stays the same for an average-luck player. Lucky players are faster, unlucky ones a little slower.
 
+**Level pets (V4.2):** houses 1 to 3 drop only their own level egg, with five pets each. Cheaper pets hatch more often. They have no rarity tier; the label is the level's place (Swamp, Pyramid, Harvest). Black Cat moved to the swamp level and Scarecrow Crow to the harvest level, and the Candy and Pumpkin eggs now hatch only the pets shown in `Config.Eggs`.
+
+| Level | Pet | Money/s | Hatch chance |
+|---|---|---|---|
+| 1 Swamp (Swamp Egg, 10 s) | Bog Toad | 3 | 35% |
+| | Black Cat | 4 | 27% |
+| | Mushroom Imp | 5 | 20% |
+| | Cauldron Slime | 7 | 12% |
+| | Hexed Owl | 11 | 6% |
+| 2 Pyramid (Pyramid Egg, 30 s) | Sand Scarab | 15 | 35% |
+| | Camel | 20 | 27% |
+| | Canopic Jar Critter | 25 | 20% |
+| | Mini Sphinx | 35 | 12% |
+| | Anubis Pup | 55 | 6% |
+| 3 Harvest (Harvest Egg, 60 s) | Hay Mouse | 70 | 35% |
+| | Scarecrow Crow | 90 | 27% |
+| | Cider Barrel Raccoon | 115 | 20% |
+| | Lantern Moth | 160 | 12% |
+| | Straw Golem | 250 | 6% |
+
 **Wandering pets:** pets walk slowly around inside your base, stop now and then to idle, and never leave the base. Money pops up above each pet as it earns. Pets don't block players.
 
-**Equipped and inventory:** your base has 10 pet slots, +2 per base upgrade (up to 18). Up to 60 more pets wait in the inventory. When the base is full, a hatched pet goes straight to the inventory. The Pets menu shows equipped pets on top and the inventory below, stacked by kind (x2, x3) with a search box. Tap a pet to equip, unequip or sell it; **Equip Best** puts your highest-earning pets on the base.
+**Equipped and inventory:** your base starts with 6 pet slots; Pet Capacity upgrades raise it to 9, 12, 15 and 18. Up to 60 more pets wait in the inventory. When the base is full, a hatched pet goes straight to the inventory. The Pets menu shows equipped pets on top and the inventory below, stacked by kind (x2, x3) with a search box. Tap a pet to equip, unequip or sell it; **Equip Best** puts your highest-earning pets on the base.
 
 **Friend boost:** +10% pet Money for every friend playing in the same server (up to +40% with 4 friends), shown in the bottom-left corner.
 
-**Base upgrades:** bought with Money at the UPGRADE BASE sign ($24K, $300K, $4.5M, $66M). Each one makes the base deeper and adds 2 pet slots and 1 incubator.
+**Base upgrades (two separate ones, both paid with Money):** there are two signs on the left of your base entrance. Each upgrade changes only its own capacity.
+
+| Upgrade | Starts at | Steps (price, new capacity) | What you see |
+|---|---|---|---|
+| Pet Capacity (pink sign nearest the entrance) | 6 pets | $2K to 9, $30K to 12, $500K to 15, $8M to 18 | The pet courtyard gets 10 studs deeper with every step |
+| Hatching Pads (yellow sign beyond it) | 2 pads | $5K to 3, $60K to 4, $700K to 5, $8M to 6, $90M to 7 | More hatching pedestals appear; from the 5th pad the hatchery gets a second row under a longer roof |
+
+Old saves keep what they had: the single base level of Version 4 is converted into the closest Pet Capacity and Hatching Pad levels that take nothing away.
 
 **Pet Index:** every pet you hatch is recorded. Money rewards for discovering 5, 10, 15 and 20 different pets ($45K, $750K, $12M, $135M). Big or Golden versions don't count twice; the Index only counts plain pets.
 
-### 2.9 Speed: treadmills, trails and rebirth
+### 2.9 Speed XP: costumes, treadmills, trails and rebirth
 
-- **Treadmills (Candy):** 7 tiers, Rusty to Cursed (0 to 150,000 Candy). A new one spawns in front of your base and replaces the old one. Step on and your character runs by itself, earning Speed XP (1 to 64 XP/s by tier). Jump to get off.
-- **Trails (Money):** sold in the new Trails tab of the Speed Shop. A trail multiplies the XP your treadmill gives: a 30 XP/s treadmill with a 1.5x trail gives 45 XP/s. You keep every trail you buy and equip one at a time, and it shows as a visible trail behind your character.
-- **Speed Levels:** each level makes you 1.85% faster. Level 0 = 16, level 50 ≈ 40, level 100 (max) ≈ 100. Each level costs 12% more XP than the last up to level 70 (6 XP for level 1, about 15,000 for level 70), then 5% more (about 65,000 for level 100). With a fitting treadmill, rebirth and trail a level takes roughly 10 to 40 seconds.
+**Speed XP per second = costume rate x treadmill multiplier (only on a treadmill) x rebirth multiplier x trail multiplier.**
+
+- **Running anywhere earns XP.** The base rate comes from the costume you wear (table in 2.10). It only counts while you really run: the server checks that your character moved at least half the distance its walk speed allows since the last half-second check. Standing still, being stunned and teleports earn nothing.
+- **Treadmills (Money):** 7 tiers. A treadmill does not give XP by itself; it multiplies your costume's rate while you run on it. Example: a costume with 10 XP/s on a x2 treadmill earns 20 XP/s. On the treadmill the character is held in place, and that still counts as running. A better treadmill replaces the old one in front of your base. You can't use the treadmill while carrying an egg.
+
+| Treadmill | XP multiplier | Price (Money) |
+|---|---|---|
+| Rusty | x1 | free |
+| Wooden | x1.25 | $500 |
+| Iron | x1.5 | $3,000 |
+| Pumpkin | x2 | $20,000 |
+| Bone | x2.5 | $120,000 |
+| Ghostly | x3 | $800,000 |
+| Cursed | x4 | $5,000,000 |
+
+- **Trails (Money):** sold in the Trails tab of the Speed Shop. A trail multiplies your Speed XP everywhere (a costume rate of 30 XP/s with a 1.5x trail gives 45 XP/s). You keep every trail you buy and equip one at a time; it shows as a visible trail behind your character.
+- **Speed Levels:** speed grows by the same amount every level: 20 at level 0, +1.5 per level, 170 at level 100. Each level costs 12% more XP than the last up to level 70 (6 XP for level 1, about 15,000 for level 70), then 5% more (about 65,000 for level 100).
+- **Custom speed (V4.2):** a panel lets you run slower than your max speed (down to 16), for example to stay under control. It does not change your XP.
 - **Rebirth:** opens at Speed Level 10, then 20, 30, 40, 55, 70, 85 and 100 (8 rebirths). It resets your Speed Level and XP and raises your XP multiplier: x2 after the first rebirth, x3 after the second, up to x9. Pets, eggs, Money, Candy, treadmills, trails and costumes are kept.
-- **Total training speed:** treadmill XP/s × trail × rebirth multiplier.
 
 Suggested trail ladder (the build in Studio may tune these):
 
@@ -205,48 +243,77 @@ Suggested trail ladder (the build in Studio may tune these):
 | Blood Moon | 4x | 42,000,000 |
 | Nightmare Shadow | 5x | 225,000,000 |
 
-### 2.10 Costumes
+### 2.10 Costumes (bought with Candy)
 
-Money buys costumes from mannequins in the Costume Shop. They visibly dress your character, set which doors give you Candy and add bonus Candy to every knock.
+Candy buys costumes from the mannequins in the Costume Shop (walk up and press E). A costume dresses your character and gives three things:
 
-| Tier | Costume | Price (Money) | Candy bonus |
-|---|---|---|---|
-| 1 | Bedsheet Ghost | 150 | +10% |
-| 2 | Pumpkin Head | 900 | +25% |
-| 3 | Witch | 5,400 | +50% |
-| 4 | Vampire | 30,000 | +75% |
-| 5 | Glowing Skeleton | 165,000 | +100% |
-| 6 | Werewolf | 900,000 | +150% |
-| 7 | Grim Reaper | 4,800,000 | +200% |
-| 8 | Mummy | 21,000,000 | +300% |
-| 9 | Frankenstein | 105,000,000 | +400% |
-| 10 | Red Devil | 450,000,000 | +500% |
+- a **Candy multiplier** on every Trick-or-Treat knock (the first costume is x2),
+- a **base Speed XP per second** while you run,
+- the **tier** that decides which doors give you Candy (see 2.3).
 
-### 2.11 Pacing targets (set 1 October 2026)
+A new player wears no costume (x1 Candy, 0.7 XP/s) and starts with 100 Candy, exactly the price of the cheapest costume.
 
-These come from a simulation of an active player (about 40% of the time on the treadmill, 25% knocking, 35% stealing), so a normal player takes roughly 1.5 to 2 times as long. The aim: a purchase every few minutes in the first hour, no wait longer than about 30 to 45 minutes before the very end, and everything finished in about 8 to 10 hours of real play.
+| Tier | Costume | Price (Candy) | Candy multiplier | Speed XP/s |
+|---|---|---|---|---|
+| 0 | No Costume | free | x1 | 0.7 |
+| 1 | Bedsheet Ghost | 100 | x2 | 1 |
+| 2 | Pumpkin Head | 250 | x3 | 1.5 |
+| 3 | Witch | 1,000 | x4 | 2.2 |
+| 4 | Vampire | 4,500 | x6 | 3.2 |
+| 5 | Glowing Skeleton | 18,000 | x8 | 4.5 |
+| 6 | Werewolf | 70,000 | x12 | 6.5 |
+| 7 | Grim Reaper | 280,000 | x16 | 9 |
+| 8 | Mummy | 1,000,000 | x24 | 12 |
+| 9 | Frankenstein | 2,500,000 | x32 | 16 |
+| 10 | Red Devil | 4,000,000 | x50 | 22 |
 
-| Milestone | Active player |
-|---|---|
-| First costume, steal from house 2 | 2 to 3 min |
-| Steal from house 4 | 16 min |
-| Steal from house 6 | 45 min |
-| Steal from house 9 | about 2 h |
-| All 10 costumes, 7 trails, 4 base upgrades | about 4 to 5 h |
+The shop signs show each costume's Candy multiplier, XP rate and Candy price; the price changes to WEARING or OWNED once you have it.
 
-Money sinks and gates: costumes (also gate the candy per door), trails (XP multiplier), base upgrades (pet and incubator slots) and Index rewards. Candy only buys treadmills, so it has nothing to buy after the Cursed Treadmill (see 5.1).
+### 2.11 Pacing targets (set 3 October 2026)
+
+These come from a simulation of an active player (about 40% of the time on the treadmill, 25% knocking, 35% stealing, running 70% of the time they are not on the treadmill) using the real numbers in `Config.luau`. A normal player takes roughly 1.5 to 2 times as long (the casual column). The aim: a purchase every few minutes in the first hour and no long waits before the very end.
+
+| Milestone | Active player | Casual player |
+|---|---|---|
+| First costume (starting Candy) | at once | at once |
+| Second costume (Pumpkin Head, 250 Candy) | 7 min | 11 min |
+| Steal from house 2 | 4 min | 7 min |
+| Steal from house 4 | 17 min | 27 min |
+| Costume 5 (Skeleton) | 37 min | 1 h |
+| Steal from house 6 | 52 min | 1.2 h |
+| Steal from house 9 | about 2 h | 3.3 h |
+| Treadmills 2 to 7 | 7 min to 1.3 h | 12 min to 1.4 h |
+| Pet Capacity 1 to 4 | 5 min to 1.5 h | 8 min to 1.6 h |
+| Hatching Pads 1 to 5 | 8 min to 2.5 h | 14 min to 3 h |
+| All 10 costumes | 3.9 h | 6.5 h |
+
+Candy now has a real job: it buys all 10 costumes, and the multipliers make each knock worth far more. Money buys treadmills, trails, both base upgrades and gets Index rewards. Candy still has nothing to buy after the Red Devil (see 5.1).
 
 ### 2.12 Interface
 
 - **Style:** chunky cartoon simulator UI. White studded panels with a thick black outline, the menu icon and name sticking out over the top-left corner, a big red X, cyan boxes, glossy gradient buttons and white text with a black outline. Menus pop open in the centre of the screen and buttons bounce.
 - **HUD:** Money and Candy on the right side in big gold and pink numbers with coin and candy icons; night/day timer at the top; "RUN!" banner during a chase; Speed Level bar at the bottom (orange to yellow) with walk speed, rebirth multiplier and a + button to the Speed Shop; friend boost bottom left; menu buttons (Rebirth, Index, Pets, Eggs, Store) on the left.
 - **Rebirth menu:** this rebirth vs the next side by side (XP multiplier, Speed Level reset), a warning line, a level bar towards the next rebirth, and Rebirth and Train Faster buttons.
+- **Speed Shop:** two tabs, Treadmills (paid with Money, shown as x multipliers) and Trails (Money). A Custom speed panel sits on the Level bar.
+- **Costume Shop signs:** each mannequin shows its name, "x2 Candy | 1 XP/s" and its Candy price (or WEARING / OWNED).
+- **Base signs:** two signs outside your base: PET CAPACITY and HATCHING PADS, each showing "now > next | price".
 - **Store menu:** a Codes box (type a code, press Redeem) above the "coming soon" Robux items. Each code works once per player; the server answers with a message (accepted, already used, unknown, or too many wrong tries).
 - **Pets and Eggs menus:** darker inventory window with a blue title bar, search box, card grids with coloured rarity splashes and counts, and Equip Best / Hatch Best at the bottom. Variant pets show their full name ("Big Golden Bat") and their higher Money per second; eggs in the menu show their size and glow.
 
+### 2.13 First-time tutorial
+
+A player who has never owned a costume is a new player (returning players who own one never see this):
+
+1. They spawn on the ground in front of the Costume Shop, facing the cheapest costume, with 100 Candy.
+2. Yellow chevron arrows on the ground, one every 6 studs, pulse along the line from the spawn point to the costume. A "Buy a Costume!" message floats over the screen and over the costume, which glows with a yellow outline. Only that player sees the guide.
+3. They walk to the Bedsheet Ghost and press E. The costume is bought with Candy and put on.
+4. As soon as the first costume is owned the arrows, the glow and the message disappear and the game continues normally. Until then, dying respawns the player at the shop again.
+
+The shop pedestal of the cheapest costume is tagged `TutorialCostume` and carries the arrows' start point as the `TutorialSpawn` attribute; the server finds the spawn point in front of the shop automatically.
+
 ## 3. Built so far
 
-The main copy is the **SpookyStealV3.2 (13)** place, kept in the GitHub repo vituyy/bib as `place/SpookyStealV3.2.rbxl` together with all scripts in `src/`. Nothing is published yet.
+The main copy is the **SpookySteal-House V4.2** place, kept in the GitHub repo vituyy/bib as `place/SpookyStealV3.2.rbxl` together with all scripts in `src/`. Nothing is published yet.
 
 **What is in the place file**
 
@@ -292,10 +359,18 @@ The main copy is the **SpookyStealV3.2 (13)** place, kept in the GitHub repo vit
 - **Eggs:** a caught thief's egg returns to its nest; the thief carries the egg in front of the chest.
 - **Codes** in the Store menu.
 
+**Version 5 changes (done: the Candy, costume, treadmill and base rework)**
+
+- Costumes cost Candy and give a Candy multiplier plus a base Speed XP rate; treadmills cost Money and multiply that rate (`Config.XpRateFor`).
+- Speed XP is earned while running anywhere (server-checked movement); treadmill running in place still counts.
+- Base Level became two saved values, `PetCapLevel` and `PadLevel`, with two signs, separate prices and separate base visuals (`Config.PetCapacityUpgrades`, `Config.HatchPadUpgrades`). Old saves are converted.
+- First-time tutorial (2.13): spawn at the Costume Shop, 100 starting Candy, ground arrows and a "Buy a Costume!" message.
+- Removed: Candy-priced treadmills, Money-priced costumes, `CandyBonus` percentages, `XpPerSecond` on treadmills and the single `BaseLevel` upgrade.
+
 **Safety (added 1 October 2026)**
 
 - **Save lock:** a player's save is stamped with the server that has it open, so two servers can't both load it (no duplicating items by rejoining quickly). A crashed server blocks a player for at most 4 minutes. A loaded save is repaired (NaN or negative numbers, unknown pets, eggs or costumes are fixed or removed) so one bad value can't break the game.
-- **Codes:** each code can be used once per player and is not case sensitive. They live in `CODES` at the top of `ShopService.luau` (server only, so players can't read them). Current codes: DEV01 gives $100,000 and DEV02 gives 10,000 Candy. Five wrong codes in a minute lock the box for a minute. Remove the dev codes before a public release.
+- **Codes:** each code can be used once per player and is not case sensitive. They live in `CODES` at the top of `ShopService.luau` (server only, so players can't read them). Current codes: DEV01 gives $100,000, DEV02 gives 10,000 Candy and DEV03 gives $100,000,000. Five wrong codes in a minute lock the box for a minute. Remove the dev codes before a public release.
 - **Prompt range checks:** doors, eggs, mannequins and the upgrade sign check that the player is really standing next to them, because cheats can fire prompts from anywhere.
 - **Movement check:** if a player keeps moving much faster than the speed the server gave them for 2 seconds, they are put back where they were last fine.
 - Every purchase and menu action already goes through one server function that re-checks costs, ownership and rate.
@@ -328,6 +403,14 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 - ✓ Pets inventory, Equip Best, Pets and Eggs window, Hatch Best
 - ✓ Friend boost (+10% Money per friend)
 - ◐ Playtest the new UI in Studio on PC and phone; swap the drawn Money/Candy icons for uploaded pictures
+
+### Phase 2c: Version 5 rework
+
+- ✓ Costumes bought with Candy (Candy multiplier and XP rate), treadmills bought with Money (XP multiplier)
+- ✓ Speed XP while running anywhere; treadmill running in place still counts
+- ✓ Separate Pet Capacity and Hatching Pad upgrades with their own signs and base visuals
+- ✓ First-time tutorial with arrows and a "Buy a Costume!" message
+- ○ Playtest the new flow in Studio: spawn at the shop, arrows, the two signs, the base look at every level
 
 ### Phase 3: World building (Viktor, by hand)
 
@@ -382,13 +465,13 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 3. **New-player escape.** *(Done: house 1's owner, the Old Witch, runs at 14 and house 2's, the Mummy, at 17; the owner also needs a moment to notice you.)* A new player carrying the smallest egg runs at about 15, so house 1 can always be escaped. Check in Studio that the owner starting inside the house still feels fair.
 
-**4. Endgame.** Outrunning the Lich King (72) while carrying a Secret egg needs about Speed Level 93 (max is 100). Decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
+**4. Endgame.** With the V4.2 speed scale (max 170) the Lich King runs at 145. Carrying a Ghost egg (x0.89) you need speed 163 (level 96), a Blood Moon egg (x0.87) speed 167 (level 98); a Cursed egg (x0.85) needs 171 and a Nightmare egg (x0.82) 177, more than the maximum, so those can only be taken by outlasting the 30 s chase. Decide whether that is intended, or lower the last owners' speed or raise the max speed. Also decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
 
 5. **Reading eggs.** With no signs, a new player can't tell a Common egg from a Mythic one. Decide how much help to give: only size, a subtle glow for Legendary and up, or the pet index revealing designs as you discover them (recommended).
 
 6. **Egg design surprise.** *(Done: egg variants, see 2.8.)* Check in play that a Gigantic Rainbow jackpot (x750) feels exciting and does not break the economy, and whether big eggs should also be heavier to carry.
 
-7. **Candy after treadmills.** Once you own the Cursed Treadmill (about 2 hours in), Candy has nothing to buy. Options: speed potions, egg-luck boosts (more variants), extra incubator slots, costume dyes.
+7. **Candy after the last costume.** Candy now buys the 10 costumes (about 4 hours for an active player). After the Red Devil it has nothing to buy. Options: speed potions, egg-luck boosts (more variants), costume dyes, extra pet or hatching-pad levels paid in Candy.
 
 **8. Pet management.** The base holds 10 to 18 pets and the inventory 60; selling pays 30 s of income. Decide on merging duplicates, trading, pet levels, or more inventory space as a Money sink.
 

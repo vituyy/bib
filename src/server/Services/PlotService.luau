@@ -9,6 +9,7 @@ local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local Art = require(ReplicatedStorage.Shared.Art)
 local DataService = require(script.Parent.DataService)
 local BaseBuilder = require(script.Parent.BaseBuilder)
+local ShopService = require(script.Parent.ShopService)
 
 local PlotService = {}
 
@@ -272,7 +273,7 @@ local function renderIncubators(player: Player, data)
 	visuals.Parent = plot
 	incubatorLabels[player] = {}
 
-	for n = 1, Config.IncubatorsFor(data.BaseLevel) do
+	for n = 1, Config.IncubatorsFor(data.PadLevel) do
 		local pad = pads:FindFirstChild("Incubator" .. n) :: BasePart?
 		local entry = data.Incubators[n]
 		if pad then
@@ -331,25 +332,27 @@ local function releasePlot(player: Player)
 			visuals:Destroy()
 		end
 	end
-	BaseBuilder.Build(plot, 0)
+	BaseBuilder.Build(plot, 0, 0)
 	setSign(plot, "Empty Plot")
 end
 
--- Rebuilds the owner's base at their upgrade level, then redraws their pets and eggs on it.
-local builtLevel: { [Player]: number } = {}
+-- Rebuilds the owner's base at their upgrade levels, then redraws their pets and eggs on it.
+local builtLevel: { [Player]: string } = {}
 local function refreshBase(player: Player, data)
 	local plot = playerPlots[player]
-	if not plot or builtLevel[player] == data.BaseLevel then
+	local key = data.PetCapLevel .. "," .. data.PadLevel
+	if not plot or builtLevel[player] == key then
 		return
 	end
-	builtLevel[player] = data.BaseLevel
-	BaseBuilder.Build(plot, data.BaseLevel)
+	builtLevel[player] = key
+	BaseBuilder.Build(plot, data.PetCapLevel, data.PadLevel)
 	setSign(plot, player.DisplayName .. "'s Base")
 	renderPets(player, data)
 	renderIncubators(player, data)
 end
 
-local function buyUpgrade(player: Player, plot: Instance): (boolean, string)
+-- The two base upgrades are independent. kind "Pets" raises Pet Capacity, kind "Pads" raises Hatching Pads.
+local function buyUpgrade(player: Player, plot: Instance, kind: string): (boolean, string)
 	if playerPlots[player] ~= plot then
 		return false, "You can only upgrade your own base"
 	end
@@ -357,18 +360,31 @@ local function buyUpgrade(player: Player, plot: Instance): (boolean, string)
 	if not data then
 		return false, "Not ready yet"
 	end
-	local upgrade = Config.BaseUpgrades[data.BaseLevel + 1]
+	local isPets = kind == "Pets"
+	if not isPets and kind ~= "Pads" then
+		return false, "Unknown upgrade"
+	end
+	local level = if isPets then data.PetCapLevel else data.PadLevel
+	local upgrades = if isPets then Config.PetCapacityUpgrades else Config.HatchPadUpgrades
+	local upgrade = upgrades[level + 1]
 	if not upgrade then
-		return false, "Your base is fully upgraded!"
+		return false, if isPets then "Your pet capacity is already maxed!" else "You already have every hatching pad!"
 	end
 	if data.Money < upgrade.Price then
-		return false, "You need " .. BaseBuilder.UpgradeText(data.BaseLevel):match("%$[%d,]+")
+		return false, "You need " .. BaseBuilder.UpgradeText(kind, level):match("%$[%d,]+")
 	end
 	DataService.Update(player, function(d)
 		d.Money -= upgrade.Price
-		d.BaseLevel += 1
+		if isPets then
+			d.PetCapLevel += 1
+		else
+			d.PadLevel += 1
+		end
 	end)
-	return true, string.format("Base upgraded to level %d! %d pet slots, %d hatching pedestals.", data.BaseLevel + 1, Config.PetSlotsFor(data.BaseLevel), Config.IncubatorsFor(data.BaseLevel))
+	if isPets then
+		return true, string.format("Pet capacity upgraded! Your base now holds %d pets.", upgrade.Capacity)
+	end
+	return true, string.format("Hatching pad added! You can now hatch %d eggs at once.", upgrade.Capacity)
 end
 
 function PlotService.GetPlot(player: Player): Instance?
@@ -385,6 +401,19 @@ function PlotService.IsOnOwnBase(player: Player): boolean
 	end
 	local offset = base.CFrame:PointToObjectSpace(root.Position)
 	return math.abs(offset.X) <= base.Size.X / 2 + 1 and math.abs(offset.Z) <= base.Size.Z / 2 + 1 and offset.Y > -2 and offset.Y < 15
+end
+
+-- Puts a freshly spawned character where it belongs: a player who has never owned a costume starts in front of
+-- the Costume Shop (the tutorial leads them to the cheapest costume); everyone else starts on their own base.
+function PlotService.Spawn(player: Player)
+	local data = DataService.WaitFor(player)
+	local character = player.Character
+	local spawn = if data and Config.NeedsTutorial(data) then ShopService.GetTutorialSpawn() else nil
+	if spawn and character then
+		character:PivotTo(spawn)
+	else
+		PlotService.TeleportHome(player)
+	end
 end
 
 function PlotService.TeleportHome(player: Player)
@@ -407,7 +436,7 @@ local function hatchReady(player: Player, data)
 	for n = #data.Incubators, 1, -1 do
 		local entry = data.Incubators[n]
 		if entry.EndsAt <= now then
-			local toBase = onBase < Config.PetSlotsFor(data.BaseLevel)
+			local toBase = onBase < Config.PetSlotsFor(data.PetCapLevel)
 			if toBase or stored < Config.MaxPetsStored then
 				table.insert(hatched, { Index = n, Pet = entry.Pet or PlotService.RollPet(entry.Egg), ToBase = toBase })
 				if toBase then
@@ -448,22 +477,23 @@ function PlotService.Start(map: Instance)
 	plotsFolder = map:WaitForChild("Plots")
 	for _, plot in plotsFolder:GetChildren() do
 		if plot:GetAttribute("Origin") then
-			BaseBuilder.Build(plot, 0)
+			BaseBuilder.Build(plot, 0, 0)
 		end
 	end
 
-	-- Studio-only test helper: ServerStorage.DevBuyUpgrade:Invoke(player) buys the next upgrade like the sign does.
+	-- Studio-only test helper: ServerStorage.DevBuyUpgrade:Invoke(player, "Pets" or "Pads") buys the next upgrade like the sign does.
 	if game:GetService("RunService"):IsStudio() then
 		local dev = Instance.new("BindableFunction")
 		dev.Name = "DevBuyUpgrade"
-		dev.OnInvoke = function(player: Player)
-			return buyUpgrade(player, playerPlots[player])
+		dev.OnInvoke = function(player: Player, kind: string?)
+			return buyUpgrade(player, playerPlots[player], kind or "Pets")
 		end
 		dev.Parent = game:GetService("ServerStorage")
 	end
 
 	game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt, player)
-		if not prompt:GetAttribute("UpgradeBase") then
+		local kind = prompt:GetAttribute("UpgradeKind")
+		if kind ~= "Pets" and kind ~= "Pads" then
 			return
 		end
 		-- Players can fire prompts from anywhere with cheats, so check they are really standing at the sign.
@@ -477,7 +507,7 @@ function PlotService.Start(map: Instance)
 			plot = plot.Parent
 		end
 		if plot then
-			local ok, message = buyUpgrade(player, plot)
+			local ok, message = buyUpgrade(player, plot, kind)
 			Remotes.Notify:FireClient(player, message, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
 		end
 	end)
@@ -487,10 +517,10 @@ function PlotService.Start(map: Instance)
 		player.CharacterAdded:Connect(function(character)
 			character:WaitForChild("HumanoidRootPart")
 			task.wait() -- let the default spawn finish first
-			PlotService.TeleportHome(player)
+			PlotService.Spawn(player)
 		end)
 		if player.Character then
-			PlotService.TeleportHome(player)
+			PlotService.Spawn(player)
 		end
 		local data = DataService.WaitFor(player)
 		if data and playerPlots[player] then
@@ -567,7 +597,7 @@ function PlotService.Start(map: Instance)
 								local left = entry.EndsAt - now
 								l.Text = if left > 0
 									then egg.Name .. "\n" .. formatTime(left)
-									elseif #data.Pets >= Config.PetSlotsFor(data.BaseLevel) and #data.Storage >= Config.MaxPetsStored then egg.Name .. "\nPets full!"
+									elseif #data.Pets >= Config.PetSlotsFor(data.PetCapLevel) and #data.Storage >= Config.MaxPetsStored then egg.Name .. "\nPets full!"
 									else egg.Name .. "\nHatching!"
 							end
 						end

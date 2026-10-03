@@ -1,5 +1,7 @@
--- Treadmills: each player's treadmill sits just in front of their base. Running on it earns Speed XP;
--- every Speed Level makes the player permanently faster. Buying a better treadmill replaces the old one.
+-- Speed XP: running anywhere earns Speed XP at the rate of the player's equipped costume (Config.XpRateFor),
+-- but only while they really move; standing still earns nothing. Each player's treadmill sits just in front of
+-- their base: running on it still counts when the character is held in place, and the treadmill multiplies the
+-- costume's rate. Every Speed Level makes the player permanently faster. A better treadmill replaces the old one.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,6 +20,8 @@ local SpeedService = {}
 -- The client says when it is held on the belt and running (Remotes.TreadmillRunning). XP only flows while
 -- running, and the treadmill's "Running" attribute tells every client to scroll that belt.
 local running: { [Player]: boolean } = {}
+local lastPosition: { [Player]: Vector3 } = {} -- where each player was at the last XP tick, to tell if they moved
+local MIN_RUN_SPEED = 10 -- a stunned or crawling character (walk speed below this) earns no running XP
 local function spawnTreadmill(player: Player, tier: number)
 	local plot = PlotService.GetPlot(player)
 	local spot = plot and plot:FindFirstChild("TreadmillSpot") :: BasePart?
@@ -52,7 +56,7 @@ local function spawnTreadmill(player: Player, tier: number)
 	label.TextScaled = true
 	label.TextStrokeTransparency = 0
 	label.TextColor3 = Color3.fromRGB(120, 220, 255)
-	label.Text = string.format("%s\n+%d Speed XP/s (move or jump to step off)", info.Name, info.XpPerSecond)
+	label.Text = string.format("%s\nx%s Speed XP (move or jump to step off)", info.Name, tostring(info.XpMultiplier))
 	label.Parent = gui
 	gui.Parent = belt
 
@@ -165,6 +169,7 @@ function SpeedService.Start()
 		end
 	end)
 	Players.PlayerRemoving:Connect(function(player)
+		lastPosition[player] = nil
 		running[player] = nil
 		lastTier[player] = nil
 		lastTrail[player] = nil
@@ -178,10 +183,29 @@ function SpeedService.Start()
 				local plot = PlotService.GetPlot(player)
 				local treadmill = plot and plot:FindFirstChild("Treadmill")
 				local belt = treadmill and treadmill:FindFirstChild("Belt") :: BasePart?
-				local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-				if data and belt and root and running[player] and not player:GetAttribute("CarryingEgg") and isOnBelt(belt, root) then
-					local info = Config.Treadmills[data.Treadmill] or Config.Treadmills[1]
-					giveXp(player, info.XpPerSecond * Config.TreadmillTick * Config.XpMultiplier(data.Rebirths) * Config.TrailMultiplier(data.Trail))
+				local character = player.Character
+				local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				if not (data and root and humanoid and humanoid.Health > 0) then
+					lastPosition[player] = nil
+					continue
+				end
+
+				-- Did the character really run since the last tick? It must cover at least half the distance its
+				-- walk speed allows, and not an impossible amount (a teleport or a cheat is not running).
+				local previous = lastPosition[player]
+				lastPosition[player] = root.Position
+				local moved = false
+				if previous and humanoid.WalkSpeed >= MIN_RUN_SPEED then
+					local covered = Vector3.new(root.Position.X - previous.X, 0, root.Position.Z - previous.Z).Magnitude
+					local possible = humanoid.WalkSpeed * Config.TreadmillTick
+					moved = covered >= possible * 0.5 and covered <= possible * 2.5
+				end
+
+				-- On the treadmill the character is held in place, so running there counts without moving.
+				local onTreadmill = belt ~= nil and running[player] == true and not player:GetAttribute("CarryingEgg") and isOnBelt(belt, root)
+				if onTreadmill or moved then
+					giveXp(player, Config.XpRateFor(data, onTreadmill) * Config.TreadmillTick)
 				end
 			end
 		end

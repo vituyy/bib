@@ -4,6 +4,7 @@
 -- Look: chunky cartoon UI. White studded panels with thick black outlines, cyan boxes, glossy gradient buttons
 -- and white text with a black outline. Pets and Eggs use a darker inventory window with a blue title bar.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -765,7 +766,7 @@ end
 local selectedPet: { Pet: string, Equipped: boolean }? = nil
 
 function menus.Pets(d)
-	local slots = Config.PetSlotsFor(d.BaseLevel)
+	local slots = Config.PetSlotsFor(d.PetCapLevel)
 	local boost = 1 + (player:GetAttribute("FriendBoost") or 0) / 100
 	if selectedPet and not table.find(if selectedPet.Equipped then d.Pets else d.Storage, selectedPet.Pet) then
 		selectedPet = nil -- sold or moved
@@ -790,10 +791,10 @@ function menus.Pets(d)
 			petCard(equippedGrid, n, petId, true)
 		end
 	end
-	local locked = Config.PetSlotsFor(#Config.BaseUpgrades) - slots
+	local locked = Config.MaxPetSlots() - slots
 	if locked > 0 then
 		blob(equippedGrid, 1000, "+" .. locked, function()
-			toast("Upgrade your base for more pet slots!", ORANGE)
+			toast("Upgrade your Pet Capacity at the sign by your base entrance for more pet slots!", ORANGE)
 		end)
 	end
 
@@ -848,7 +849,7 @@ local function refreshIncubatorTimers()
 end
 
 function menus.Eggs(d)
-	local slots = Config.IncubatorsFor(d.BaseLevel)
+	local slots = Config.IncubatorsFor(d.PadLevel)
 	sectionTitle(1, string.format("Hatching %d/%d", #d.Incubators, slots))
 	local hatchGrid = cardGrid(2)
 	for n, entry in d.Incubators do
@@ -1075,7 +1076,7 @@ end
 function menus.Treadmills(d)
 	tabRow(-1)
 	if shopTab == "Trails" then
-		header(0, "Trails: paid with Money, multiply treadmill XP")
+		header(0, "Trails: paid with Money, multiply your Speed XP")
 		for index, info in Config.Trails do
 			local owned = table.find(d.OwnedTrails or {}, index) ~= nil
 			local equipped = d.Trail == index
@@ -1087,13 +1088,13 @@ function menus.Treadmills(d)
 		end
 		return
 	end
-	header(0, "Treadmills: paid with Candy")
+	header(0, "Treadmills: paid with Money, multiply your costume's XP while you run on them")
 	for tier, info in Config.Treadmills do
-		local text = string.format("%s  +%d XP/s", info.Name, info.XpPerSecond)
+		local text = string.format("%s  x%s XP", info.Name, tostring(info.XpMultiplier))
 		if tier <= d.Treadmill then
 			row(tier, text, info.Color, if tier == d.Treadmill then "Owned" else "-", PAINT.Grey)
 		else
-			row(tier, text, info.Color, formatNumber(info.Price) .. " Candy", PAINT.Green, function()
+			row(tier, text, info.Color, "$" .. formatNumber(info.Price), PAINT.Green, function()
 				request("BuyTreadmill", tier)
 			end)
 		end
@@ -1140,8 +1141,8 @@ local function menuKey(d)
 		openMenu or "", shopTab, d.SpeedLevel, d.Rebirths, d.Treadmill, d.Trail or 0, #(d.OwnedTrails or {}), d.EquippedCostume,
 		table.concat(d.Eggs, ","), table.concat(incubating, ","), table.concat(d.Pets, ","), table.concat(d.Storage or {}, ","),
 		player:GetAttribute("FriendBoost") or 0,
-		table.concat(d.Discovered or {}, ","), table.concat(d.IndexClaimed or {}, ","), d.BaseLevel,
-		if openMenu == "Treadmills" then math.floor(if shopTab == "Trails" then d.Money / 1000 else d.Candy) else 0,
+		table.concat(d.Discovered or {}, ","), table.concat(d.IndexClaimed or {}, ","), d.PetCapLevel, d.PadLevel,
+		if openMenu == "Treadmills" then math.floor(d.Money / 1000) else 0,
 	}, "|")
 end
 
@@ -1207,6 +1208,133 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt)
 end)
 
 ---------------------------------------------------------------------------
+-- First-time tutorial: a player who has never owned a costume spawns in front of the Costume Shop. Arrows on the
+-- ground lead from the spawn point to the cheapest costume, a "Buy a Costume!" message floats on screen and over
+-- the costume, and the costume glows. Everything disappears the moment the first costume is bought, and players
+-- who already own a costume never see it. (Only this player sees it: the arrows are created on the client.)
+---------------------------------------------------------------------------
+local tutorialFolder: Folder? = nil
+local tutorialMessage: Frame? = nil
+local tutorialRender: RBXScriptConnection? = nil
+
+local function stopTutorial()
+	if tutorialRender then
+		tutorialRender:Disconnect()
+		tutorialRender = nil
+	end
+	if tutorialFolder then
+		tutorialFolder:Destroy()
+		tutorialFolder = nil
+	end
+	if tutorialMessage then
+		tutorialMessage:Destroy()
+		tutorialMessage = nil
+	end
+end
+
+local function startTutorial()
+	if tutorialFolder then
+		return
+	end
+	local pedestal = CollectionService:GetTagged("TutorialCostume")[1]
+	local from = pedestal and pedestal:GetAttribute("TutorialSpawn")
+	if not (pedestal and pedestal:IsA("BasePart") and typeof(from) == "Vector3") then
+		return -- the shop has not streamed in yet; this runs again when it does
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "TutorialGuide"
+	folder.Parent = workspace
+	tutorialFolder = folder
+
+	-- Arrows (chevrons) on the ground, one every 6 studs, pointing toward the costume.
+	local flatDir = Vector3.new(pedestal.Position.X - from.X, 0, pedestal.Position.Z - from.Z)
+	local length = flatDir.Magnitude
+	local dir = flatDir.Unit
+	local params = RaycastParams.new()
+	params.FilterDescendantsInstances = { folder, player.Character }
+	local arrows: { { BasePart } } = {}
+	local count = math.max(1, math.floor((length - 6) / 6))
+	for i = 1, count do
+		local spot = from + dir * (i * 6)
+		local hit = workspace:Raycast(Vector3.new(spot.X, spot.Y + 30, spot.Z), Vector3.new(0, -80, 0), params)
+		local ground = if hit then hit.Position else spot
+		local tip = CFrame.lookAt(ground + Vector3.new(0, 0.15, 0), ground + Vector3.new(0, 0.15, 0) + dir) * CFrame.new(0, 0, -1.5)
+		local bars = {}
+		for _, angle in { math.rad(40), math.rad(-40) } do
+			local bar = Instance.new("Part")
+			bar.Name = "GuideArrow"
+			bar.Size = Vector3.new(1, 0.15, 3.2)
+			bar.CFrame = tip * CFrame.Angles(0, angle, 0) * CFrame.new(0, 0, 1.6)
+			bar.Color = Color3.fromRGB(255, 225, 60)
+			bar.Material = Enum.Material.Neon
+			bar.Anchored, bar.CanCollide, bar.CanQuery, bar.CanTouch, bar.CastShadow = true, false, false, false, false
+			bar.Parent = folder
+			table.insert(bars, bar)
+		end
+		table.insert(arrows, bars)
+	end
+
+	-- The costume glows and carries a bouncing label.
+	local display = pedestal.Parent
+	if display then
+		local glow = Instance.new("Highlight")
+		glow.FillTransparency = 1
+		glow.OutlineColor = Color3.fromRGB(255, 225, 60)
+		glow.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		glow.Adornee = display
+		glow.Parent = folder
+	end
+	local billboard = Instance.new("BillboardGui")
+	billboard.Size = UDim2.fromOffset(260, 70)
+	billboard.StudsOffset = Vector3.new(0, 12, 0)
+	billboard.AlwaysOnTop = true
+	billboard.LightInfluence = 0
+	billboard.MaxDistance = 400
+	billboard.Adornee = pedestal
+	outlined({ Size = UDim2.fromScale(1, 1), Text = "Buy a Costume!", TextColor3 = Color3.fromRGB(255, 225, 60), Parent = billboard }, 3)
+	billboard.Parent = folder
+
+	-- Message at the top of the screen.
+	local message = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Size = UDim2.fromOffset(420, 96),
+		Position = UDim2.new(0.5, 0, 0, 70),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	tutorialMessage = message
+	local scale = new("UIScale", { Parent = message })
+	outlined({ Size = UDim2.new(1, 0, 0, 56), Text = "Buy a Costume!", TextColor3 = Color3.fromRGB(255, 225, 60), Parent = message }, 3)
+	outlined({ Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 60), Text = "Follow the arrows, then press E at the glowing costume", Parent = message }, 2)
+
+	tutorialRender = RunService.RenderStepped:Connect(function()
+		local t = os.clock()
+		for i, bars in arrows do
+			local transparency = 0.1 + 0.6 * (0.5 + 0.5 * math.sin(t * 4 - i * 0.7)) -- a pulse running toward the costume
+			for _, bar in bars do
+				bar.Transparency = transparency
+			end
+		end
+		billboard.StudsOffset = Vector3.new(0, 12 + math.sin(t * 3) * 0.7, 0)
+		scale.Scale = 1 + math.sin(t * 3) * 0.04
+	end)
+end
+
+local function updateTutorial(d: { [string]: any })
+	if Config.NeedsTutorial(d) then
+		startTutorial()
+	else
+		stopTutorial()
+	end
+end
+CollectionService:GetInstanceAddedSignal("TutorialCostume"):Connect(function()
+	if data and Config.NeedsTutorial(data) then
+		startTutorial()
+	end
+end)
+
+---------------------------------------------------------------------------
 -- Server events
 ---------------------------------------------------------------------------
 local function refreshStats(d)
@@ -1229,6 +1357,7 @@ end
 Remotes.DataChanged.OnClientEvent:Connect(function(newData)
 	data = newData
 	refreshStats(newData)
+	updateTutorial(newData)
 	if openMenu then
 		local key = menuKey(newData)
 		if key ~= lastMenuKey then

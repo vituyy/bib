@@ -7,7 +7,7 @@ Config.AutosaveInterval = 120 -- seconds
 Config.MaxPlayers = 5 -- one base per player (set the same number in Game Settings > Places)
 
 Config.StartingData = {
-	Candy = 0,
+	Candy = 0, -- set below to the price of the cheapest costume, so a new player can buy one at once
 	Money = 0,
 	SpeedLevel = 0,
 	SpeedXp = 0,
@@ -21,7 +21,8 @@ Config.StartingData = {
 	Incubators = {}, -- { { Egg = eggId, Pet = petId, EndsAt = unix time } }
 	Pets = {}, -- pet ids equipped: placed on the base, earning Money
 	Storage = {}, -- pet ids owned but not equipped (the Pets menu inventory)
-	BaseLevel = 0, -- base upgrades bought (0 to #Config.BaseUpgrades)
+	PetCapLevel = 0, -- Pet Capacity upgrades bought (0 to #Config.PetCapacityUpgrades)
+	PadLevel = 0, -- Hatching Pad upgrades bought (0 to #Config.HatchPadUpgrades)
 	Discovered = {}, -- pet ids hatched at least once (the Index)
 	IndexClaimed = {}, -- Index milestone counts already claimed (5, 10, 15, 20)
 	RedeemedCodes = {}, -- codes this player has already used (see CODES in ShopService)
@@ -94,19 +95,21 @@ end
 Config.TreadmillBeltSpeed = 10 -- studs/s the belt pushes you back; stop running and you slide off
 Config.TreadmillTick = 0.5 -- seconds between XP payouts
 
--- Bought with Candy. The new one replaces the old one in front of your base.
+-- Treadmills are bought with Money. The new one replaces the old one in front of your base.
+-- A treadmill does not give Speed XP by itself: it multiplies the XP your costume gives per second
+-- (a costume with 10 XP/s on a x2 treadmill earns 20 XP/s while you run on it).
 Config.Treadmills = {
-	{ Name = "Rusty Treadmill", Price = 0, XpPerSecond = 1, Color = Color3.fromRGB(110, 90, 80) },
-	{ Name = "Wooden Treadmill", Price = 50, XpPerSecond = 2, Color = Color3.fromRGB(130, 85, 45) },
-	{ Name = "Iron Treadmill", Price = 250, XpPerSecond = 4, Color = Color3.fromRGB(120, 125, 135) },
-	{ Name = "Pumpkin Treadmill", Price = 1200, XpPerSecond = 8, Color = Color3.fromRGB(255, 120, 0) },
-	{ Name = "Bone Treadmill", Price = 6000, XpPerSecond = 16, Color = Color3.fromRGB(230, 225, 200) },
-	{ Name = "Ghostly Treadmill", Price = 30000, XpPerSecond = 32, Color = Color3.fromRGB(170, 230, 255) },
-	{ Name = "Cursed Treadmill", Price = 150000, XpPerSecond = 64, Color = Color3.fromRGB(140, 40, 200) },
+	{ Name = "Rusty Treadmill", Price = 0, XpMultiplier = 1, Color = Color3.fromRGB(110, 90, 80) },
+	{ Name = "Wooden Treadmill", Price = 500, XpMultiplier = 1.25, Color = Color3.fromRGB(130, 85, 45) },
+	{ Name = "Iron Treadmill", Price = 3000, XpMultiplier = 1.5, Color = Color3.fromRGB(120, 125, 135) },
+	{ Name = "Pumpkin Treadmill", Price = 20000, XpMultiplier = 2, Color = Color3.fromRGB(255, 120, 0) },
+	{ Name = "Bone Treadmill", Price = 120000, XpMultiplier = 2.5, Color = Color3.fromRGB(230, 225, 200) },
+	{ Name = "Ghostly Treadmill", Price = 800000, XpMultiplier = 3, Color = Color3.fromRGB(170, 230, 255) },
+	{ Name = "Cursed Treadmill", Price = 5000000, XpMultiplier = 4, Color = Color3.fromRGB(140, 40, 200) },
 }
 
 -- Trails: bought with Money in the Speed Shop's Trails tab. You keep every trail you buy and equip one.
--- A trail multiplies treadmill Speed XP (a 30 XP/s treadmill with a 1.5x trail gives 45 XP/s),
+-- A trail multiplies your Speed XP (a costume rate of 30 XP/s with a 1.5x trail gives 45 XP/s),
 -- stacks with the rebirth multiplier, and shows as a glowing trail behind you.
 Config.Trails = {
 	{ Name = "Candle Smoke", Price = 1800, Multiplier = 1.25, Color = Color3.fromRGB(200, 190, 180) },
@@ -123,22 +126,27 @@ function Config.TrailMultiplier(trail: number?): number
 end
 
 ---------------------------------------------------------------------------
--- Costumes: bought with Money. Better houses only give Candy to good enough costumes.
--- CandyBonus is the extra Candy per Trick-or-Treat knock, in percent (100 = double Candy).
+-- Costumes: bought with Candy. Better houses only give Candy to good enough costumes (Tier).
+--   CandyMultiplier: multiplies the Candy you get from every Trick-or-Treat knock (the first costume is x2).
+--   XpPerSecond: the Speed XP per second you earn while running (anywhere; a treadmill multiplies it).
+-- "None" is what a brand-new player wears: x1 Candy and the lowest XP rate.
 ---------------------------------------------------------------------------
 Config.Costumes = {
-	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyBonus = 0, Color = Color3.fromRGB(200, 200, 200) },
-	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 150, CandyBonus = 10, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
-	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 900, CandyBonus = 25, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
-	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 5400, CandyBonus = 50, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
-	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 30000, CandyBonus = 75, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
-	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 165000, CandyBonus = 100, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
-	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 900000, CandyBonus = 150, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
-	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 4800000, CandyBonus = 200, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
-	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 21000000, CandyBonus = 300, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
-	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 105000000, CandyBonus = 400, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
-	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 450000000, CandyBonus = 500, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
+	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyMultiplier = 1, XpPerSecond = 0.7, Color = Color3.fromRGB(200, 200, 200) },
+	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 100, CandyMultiplier = 2, XpPerSecond = 1, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
+	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 250, CandyMultiplier = 3, XpPerSecond = 1.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
+	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1000, CandyMultiplier = 4, XpPerSecond = 2.2, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
+	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 4500, CandyMultiplier = 6, XpPerSecond = 3.2, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
+	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 18000, CandyMultiplier = 8, XpPerSecond = 4.5, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
+	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 70000, CandyMultiplier = 12, XpPerSecond = 6.5, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
+	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 280000, CandyMultiplier = 16, XpPerSecond = 9, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
+	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 1000000, CandyMultiplier = 24, XpPerSecond = 12, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
+	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 2500000, CandyMultiplier = 32, XpPerSecond = 16, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
+	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 4000000, CandyMultiplier = 50, XpPerSecond = 22, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
 }
+
+-- A brand-new player starts with exactly enough Candy for the cheapest costume (the tutorial sends them to buy it).
+Config.StartingData.Candy = Config.Costumes[2].Price
 
 function Config.GetCostume(id: string)
 	for _, costume in Config.Costumes do
@@ -147,6 +155,22 @@ function Config.GetCostume(id: string)
 		end
 	end
 	return Config.Costumes[1]
+end
+
+-- True for a player who has never owned a costume: they get the first-time tutorial and spawn at the Costume Shop.
+function Config.NeedsTutorial(data: { [string]: any }): boolean
+	return #data.OwnedCostumes <= 1
+end
+
+-- Speed XP per second for a player's data. The base rate comes from the equipped costume; running on a
+-- treadmill multiplies it by that treadmill's XpMultiplier; rebirths and the equipped trail multiply it too.
+function Config.XpRateFor(data: { [string]: any }, onTreadmill: boolean): number
+	local rate = Config.GetCostume(data.EquippedCostume).XpPerSecond
+	if onTreadmill then
+		local treadmill = Config.Treadmills[data.Treadmill] or Config.Treadmills[1]
+		rate *= treadmill.XpMultiplier
+	end
+	return rate * Config.XpMultiplier(data.Rebirths) * Config.TrailMultiplier(data.Trail)
 end
 
 -- What owners say when your costume is not good enough.
@@ -460,31 +484,51 @@ Config.OwnerReaction = 0.8 -- seconds the owner needs to notice a thief before h
 Config.OwnerReactionPerRarity = 0.2 -- extra seconds per egg rarity step (Common = 1 step, Secret = 7): rarer eggs give a bigger head start
 Config.CaughtStunTime = 1.5 -- seconds the thief is slowed after being caught
 Config.MaxEggsHeld = 12 -- unhatched egg inventory cap
-Config.IncubatorSlots = 3 -- eggs hatching at the same time on a new base
-Config.MaxPetsOnBase = 10 -- pet slots on a new base
+Config.IncubatorSlots = 2 -- hatching pads on a new base
+Config.MaxPetsOnBase = 6 -- pet slots on a new base
 Config.MaxPetsStored = 60 -- inventory cap for pets that are not equipped
 Config.FriendBoostPercent = 10 -- extra pet Money for every friend playing in the same server
 
 ---------------------------------------------------------------------------
--- Base upgrades: bought with Money at the UPGRADE BASE sign. Each one makes the base
--- Config.BaseDepthStep studs deeper, and adds 2 pet slots and 1 hatching pedestal.
+-- Base upgrades: two separate upgrades, both bought with Money at their own sign by the base entrance.
+--   Pet Capacity: how many pets can stand on the base (starts at Config.MaxPetsOnBase).
+--   Hatching Pads: how many eggs can hatch at once (starts at Config.IncubatorSlots).
+-- Each upgrade changes only its own capacity. Pet Capacity also makes the pet courtyard Config.BaseDepthStep
+-- studs deeper; Hatching Pads add pedestals and, from the fifth pad, a second row under a longer roof.
 ---------------------------------------------------------------------------
 Config.BaseDepth = 40 -- depth of a new base (studs, front to back)
 Config.BaseDepthStep = 10
-Config.BaseUpgrades = {
-	{ Price = 24000 },
-	{ Price = 300000 },
-	{ Price = 4500000 },
-	{ Price = 66000000 },
+Config.PetCapacityUpgrades = {
+	{ Price = 2000, Capacity = 9 },
+	{ Price = 30000, Capacity = 12 },
+	{ Price = 500000, Capacity = 15 },
+	{ Price = 8000000, Capacity = 18 },
+}
+Config.HatchPadUpgrades = {
+	{ Price = 5000, Capacity = 3 },
+	{ Price = 60000, Capacity = 4 },
+	{ Price = 700000, Capacity = 5 },
+	{ Price = 8000000, Capacity = 6 },
+	{ Price = 90000000, Capacity = 7 },
 }
 
-function Config.IncubatorsFor(baseLevel: number?): number
-	return Config.IncubatorSlots + (baseLevel or 0)
+-- Eggs that can hatch at once, with this many Hatching Pad upgrades.
+function Config.IncubatorsFor(padLevel: number?): number
+	local upgrade = Config.HatchPadUpgrades[padLevel or 0]
+	return if upgrade then upgrade.Capacity else Config.IncubatorSlots
 end
 
-function Config.PetSlotsFor(baseLevel: number?): number
-	return Config.MaxPetsOnBase + 2 * (baseLevel or 0)
+-- Pets that can stand on the base, with this many Pet Capacity upgrades.
+function Config.PetSlotsFor(petCapLevel: number?): number
+	local upgrade = Config.PetCapacityUpgrades[petCapLevel or 0]
+	return if upgrade then upgrade.Capacity else Config.MaxPetsOnBase
 end
+
+-- The most a base can ever hold (the "+N locked" hint in the Pets menu uses these).
+function Config.MaxPetSlots(): number
+	return Config.PetCapacityUpgrades[#Config.PetCapacityUpgrades].Capacity
+end
+
 Config.IncomeTickSeconds = 1
 Config.PetSellSeconds = 30 -- selling a pet pays this many seconds of its income
 

@@ -1,4 +1,5 @@
--- Builds a player base (fence, hatching stall, pedestals, Upgrade sign) at a given upgrade level.
+-- Builds a player base (fence, hatching stall, pedestals, two Upgrade signs) at a given Pet Capacity level and
+-- Hatching Pad level. Pet Capacity makes the pet courtyard deeper; Hatching Pads add pedestals (and a second row).
 -- Each Plot model in Workspace.Map.Plots has an "Origin" CFrame attribute: the middle of the base's front edge
 -- (the entrance), on the floor, looking out toward the hub centre. The base grows backward (away from the
 -- entrance) by Config.BaseDepthStep per upgrade, so the front, the Upgrade sign and the treadmill never move.
@@ -24,8 +25,37 @@ local PURPLE = Color3.fromRGB(150, 60, 220)
 -- Every generated piece is removed before a rebuild; the player's pets, eggs and treadmill are kept.
 local BUILT = { "Structure", "Base", "PetArea", "Incubators", "PlayerSpawn", "TreadmillSpot", "PetSlots" }
 
-function BaseBuilder.Depth(level: number): number
-	return Config.BaseDepth + Config.BaseDepthStep * level
+function BaseBuilder.Depth(petCapLevel: number): number
+	return Config.BaseDepth + Config.BaseDepthStep * petCapLevel
+end
+
+-- Where the hatching pads stand, measured back from the hatchery's rear wall. Up to 4 pads fit in one row;
+-- from the 5th pad a second row opens up under a longer roof.
+local function padLayout(count: number): ({ Vector2 }, boolean)
+	local back, front = 7, 15.5 -- distance in front of the rear wall
+	local row = function(xs: { number }, d: number)
+		local out = {}
+		for _, x in xs do
+			table.insert(out, Vector2.new(x, d))
+		end
+		return out
+	end
+	local rows = {
+		[2] = { row({ -5, 5 }, back) },
+		[3] = { row({ -10, 0, 10 }, back) },
+		[4] = { row({ -15, -5, 5, 15 }, back) },
+		[5] = { row({ -15, -5, 5, 15 }, back), row({ 0 }, front) },
+		[6] = { row({ -10, 0, 10 }, back), row({ -10, 0, 10 }, front) },
+		[7] = { row({ -15, -5, 5, 15 }, back), row({ -10, 0, 10 }, front) },
+	}
+	local chosen = rows[math.clamp(count, 2, 7)]
+	local spots = {}
+	for _, r in chosen do
+		for _, v in r do
+			table.insert(spots, v)
+		end
+	end
+	return spots, count >= 5
 end
 
 local function part(props: { [string]: any }): BasePart
@@ -118,15 +148,19 @@ local function fmt(n: number): string
 	return (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
 end
 
-function BaseBuilder.UpgradeText(level: number): string
-	local nextUpgrade = Config.BaseUpgrades[level + 1]
+-- Sign text for the next upgrade of a kind ("Pets" or "Pads") at the given level: "6 > 9  |  $2,000" or "MAX 18".
+function BaseBuilder.UpgradeText(kind: string, level: number): string
+	local isPets = kind == "Pets"
+	local upgrades = if isPets then Config.PetCapacityUpgrades else Config.HatchPadUpgrades
+	local now = if isPets then Config.PetSlotsFor(level) else Config.IncubatorsFor(level)
+	local nextUpgrade = upgrades[level + 1]
 	if not nextUpgrade then
-		return string.format("Level %d  |  MAX", level + 1)
+		return string.format("MAX  %d", now)
 	end
-	return string.format("Level %d  >  $%s", level + 1, fmt(nextUpgrade.Price))
+	return string.format("%d > %d  |  $%s", now, nextUpgrade.Capacity, fmt(nextUpgrade.Price))
 end
 
-function BaseBuilder.Build(plot: Model, level: number)
+function BaseBuilder.Build(plot: Model, petCapLevel: number, padLevel: number)
 	for _, name in BUILT do
 		local old = plot:FindFirstChild(name)
 		while old do
@@ -135,8 +169,11 @@ function BaseBuilder.Build(plot: Model, level: number)
 		end
 	end
 	local origin: CFrame = plot:GetAttribute("Origin")
-	local D = BaseBuilder.Depth(level)
-	plot:SetAttribute("Level", level)
+	local D = BaseBuilder.Depth(petCapLevel)
+	local padCount = Config.IncubatorsFor(padLevel)
+	local padSpots, twoRows = padLayout(padCount)
+	plot:SetAttribute("PetCapLevel", petCapLevel)
+	plot:SetAttribute("PadLevel", padLevel)
 	-- Local frame: +X across the base, +Z backward into the base (away from the entrance).
 	local function at(x: number, y: number, z: number): CFrame
 		return origin * CFrame.new(x, y, z)
@@ -165,7 +202,8 @@ function BaseBuilder.Build(plot: Model, level: number)
 	ownerLabel.Parent = ownerSign
 	ownerSign.Parent = base
 	-- Pets roam the front part of the base, clear of the hatching stall.
-	local roamDepth = math.max(D - (if level == 0 then 18 else 27), 12)
+	local pavilionDepth = if twoRows then 21 else 12 -- the hatchery grows a second row with the 5th pad
+	local roamDepth = math.max(D - (pavilionDepth + 6), 12)
 	deco({ Name = "PetArea", Size = Vector3.new(W - 16, 1, roamDepth), CFrame = at(0, -0.2, 3 + roamDepth / 2), Transparency = 1, Parent = plot })
 
 	-- Studded courtyard and inset flagstone path grow from the fixed front edge.
@@ -179,7 +217,6 @@ function BaseBuilder.Build(plot: Model, level: number)
 	local trim = Color3.fromRGB(83, 54, 42)
 	local gold = Color3.fromRGB(193, 121, 47)
 	local roofColors = { Color3.fromRGB(73, 42, 101), Color3.fromRGB(88, 49, 118), Color3.fromRGB(64, 36, 86) }
-	local pavilionDepth = if level == 0 then 12 else 21
 	local stallFront = D - pavilionDepth
 	local stallZ = D - 2.5
 	-- Keep the floor flush enough for pets and character movement.
@@ -408,7 +445,7 @@ function BaseBuilder.Build(plot: Model, level: number)
 	local board = box("HatchSign", 0, 11.2, stallFront - 1.9, 18, 3.25, 0.6, dark, false)
 	surfaceText(board, {
 		{ Name = "Title", Text = "HATCH EGGS", Color = Color3.fromRGB(255, 203, 97), Height = 0.61 },
-		{ Name = "Capacity", Text = tostring(Config.IncubatorsFor(level)) .. " HATCHING PADS", Color = Color3.fromRGB(212, 193, 231), Height = 0.25 },
+		{ Name = "Capacity", Text = tostring(padCount) .. " HATCHING PADS", Color = Color3.fromRGB(212, 193, 231), Height = 0.25 },
 	})
 	for _, y in { 9.5, 12.9 } do box("SignFrame", 0, y, stallFront - 2.05, 18.8, 0.25, 0.3, gold, false) end
 	for _, x in { -9.25, 9.25 } do box("SignFrame", x, 11.2, stallFront - 2.05, 0.25, 3.6, 0.3, gold, false) end
@@ -440,13 +477,8 @@ function BaseBuilder.Build(plot: Model, level: number)
 	local pads = Instance.new("Folder")
 	pads.Name = "Incubators"
 	pads.Parent = plot
-	local spots = {
-		Vector2.new(-10, D - 7), Vector2.new(0, D - 7), Vector2.new(10, D - 7),
-		Vector2.new(-13.5, D - 15.5), Vector2.new(13.5, D - 15.5),
-		Vector2.new(-4.5, D - 15.5), Vector2.new(4.5, D - 15.5),
-	}
-	for n = 1, Config.IncubatorsFor(level) do
-		local s = assert(spots[n], "Missing hatching pad layout")
+	for n, rel in padSpots do
+		local s = Vector2.new(rel.X, D - rel.Y) -- rel.Y is the distance in front of the rear wall
 		local cylinderRotation = CFrame.Angles(0, 0, math.pi / 2)
 		deco({ Name = "PedestalFoot", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.45, 6.5, 6.5),
 			CFrame = at(s.X, 1.05, s.Y) * cylinderRotation, Color = dark, Parent = structure })
@@ -465,35 +497,39 @@ function BaseBuilder.Build(plot: Model, level: number)
 		local plaque = box("PadPlaque", s.X, 1.13, s.Y - 2.7, 1.8, 0.8, 0.16, dark, false)
 		surfaceText(plaque, { { Name = "Number", Text = string.format("%02d", n), Color = Color3.fromRGB(255, 212, 120), Height = 0.9 } })
 	end
-	-- UPGRADE BASE sign beside the entrance (the prompt is wired by PlotService)
-	local signX, signZ = -GAP / 2 - 9, -4
-	for _, dx in { -4.2, 4.2 } do
-		part({ Name = "SignPost", Size = Vector3.new(0.9, 9, 0.9), CFrame = at(signX + dx, 4.5, signZ + 0.4), Color = WOOD, Material = Enum.Material.Plastic, Parent = structure })
+	-- Two upgrade signs side by side on the left of the entrance, away from the treadmill on the right (the
+	-- prompts are wired by PlotService): PET CAPACITY nearest the entrance, HATCHING PADS beyond it. Each one upgrades only its own capacity.
+	local function upgradeSign(kind: string, level: number, signX: number, title: string, icons: string, color: Color3)
+		local signZ = -4
+		for _, dx in { -4.2, 4.2 } do
+			part({ Name = "SignPost", Size = Vector3.new(0.9, 9, 0.9), CFrame = at(signX + dx, 4.5, signZ + 0.4), Color = WOOD, Material = Enum.Material.Plastic, Parent = structure })
+		end
+		local board = part({ Name = "UpgradeBoard" .. kind, Size = Vector3.new(11, 6, 0.6), CFrame = at(signX, 6.5, signZ), Color = PLANK, Material = Enum.Material.Plastic, Parent = structure })
+		for _, y in { 3.4, 9.6 } do box("UpgradeFrame", signX, y, signZ - 0.38, 11.8, 0.3, 0.4, gold, false) end
+		for _, dx in { -5.75, 5.75 } do box("UpgradeFrame", signX + dx, 6.5, signZ - 0.38, 0.3, 6.5, 0.4, dark, false) end
+		board:SetAttribute("UpgradeKind", kind)
+		surfaceText(board, {
+			{ Name = "Title", Text = title, Color = color, Height = 0.34 },
+			{ Name = "Icons", Text = icons, Color = Color3.fromRGB(120, 255, 120), Height = 0.3 },
+			{ Name = "Info", Text = BaseBuilder.UpgradeText(kind, level), Color = Color3.new(1, 1, 1), Height = 0.26 },
+		})
+		local arrow = deco({ Name = "Arrow", ClassName = "WedgePart", Size = Vector3.new(0.4, 1.6, 2.4), CFrame = at(signX + 4.6, 10.4, signZ - 0.2) * CFrame.Angles(0, math.pi / 2, 0), Color = Color3.fromRGB(80, 230, 90), Material = Enum.Material.Neon, Parent = structure })
+		local _ = arrow
+		local upgrades = if kind == "Pets" then Config.PetCapacityUpgrades else Config.HatchPadUpgrades
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "UpgradePrompt"
+		prompt.ActionText = if kind == "Pets" then "Upgrade Pet Capacity" else "Add Hatching Pad"
+		prompt.ObjectText = BaseBuilder.UpgradeText(kind, level)
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.HoldDuration = 0.4
+		prompt.MaxActivationDistance = 12
+		prompt.RequiresLineOfSight = false
+		prompt.Enabled = upgrades[level + 1] ~= nil
+		prompt:SetAttribute("UpgradeKind", kind)
+		prompt.Parent = board
 	end
-	local upgradeBoard = part({ Name = "UpgradeBoard", Size = Vector3.new(11, 6, 0.6), CFrame = at(signX, 6.5, signZ), Color = PLANK, Material = Enum.Material.Plastic, Parent = structure })
-
-	for _, y in { 3.4, 9.6 } do box("UpgradeFrame", signX, y, signZ - 0.38, 11.8, 0.3, 0.4, gold, false) end
-	for _, dx in { -5.75, 5.75 } do box("UpgradeFrame", signX + dx, 6.5, signZ - 0.38, 0.3, 6.5, 0.4, dark, false) end
-	upgradeBoard:SetAttribute("UpgradeBase", true)
-	surfaceText(upgradeBoard, {
-		{ Name = "Title", Text = "UPGRADE BASE", Color = Color3.fromRGB(255, 220, 90), Height = 0.34 },
-		{ Name = "Icons", Text = "\u{1FA99} \u{1F528} \u{2B06}\u{FE0F}", Color = Color3.fromRGB(120, 255, 120), Height = 0.3 },
-		{ Name = "Info", Text = BaseBuilder.UpgradeText(level), Color = Color3.new(1, 1, 1), Height = 0.26 },
-	})
-	local coin = deco({ Name = "Coin", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 2.4, 2.4), CFrame = at(signX - 4.6, 9.8, signZ - 0.2) * CFrame.Angles(0, math.pi / 2, 0), Color = Color3.fromRGB(255, 200, 40), Material = Enum.Material.Metal, Parent = structure })
-	local arrow = deco({ Name = "Arrow", ClassName = "WedgePart", Size = Vector3.new(0.4, 1.6, 2.4), CFrame = at(signX + 4.6, 10.4, signZ - 0.2) * CFrame.Angles(0, math.pi / 2, 0), Color = Color3.fromRGB(80, 230, 90), Material = Enum.Material.Neon, Parent = structure })
-	local _ = coin and arrow
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "UpgradePrompt"
-	prompt.ActionText = "Upgrade Base"
-	prompt.ObjectText = BaseBuilder.UpgradeText(level)
-	prompt.KeyboardKeyCode = Enum.KeyCode.E
-	prompt.HoldDuration = 0.4
-	prompt.MaxActivationDistance = 12
-	prompt.RequiresLineOfSight = false
-	prompt.Enabled = Config.BaseUpgrades[level + 1] ~= nil
-	prompt:SetAttribute("UpgradeBase", true)
-	prompt.Parent = upgradeBoard
+	upgradeSign("Pets", petCapLevel, -GAP / 2 - 9, "PET CAPACITY", "\u{1F43E} \u{2B06}\u{FE0F}", Color3.fromRGB(255, 160, 220))
+	upgradeSign("Pads", padLevel, -GAP / 2 - 22, "HATCHING PADS", "\u{1F95A} \u{2B06}\u{FE0F}", Color3.fromRGB(255, 220, 90))
 
 	part({ Name = "PlayerSpawn", Size = Vector3.new(1, 1, 1), CFrame = at(0, 4, 7), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false, Parent = plot })
 	-- Treadmill just outside the base, right of the entrance, running toward the hub centre.

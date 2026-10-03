@@ -1,6 +1,7 @@
 -- Handles every purchase and menu action. The server re-checks all costs; the client only asks.
 -- Also wires the costume shop mannequins (walk up and buy) and the speed shop counter (opens the menu).
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -9,6 +10,12 @@ local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local DataService = require(script.Parent.DataService)
 
 local ShopService = {}
+
+-- Where a brand-new player spawns: on the ground in front of the Costume Shop, looking at the cheapest costume.
+local tutorialSpawn: CFrame? = nil
+function ShopService.GetTutorialSpawn(): CFrame?
+	return tutorialSpawn
+end
 
 local lastRequest: { [Player]: number } = {}
 
@@ -40,11 +47,11 @@ function actions.BuyTreadmill(player: Player, data, tier: any)
 	if tier <= data.Treadmill then
 		return false, "You already have a better treadmill"
 	end
-	if data.Candy < info.Price then
-		return false, "You need " .. fmt(info.Price) .. " Candy"
+	if data.Money < info.Price then
+		return false, "You need $" .. fmt(info.Price)
 	end
 	DataService.Update(player, function(d)
-		d.Candy -= info.Price
+		d.Money -= info.Price
 		d.Treadmill = tier
 	end)
 	return true, info.Name .. " is now in front of your base!"
@@ -88,11 +95,11 @@ function actions.BuyCostume(player: Player, data, costumeId: any)
 		end)
 		return true, costume.Name .. " equipped"
 	end
-	if data.Money < costume.Price then
-		return false, "You need $" .. fmt(costume.Price)
+	if data.Candy < costume.Price then
+		return false, "You need " .. fmt(costume.Price) .. " Candy"
 	end
 	DataService.Update(player, function(d)
-		d.Money -= costume.Price
+		d.Candy -= costume.Price
 		table.insert(d.OwnedCostumes, costumeId)
 		d.EquippedCostume = costumeId
 	end)
@@ -153,7 +160,7 @@ function actions.Hatch(player: Player, data, eggIndex: any)
 	if not egg then
 		return false, "That egg is gone"
 	end
-	if #data.Incubators >= Config.IncubatorsFor(data.BaseLevel) then
+	if #data.Incubators >= Config.IncubatorsFor(data.PadLevel) then
 		return false, "All your incubators are busy"
 	end
 	DataService.Update(player, function(d)
@@ -195,7 +202,7 @@ function actions.EquipPet(player: Player, data, petId: any)
 	if type(petId) ~= "string" or not table.find(data.Storage, petId) then
 		return false, "That pet is gone"
 	end
-	if #data.Pets >= Config.PetSlotsFor(data.BaseLevel) then
+	if #data.Pets >= Config.PetSlotsFor(data.PetCapLevel) then
 		return false, "Your base is full. Unequip a pet or upgrade your base."
 	end
 	DataService.Update(player, function(d)
@@ -226,7 +233,7 @@ function actions.EquipBest(player: Player, data)
 	table.sort(all, function(a, b)
 		return Config.Pets[a].MoneyPerSecond > Config.Pets[b].MoneyPerSecond
 	end)
-	local slots = Config.PetSlotsFor(data.BaseLevel)
+	local slots = Config.PetSlotsFor(data.PetCapLevel)
 	local best = { table.unpack(all, 1, math.min(slots, #all)) }
 	local rest = { table.unpack(all, slots + 1, #all) }
 	DataService.Update(player, function(d)
@@ -238,7 +245,7 @@ end
 
 -- Fills every free incubator with the rarest eggs in the bag.
 function actions.HatchBest(player: Player, data)
-	local free = Config.IncubatorsFor(data.BaseLevel) - #data.Incubators
+	local free = Config.IncubatorsFor(data.PadLevel) - #data.Incubators
 	if free <= 0 then
 		return false, "All your incubators are busy"
 	end
@@ -347,21 +354,26 @@ local function wireCostumeShop(map: Instance)
 	if not mannequins then
 		return
 	end
+	local cheapestId = Config.Costumes[2].Id -- the first costume after "None"
+	local cheapestPedestal: BasePart? = nil
 	for _, display in mannequins:GetChildren() do
 		local costumeId = display:GetAttribute("Costume")
 		local costume = costumeId and Config.GetCostume(costumeId)
 		local pedestal = display:FindFirstChild("Pedestal")
 		if costume and costume.Id == costumeId and pedestal then
-			-- Name, Candy bonus and price; the client swaps the price for Owned / Wearing.
+			-- Name, Candy multiplier and XP rate, and price in Candy; the client swaps the price for Owned / Wearing.
 			local sign = pedestal:FindFirstChild("InfoSign")
 			if sign then
 				(sign:FindFirstChild("NameLabel", true) :: TextLabel).Text = costume.Name;
-				(sign:FindFirstChild("BonusLabel", true) :: TextLabel).Text = string.format("+%d%% Candy", costume.CandyBonus or 0);
-				(sign:FindFirstChild("PriceLabel", true) :: TextLabel).Text = "$" .. fmt(costume.Price)
+				(sign:FindFirstChild("BonusLabel", true) :: TextLabel).Text = string.format("x%s Candy  |  %s XP/s", tostring(costume.CandyMultiplier), tostring(costume.XpPerSecond));
+				(sign:FindFirstChild("PriceLabel", true) :: TextLabel).Text = fmt(costume.Price) .. " Candy"
+			end
+			if costume.Id == cheapestId and pedestal:IsA("BasePart") then
+				cheapestPedestal = pedestal
 			end
 			local prompt = Instance.new("ProximityPrompt")
 			prompt.ActionText = "Buy / Wear"
-			prompt.ObjectText = string.format("%s ($%s)", costume.Name, fmt(costume.Price))
+			prompt.ObjectText = string.format("%s (%s Candy)", costume.Name, fmt(costume.Price))
 			prompt.MaxActivationDistance = 9
 			prompt.RequiresLineOfSight = false
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
@@ -376,6 +388,25 @@ local function wireCostumeShop(map: Instance)
 				Remotes.Notify:FireClient(player, message, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
 			end)
 		end
+	end
+
+	-- Tutorial: stand in front of the shop (on the side facing the hub's lobby spawn), look at the cheapest costume.
+	-- The pedestal is tagged "TutorialCostume" and carries the ground point where the guide arrows start, so the
+	-- client can draw the arrows for first-time players.
+	if cheapestPedestal and shop and shop:IsA("Model") then
+		local pedestal = cheapestPedestal :: BasePart
+		local lobby = workspace:FindFirstChild("LobbySpawn", true)
+		local toward = if lobby and lobby:IsA("BasePart") then lobby.Position else Vector3.zero
+		local center = shop:GetBoundingBox().Position
+		local out = Vector3.new(toward.X - center.X, 0, toward.Z - center.Z)
+		out = if out.Magnitude > 1 then out.Unit else Vector3.new(-1, 0, 0)
+		local want = pedestal.Position + out * 18
+		local hit = workspace:Raycast(Vector3.new(want.X, pedestal.Position.Y + 40, want.Z), Vector3.new(0, -120, 0))
+		local ground = if hit then hit.Position else Vector3.new(want.X, 0, want.Z)
+		local standAt = ground + Vector3.new(0, 3.5, 0)
+		tutorialSpawn = CFrame.lookAt(standAt, Vector3.new(pedestal.Position.X, standAt.Y, pedestal.Position.Z))
+		pedestal:SetAttribute("TutorialSpawn", ground)
+		CollectionService:AddTag(pedestal, "TutorialCostume")
 	end
 end
 

@@ -1107,7 +1107,7 @@ local function onKnock(state: HouseState, player: Player)
 	end
 	state.KnockCooldowns[player] = now + Config.TrickOrTreatCooldown
 
-	local candy = math.floor(state.Info.CandyPerKnock * (1 + (costume.CandyBonus or 0) / 100))
+	local candy = math.floor(state.Info.CandyPerKnock * costume.CandyMultiplier)
 	DataService.Update(player, function(d)
 		d.Candy += candy
 	end)

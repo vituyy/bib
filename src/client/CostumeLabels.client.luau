@@ -35,7 +35,7 @@ local function refresh()
 			elseif owned[id] then
 				price.Text, price.TextColor3 = "OWNED - press E to wear", LAVENDER
 			else
-				price.Text, price.TextColor3 = "$" .. fmt(costume.Price), GOLD
+				price.Text, price.TextColor3 = fmt(costume.Price) .. " Candy", GOLD
 			end
 		end
 	end

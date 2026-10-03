@@ -84,6 +84,15 @@ end
 
 -- Repair a loaded save so one bad value (NaN, a negative, a removed pet or egg) can not break the game.
 local function sanitize(data: { [string]: any })
+	-- Saves from before the two separate base upgrades had one BaseLevel (10 + 2 pets and 3 + 1 pads per level).
+	-- Turn it into the closest Pet Capacity and Hatching Pad levels that never take anything away.
+	if isNumber(data.BaseLevel) then
+		local old = math.clamp(math.floor(data.BaseLevel), 0, 4)
+		data.PetCapLevel = math.max(tonumber(data.PetCapLevel) or 0, math.ceil((4 + 2 * old) / 3))
+		data.PadLevel = math.max(tonumber(data.PadLevel) or 0, 1 + old)
+	end
+	data.BaseLevel = nil
+
 	cleanNumber(data, "Candy", 0)
 	cleanNumber(data, "Money", 0)
 	cleanNumber(data, "SpeedXp", 0)
@@ -91,7 +100,8 @@ local function sanitize(data: { [string]: any })
 	cleanNumber(data, "Rebirths", 0, Config.MaxRebirths, true)
 	cleanNumber(data, "Treadmill", 1, #Config.Treadmills, true)
 	cleanNumber(data, "Trail", 0, #Config.Trails, true)
-	cleanNumber(data, "BaseLevel", 0, #Config.BaseUpgrades, true)
+	cleanNumber(data, "PetCapLevel", 0, #Config.PetCapacityUpgrades, true)
+	cleanNumber(data, "PadLevel", 0, #Config.HatchPadUpgrades, true)
 	cleanNumber(data, "CustomSpeed", 0, Config.WalkSpeedFor(Config.MaxSpeedLevel))
 
 	data.OwnedTrails = cleanList(data.OwnedTrails, function(i)
