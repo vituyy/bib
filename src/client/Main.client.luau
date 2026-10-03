@@ -1550,6 +1550,26 @@ local function refreshBanner(chasedBy: string?)
 	end
 end
 
+-- Kicked by an owner: the server sends the launch velocity. Our own client owns the character's physics, so
+-- the launch happens here; the character flops (PlatformStand) while it flies and gets up after it lands.
+Remotes.Kick.OnClientEvent:Connect(function(velocity: Vector3, seconds: number)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not (root and humanoid and humanoid.Health > 0) then
+		return
+	end
+	humanoid.PlatformStand = true
+	root.AssemblyLinearVelocity = velocity
+	root.AssemblyAngularVelocity = Vector3.new(velocity.Z, 0, -velocity.X).Unit * 6
+	task.delay(seconds, function()
+		if humanoid.Parent and humanoid.Health > 0 then
+			humanoid.PlatformStand = false
+			humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+	end)
+end)
+
 Remotes.ChaseState.OnClientEvent:Connect(function(isChased: boolean, ownerName: string?)
 	refreshBanner(if isChased then ownerName else nil)
 end)

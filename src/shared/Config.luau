@@ -489,6 +489,9 @@ Config.CatchDistance = 5 -- studs between owner and thief that counts as caught
 Config.OwnerReaction = 0.8 -- seconds the owner needs to notice a thief before he starts running
 Config.OwnerReactionPerRarity = 0.2 -- extra seconds per egg rarity step (Common = 1 step, Secret = 7): rarer eggs give a bigger head start
 Config.CaughtStunTime = 1.5 -- seconds the thief is slowed after being caught
+Config.KickDistance = 100 -- studs a caught thief is kicked away from the owner
+Config.KickAngle = 35 -- degrees above the ground the kick launches the thief (a higher angle flies higher and lasts longer)
+Config.KickSounds = { "rbxasset://sounds/Kickhit.wav", "rbxasset://sounds/uuhhh.mp3" } -- the thud, then the grunt; swap in your own uploaded sound ids here
 Config.MaxEggsHeld = 12 -- unhatched egg inventory cap
 Config.IncubatorSlots = 2 -- hatching pads on a new base
 Config.MaxPetsOnBase = 6 -- pet slots on a new base

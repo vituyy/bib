@@ -339,6 +339,40 @@ local function clearCarry(player: Player)
 	end
 end
 
+-- The owner kicks a caught thief away from him: a thud, a grunt, and a long flight in the direction of the kick.
+-- The thief's own client launches the character (it owns its physics) and the character flops until it lands.
+local function kickThief(state: HouseState, player: Player)
+	local thiefRoot = rootOf(player.Character) :: BasePart?
+	local ownerRoot = rootOf(state.Owner)
+	if not thiefRoot then
+		return
+	end
+	local away = if ownerRoot then Vector3.new(thiefRoot.Position.X - ownerRoot.Position.X, 0, thiefRoot.Position.Z - ownerRoot.Position.Z) else Vector3.zero
+	if away.Magnitude < 0.5 then
+		away = Vector3.new(thiefRoot.CFrame.LookVector.X, 0, thiefRoot.CFrame.LookVector.Z)
+	end
+	away = away.Unit
+	-- Ballistic launch: range = v^2 * sin(2a) / g, so this lands about KickDistance studs away on flat ground.
+	local angle = math.rad(Config.KickAngle)
+	local gravity = workspace.Gravity
+	local speed = math.sqrt(Config.KickDistance * gravity / math.sin(2 * angle))
+	local velocity = away * (speed * math.cos(angle)) + Vector3.new(0, speed * math.sin(angle), 0)
+	local flight = 2 * speed * math.sin(angle) / gravity
+	CharacterService.Grace(player, flight + 2)
+	Remotes.Kick:FireClient(player, velocity, flight + 0.3)
+	for index, id in Config.KickSounds do
+		local sound = Instance.new("Sound")
+		sound.SoundId = id
+		sound.Volume = if index == 1 then 1.5 else 1
+		sound.RollOffMaxDistance = 150
+		sound.Parent = thiefRoot
+		task.delay((index - 1) * 0.12, function()
+			sound:Play()
+		end)
+		Debris:AddItem(sound, 4)
+	end
+end
+
 -- outcome: "escaped" (egg delivered), "caught", "sunrise", or "lost" (thief died or left)
 local function finishTheft(player: Player, outcome: string)
 	local carry = carrying[player]
@@ -364,8 +398,9 @@ local function finishTheft(player: Player, outcome: string)
 		end)
 		notify(player, "You escaped with a " .. eggName .. "! Put it in an incubator from the Eggs menu.", GREEN)
 	elseif outcome == "caught" then
-		notify(player, state.OwnerName .. " caught you and put the " .. eggName .. " back in its nest!", RED)
+		notify(player, state.OwnerName .. " caught you and KICKED you away! The " .. eggName .. " went back in its nest.", RED)
 		CharacterService.Stun(player, Config.CaughtStunTime)
+		kickThief(state, player)
 	elseif outcome == "sunrise" then
 		notify(player, "The sun came up and your " .. egg.Name .. " crumbled to dust!", ORANGE)
 	end

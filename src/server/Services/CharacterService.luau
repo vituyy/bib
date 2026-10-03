@@ -10,6 +10,7 @@ local DataService = require(script.Parent.DataService)
 local CharacterService = {}
 
 local stunnedUntil: { [Player]: number } = {}
+local graceUntil: { [Player]: number } = {} -- a kick or other server launch moves a player faster than they can run
 
 -- Hide the parts a costume covers: "Head" hides the head, face and accessories, "Body" hides everything.
 -- "None" shows everything again.
@@ -131,6 +132,11 @@ function CharacterService.Refresh(player: Player)
 	cape.Material = if costume.Id == "Skeleton" then Enum.Material.Neon else Enum.Material.Fabric
 end
 
+-- The movement check ignores this player for `seconds` (the server launched them).
+function CharacterService.Grace(player: Player, seconds: number)
+	graceUntil[player] = os.clock() + seconds
+end
+
 function CharacterService.Stun(player: Player, seconds: number)
 	stunnedUntil[player] = os.clock() + seconds
 	CharacterService.Refresh(player)
@@ -162,6 +168,10 @@ local function watchMovement()
 		local record = lastFine[player]
 		if not record or record.Character ~= character then
 			lastFine[player] = { Character = character, Last = root.Position, Good = root.Position, At = now, Strikes = 0 }
+			continue
+		end
+		if (graceUntil[player] or 0) > now then
+			record.Last, record.At, record.Strikes = root.Position, now, 0
 			continue
 		end
 		-- Distance since the previous check, against what this player's speed allows (plus room for slopes, lag
@@ -218,6 +228,7 @@ function CharacterService.Start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		stunnedUntil[player] = nil
+		graceUntil[player] = nil
 		lastFine[player] = nil
 	end)
 	DataService.OnChanged(function(player)
