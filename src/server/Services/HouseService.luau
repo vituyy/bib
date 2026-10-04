@@ -339,6 +339,23 @@ local function clearCarry(player: Player)
 	end
 end
 
+-- A positional sound (everyone near `parent` hears it) from Config.Audio.Sfx; nothing if it has no id.
+local function playSfx(name: string, parent: Instance, delay: number?)
+	local id = Config.SfxId(name)
+	if not id then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = id
+	sound.Volume = Config.Audio.Sfx[name].Volume
+	sound.RollOffMaxDistance = 150
+	sound.Parent = parent
+	task.delay(delay or 0, function()
+		sound:Play()
+	end)
+	Debris:AddItem(sound, 6)
+end
+
 -- The owner kicks a caught thief away from him: a thud, a grunt, and a long flight in the direction of the kick.
 -- The thief's own client launches the character (it owns its physics) and the character flops until it lands.
 local function kickThief(state: HouseState, player: Player)
@@ -360,17 +377,8 @@ local function kickThief(state: HouseState, player: Player)
 	local flight = 2 * speed * math.sin(angle) / gravity
 	CharacterService.Grace(player, flight + 2)
 	Remotes.Kick:FireClient(player, velocity, flight + 0.3)
-	for index, id in Config.KickSounds do
-		local sound = Instance.new("Sound")
-		sound.SoundId = id
-		sound.Volume = if index == 1 then 1.5 else 1
-		sound.RollOffMaxDistance = 150
-		sound.Parent = thiefRoot
-		task.delay((index - 1) * 0.12, function()
-			sound:Play()
-		end)
-		Debris:AddItem(sound, 4)
-	end
+	playSfx("Kick", thiefRoot, 0)
+	playSfx("Grunt", thiefRoot, 0.12)
 end
 
 -- outcome: "escaped" (egg delivered), "caught", "sunrise", or "lost" (thief died or left)
@@ -1083,6 +1091,10 @@ local function playDoorScene(state: HouseState, player: Player, happy: boolean, 
 
 	local opened = false
 	local ok, err = pcall(function()
+		-- Three knocks, then the door creaks open.
+		playSfx("Knock", door)
+		task.wait(0.65)
+		playSfx("DoorCreak", door)
 		task.spawn(function()
 			pcall(swingDoor, setup, 0, 1, 0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 			opened = true

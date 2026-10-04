@@ -189,6 +189,87 @@ end
 local toggleMenu: (name: string, forceOpen: boolean?) -> ()
 
 ---------------------------------------------------------------------------
+-- Audio: a chill Halloween theme that is always playing, an intense track that takes over while an owner chases
+-- you, and sound effects for the UI and the big moments. Ids and volumes live in Config.Audio; a sound
+-- without an id is simply skipped. The player can switch music and sounds off in the Store menu.
+---------------------------------------------------------------------------
+local SoundService = game:GetService("SoundService")
+local Debris = game:GetService("Debris")
+local ContentProvider = game:GetService("ContentProvider")
+
+local audioOn = { Music = true, Sfx = true }
+local musicGroup = new("SoundGroup", { Name = "Music", Parent = SoundService })
+local sfxGroup = new("SoundGroup", { Name = "Sfx", Parent = SoundService })
+local tracks: { [string]: { Sound: Sound, Volume: number } } = {}
+local currentMusic = ""
+
+local function applyAudioSettings()
+	musicGroup.Volume = if audioOn.Music then 1 else 0
+	sfxGroup.Volume = if audioOn.Sfx then 1 else 0
+end
+
+for name, info in Config.Audio.Music do
+	if info.Id ~= "" then
+		local id = if string.match(info.Id, "^%d+$") then "rbxassetid://" .. info.Id else info.Id
+		tracks[name] = { Sound = new("Sound", { Name = name, SoundId = id, Looped = true, Volume = 0, SoundGroup = musicGroup, Parent = SoundService }), Volume = info.Volume }
+	end
+end
+
+-- Fade to a track; the others fade out but keep their place (the chill theme resumes where it was).
+local function setMusic(name: string, fade: number)
+	if currentMusic == name then
+		return
+	end
+	currentMusic = name
+	for trackName, track in tracks do
+		local on = trackName == name
+		if on then
+			if name == "Chase" then
+				track.Sound.TimePosition = 0 -- the chase always starts from its opening beat
+			end
+			if not track.Sound.IsPlaying then
+				track.Sound:Play()
+			end
+		end
+		TweenService:Create(track.Sound, TweenInfo.new(fade), { Volume = if on then track.Volume else 0 }):Play()
+	end
+end
+
+-- One-shot effect from Config.Audio.Sfx; `speed` varies the pitch a little so repeated clicks do not sound robotic.
+local lastPlayed: { [string]: number } = {}
+local function sfx(name: string, speed: number?)
+	if not audioOn.Sfx or os.clock() - (lastPlayed[name] or 0) < 0.08 then -- the same sound twice at once is just louder
+		return
+	end
+	lastPlayed[name] = os.clock()
+	local id = Config.SfxId(name)
+	if not id then
+		return
+	end
+	local sound = new("Sound", { SoundId = id, Volume = Config.Audio.Sfx[name].Volume, PlaybackSpeed = speed or 1, SoundGroup = sfxGroup, Parent = SoundService })
+	sound:Play()
+	Debris:AddItem(sound, 6)
+end
+
+task.spawn(function() -- load everything before it is needed, so the first click is not late
+	local list = {}
+	for _, track in tracks do
+		table.insert(list, track.Sound)
+	end
+	for name in Config.Audio.Sfx do
+		local id = Config.SfxId(name)
+		if id then
+			table.insert(list, new("Sound", { SoundId = id }))
+		end
+	end
+	pcall(function()
+		ContentProvider:PreloadAsync(list)
+	end)
+end)
+applyAudioSettings()
+setMusic("Chill", 3)
+
+---------------------------------------------------------------------------
 -- HUD
 ---------------------------------------------------------------------------
 local gui = new("ScreenGui", { Name = "SpookyHUD", ResetOnSpawn = false, IgnoreGuiInset = false, Parent = player:WaitForChild("PlayerGui") })
@@ -614,6 +695,7 @@ local function request(action: string, arg: any?)
 		return
 	end
 	toast(message or "", if success then GREEN else RED)
+	sfx(if success then "Buy" else "Error")
 end
 
 -- Section heading: coloured outlined text straight on the panel.
@@ -1082,6 +1164,25 @@ function menus.Store(_d)
 		request("RedeemCode", code)
 	end)
 	header(2, "Coming soon!")
+	header(100, "Sound")
+	for index, setting in { { Key = "Music", Label = "Music" }, { Key = "Sfx", Label = "Sound effects" } } do
+		local holder = box({ Size = UDim2.new(1, -8, 0, 52), LayoutOrder = 100 + index, Parent = list }, PAINT.Cyan)
+		outlined({ Size = UDim2.new(1, -156, 1, -16), Position = UDim2.fromOffset(14, 8), Text = setting.Label, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = holder }, 2)
+		local toggle
+		toggle = chunkyButton({ Size = UDim2.new(0, 132, 1, -12), Position = UDim2.new(1, -138, 0, 6), Text = if audioOn[setting.Key] then "ON" else "OFF", ZIndex = 2, Parent = holder }, if audioOn[setting.Key] then PAINT.Green else PAINT.Grey, function()
+			audioOn[setting.Key] = not audioOn[setting.Key]
+			applyAudioSettings()
+			local paint = if audioOn[setting.Key] then PAINT.Green else PAINT.Grey
+			local label = toggle:FindFirstChildOfClass("TextLabel")
+			if label then
+				label.Text = if audioOn[setting.Key] then "ON" else "OFF"
+			end
+			local fill = toggle:FindFirstChildOfClass("UIGradient")
+			if fill then
+				fill.Color = ColorSequence.new(paint[1], paint[2])
+			end
+		end)
+	end
 	for n, item in STORE_ITEMS do
 		row(n + 2, string.format("%s (%s)", item.Name, item.Kind), WHITE, "R$ ??", PAINT.Grey, function()
 			toast("The Store opens soon!", ORANGE)
@@ -1794,4 +1895,92 @@ task.spawn(function()
 		end
 		task.wait(0.25)
 	end
+end)
+
+---------------------------------------------------------------------------
+-- Audio hooks: every button, the menus, purchases, level-ups, eggs and the chase
+---------------------------------------------------------------------------
+local wiredButtons: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local function wireButton(inst: Instance)
+	if not inst:IsA("GuiButton") or wiredButtons[inst] then
+		return
+	end
+	wiredButtons[inst] = true
+	inst.Activated:Connect(function()
+		sfx("Click", 0.96 + math.random() * 0.08)
+	end)
+	inst.MouseEnter:Connect(function()
+		sfx("Hover", 0.95 + math.random() * 0.1)
+	end)
+end
+gui.DescendantAdded:Connect(wireButton)
+for _, inst in gui:GetDescendants() do
+	wireButton(inst)
+end
+ProximityPromptService.PromptTriggered:Connect(function()
+	sfx("Click")
+end)
+
+local panelsOpen = false
+local function checkPanels()
+	local open = panel.Visible or invPanel.Visible
+	if open ~= panelsOpen then
+		panelsOpen = open
+		sfx(if open then "Open" else "Close")
+	end
+end
+panel:GetPropertyChangedSignal("Visible"):Connect(checkPanels)
+invPanel:GetPropertyChangedSignal("Visible"):Connect(checkPanels)
+
+-- Things that change in the player's data: level-ups, rebirths, candy, eggs.
+local previousData: { [string]: any }? = nil
+local lastCandy = 0
+Remotes.DataChanged.OnClientEvent:Connect(function(new)
+	local old = previousData
+	previousData = new
+	if not old then
+		return
+	end
+	if new.Rebirths > old.Rebirths then
+		sfx("Fanfare")
+	elseif new.SpeedLevel > old.SpeedLevel then
+		sfx("LevelUp")
+	end
+	if new.Candy > old.Candy and os.clock() - lastCandy > 0.2 then
+		lastCandy = os.clock()
+		sfx("Candy")
+	end
+	if #new.Pets + #new.Storage > #old.Pets + #old.Storage then
+		sfx("EggHatch")
+	elseif #new.Incubators > #old.Incubators then
+		sfx("EggPlace")
+	elseif #new.Eggs > #old.Eggs then
+		sfx("Escape")
+	end
+end)
+
+Remotes.Notify.OnClientEvent:Connect(function(_text: string, color: Color3?)
+	if color == RED then
+		sfx("Error")
+	end
+end)
+
+player:GetAttributeChangedSignal("CarryingEgg"):Connect(function()
+	if player:GetAttribute("CarryingEgg") then
+		sfx("EggPickup")
+	end
+end)
+
+-- The chase: the stinger and the intense track when an owner starts running, back to the chill theme afterwards.
+Remotes.ChaseState.OnClientEvent:Connect(function(isChased: boolean)
+	if isChased then
+		sfx("ChaseAlert")
+		setMusic("Chase", 0.5)
+	else
+		setMusic("Chill", 2.5)
+	end
+end)
+Remotes.Kick.OnClientEvent:Connect(function()
+	sfx("Caught")
+	setMusic("Chill", 2.5)
 end)

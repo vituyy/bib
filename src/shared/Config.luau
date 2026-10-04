@@ -491,7 +491,54 @@ Config.OwnerReactionPerRarity = 0.2 -- extra seconds per egg rarity step (Common
 Config.CaughtStunTime = 1.5 -- seconds the thief is slowed after being caught
 Config.KickDistance = 100 -- studs a caught thief is kicked away from the owner
 Config.KickAngle = 35 -- degrees above the ground the kick launches the thief (a higher angle flies higher and lasts longer)
-Config.KickSounds = { "rbxasset://sounds/Kickhit.wav", "rbxasset://sounds/uuhhh.mp3" } -- the thud, then the grunt; swap in your own uploaded sound ids here
+
+---------------------------------------------------------------------------
+-- Audio. The files are made by tools/make_audio.py into audio/ (see audio/README.md). Upload them to Roblox
+-- and paste each id into `Id` ("rbxassetid://123456" or just the number). An empty Id plays the Fallback (a
+-- sound that ships with Roblox) or nothing. Volume is 0 to 1 and multiplies the player's sound setting.
+---------------------------------------------------------------------------
+Config.Audio = {
+	Music = {
+		Chill = { Id = "", File = "music_chill.mp3", Volume = 0.45 }, -- slow spooky waltz, always playing
+		Chase = { Id = "", File = "music_chase.mp3", Volume = 0.7 }, -- replaces it while an owner chases you
+	},
+	Sfx = {
+		Click = { Id = "", File = "ui_click.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/clickfast.wav" },
+		Hover = { Id = "", File = "ui_hover.mp3", Volume = 0.25 },
+		Open = { Id = "", File = "ui_open.mp3", Volume = 0.5 },
+		Close = { Id = "", File = "ui_close.mp3", Volume = 0.45 },
+		Buy = { Id = "", File = "ui_buy.mp3", Volume = 0.7, Fallback = "rbxasset://sounds/electronicpingshort.wav" },
+		Error = { Id = "", File = "ui_error.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/bass.wav" },
+		Notify = { Id = "", File = "ui_notify.mp3", Volume = 0.45 },
+		Candy = { Id = "", File = "ui_candy.mp3", Volume = 0.5 },
+		LevelUp = { Id = "", File = "ui_levelup.mp3", Volume = 0.7 },
+		Fanfare = { Id = "", File = "fanfare.mp3", Volume = 0.8 },
+		EggPickup = { Id = "", File = "egg_pickup.mp3", Volume = 0.7 },
+		EggPlace = { Id = "", File = "egg_place.mp3", Volume = 0.6 },
+		EggHatch = { Id = "", File = "egg_hatch.mp3", Volume = 0.8 },
+		ChaseAlert = { Id = "", File = "chase_alert.mp3", Volume = 0.8 },
+		Escape = { Id = "", File = "escape.mp3", Volume = 0.8 },
+		Caught = { Id = "", File = "caught.mp3", Volume = 0.8 },
+		Kick = { Id = "", File = "kick.mp3", Volume = 1.2, Fallback = "rbxasset://sounds/Kickhit.wav" },
+		Grunt = { Id = "", Volume = 0.9, Fallback = "rbxasset://sounds/uuhhh.mp3" },
+		Knock = { Id = "", File = "knock.mp3", Volume = 1 },
+		DoorCreak = { Id = "", File = "door_creak.mp3", Volume = 0.8 },
+		Whoosh = { Id = "", File = "whoosh.mp3", Volume = 0.5 },
+	},
+}
+
+-- The sound id to play for a Config.Audio.Sfx name: the uploaded id, else the fallback, else nil.
+function Config.SfxId(name: string): string?
+	local info = Config.Audio.Sfx[name]
+	if not info then
+		return nil
+	end
+	local id: string = info.Id
+	if id ~= "" then
+		return if string.match(id, "^%d+$") then "rbxassetid://" .. id else id
+	end
+	return info.Fallback
+end
 Config.MaxEggsHeld = 12 -- unhatched egg inventory cap
 Config.IncubatorSlots = 2 -- hatching pads on a new base
 Config.MaxPetsOnBase = 6 -- pet slots on a new base
