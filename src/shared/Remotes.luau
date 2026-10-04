@@ -10,6 +10,7 @@ local DEFINITIONS = {
 	DataChanged = "RemoteEvent", -- server -> client: (dataSnapshot)
 	ChaseState = "RemoteEvent", -- server -> client: (isChased, ownerName?)
 	Request = "RemoteFunction", -- client -> server: (action, arg) -> (ok, message)
+	TreadmillRunning = "RemoteEvent", -- client -> server: (isRunning) held on the belt and running, or stepped off
 }
 
 local Remotes = {}

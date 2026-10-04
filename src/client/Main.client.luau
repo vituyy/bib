@@ -4,6 +4,7 @@
 -- Look: chunky cartoon UI. White studded panels with thick black outlines, cyan boxes, glossy gradient buttons
 -- and white text with a black outline. Pets and Eggs use a darker inventory window with a blue title bar.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -272,6 +273,84 @@ local function refreshFriendBoost()
 end
 player:GetAttributeChangedSignal("FriendBoost"):Connect(refreshFriendBoost)
 refreshFriendBoost()
+
+-- Custom speed, under Money and Candy: run slower than your max speed if you want. Type a number or use - / +.
+-- The server clamps it between Config.MinCustomSpeed and your max and saves it.
+local customSpeedHud = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(270, 112), Position = UDim2.new(1, -16, 0.5, 80), BackgroundTransparency = 1, Parent = gui })
+outlined({ Size = UDim2.fromOffset(62, 62), Position = UDim2.fromOffset(0, 26), Text = "⚡", TextColor3 = Color3.fromRGB(255, 200, 30), Parent = customSpeedHud }, 3)
+outlined({ Size = UDim2.new(1, -66, 0, 30), Position = UDim2.fromOffset(66, 0), Text = "Custom speed", Parent = customSpeedHud }, 3)
+local speedBox = new("Frame", {
+	Size = UDim2.new(1, -66, 0, 54),
+	Position = UDim2.fromOffset(66, 32),
+	BackgroundColor3 = Color3.fromRGB(15, 70, 25),
+	BackgroundTransparency = 0.3,
+	Parent = customSpeedHud,
+}, { corner(12), new("UIStroke", { Color = Color3.fromRGB(10, 40, 15), Thickness = 2, Transparency = 0.3 }) })
+local speedInput = new("TextBox", {
+	Size = UDim2.new(1, -96, 1, -8),
+	Position = UDim2.fromOffset(48, 4),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.FredokaOne,
+	TextColor3 = WHITE,
+	TextScaled = true,
+	ClearTextOnFocus = false,
+	Text = "",
+	Parent = speedBox,
+}, { new("UIStroke", { Color = BLACK, Thickness = 2, LineJoinMode = Enum.LineJoinMode.Round }) })
+local maxSpeedLabel = outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.new(1, -66, 0, 22), Position = UDim2.new(1, -4, 0, 89), Text = "Max: 0", TextXAlignment = Enum.TextXAlignment.Right, Parent = customSpeedHud }, 2)
+
+local shownSpeed: number? = nil -- what the panel shows; nil until the first data arrives
+local sendSpeedAt = 0
+local function speedLimits(): (number, number)
+	local max = if data then Config.WalkSpeedFor(data.SpeedLevel) else Config.BaseWalkSpeed
+	return math.min(Config.MinCustomSpeed, max), max
+end
+local function showSpeed(speed: number)
+	local low, max = speedLimits()
+	shownSpeed = math.clamp(math.floor(speed * 2 + 0.5) / 2, low, max)
+	speedInput.Text = Config.FormatSpeed(shownSpeed :: number)
+	maxSpeedLabel.Text = "Max: " .. Config.FormatSpeed(max)
+end
+-- Wait a moment after the last change before telling the server, so holding/clicking fast sends one request.
+local function pickSpeed(speed: number)
+	showSpeed(speed)
+	local at = os.clock()
+	sendSpeedAt = at
+	task.delay(0.35, function()
+		if sendSpeedAt == at and shownSpeed then
+			Remotes.Request:InvokeServer("SetCustomSpeed", shownSpeed)
+		end
+	end)
+end
+for _, step in { -1, 1 } do
+	chunkyButton({
+		AnchorPoint = Vector2.new(if step < 0 then 0 else 1, 0.5),
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(if step < 0 then 0 else 1, if step < 0 then 6 else -6, 0.5, 0),
+		Text = if step < 0 then "-" else "+",
+		ZIndex = 2,
+		Parent = speedBox,
+	}, if step < 0 then PAINT.Red else PAINT.Green, function()
+		if shownSpeed then
+			pickSpeed(if step > 0 then math.floor(shownSpeed) + 1 else math.ceil(shownSpeed) - 1)
+		end
+	end)
+end
+speedInput.FocusLost:Connect(function()
+	local typed = tonumber(speedInput.Text)
+	if typed and typed == typed then
+		pickSpeed(typed)
+	elseif shownSpeed then
+		showSpeed(shownSpeed)
+	end
+end)
+local function refreshCustomSpeed(d)
+	if speedInput:IsFocused() or os.clock() - sendSpeedAt < 1 then
+		maxSpeedLabel.Text = "Max: " .. Config.FormatSpeed(Config.WalkSpeedFor(d.SpeedLevel))
+		return -- the player is changing it right now
+	end
+	showSpeed(Config.ChosenSpeed(d))
+end
 
 -- Night / day timer, top centre: just outlined text.
 local phaseLabel = outlined({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(340, 40), Position = UDim2.new(0.5, 0, 0, 10), Text = "", Parent = gui }, 3)
@@ -621,7 +700,7 @@ end
 
 local petAssets = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Pets")
 local function petModel(petId: string): Model?
-	local template = petAssets:FindFirstChild(petId)
+	local template = petAssets:FindFirstChild((Config.SplitPet(petId))) -- Big or Golden pets use the plain pet's model
 	return if template then template:Clone() else nil
 end
 
@@ -687,7 +766,7 @@ end
 local selectedPet: { Pet: string, Equipped: boolean }? = nil
 
 function menus.Pets(d)
-	local slots = Config.PetSlotsFor(d.BaseLevel)
+	local slots = Config.PetSlotsFor(d.PetCapLevel)
 	local boost = 1 + (player:GetAttribute("FriendBoost") or 0) / 100
 	if selectedPet and not table.find(if selectedPet.Equipped then d.Pets else d.Storage, selectedPet.Pet) then
 		selectedPet = nil -- sold or moved
@@ -712,10 +791,10 @@ function menus.Pets(d)
 			petCard(equippedGrid, n, petId, true)
 		end
 	end
-	local locked = Config.PetSlotsFor(#Config.BaseUpgrades) - slots
+	local locked = Config.MaxPetSlots() - slots
 	if locked > 0 then
 		blob(equippedGrid, 1000, "+" .. locked, function()
-			toast("Upgrade your base for more pet slots!", ORANGE)
+			toast("Upgrade your Pet Capacity at the sign by your base entrance for more pet slots!", ORANGE)
 		end)
 	end
 
@@ -770,7 +849,7 @@ local function refreshIncubatorTimers()
 end
 
 function menus.Eggs(d)
-	local slots = Config.IncubatorsFor(d.BaseLevel)
+	local slots = Config.IncubatorsFor(d.PadLevel)
 	sectionTitle(1, string.format("Hatching %d/%d", #d.Incubators, slots))
 	local hatchGrid = cardGrid(2)
 	for n, entry in d.Incubators do
@@ -904,9 +983,31 @@ local STORE_ITEMS = {
 	{ Name = "$100K Money Pack", Kind = "Product" },
 }
 function menus.Store(_d)
-	header(0, "Coming soon!")
+	-- Codes: type one and press Redeem (the server checks it and gives the reward once per player).
+	header(0, "Codes")
+	local codeRow = box({ Size = UDim2.new(1, -8, 0, 60), LayoutOrder = 1, Parent = list }, PAINT.Cyan)
+	local codeInput = new("TextBox", {
+		Size = UDim2.new(1, -168, 1, -16),
+		Position = UDim2.fromOffset(12, 8),
+		BackgroundColor3 = Color3.fromRGB(25, 15, 45),
+		TextColor3 = WHITE,
+		PlaceholderText = "Type a code...",
+		PlaceholderColor3 = Color3.fromRGB(160, 160, 195),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		ClearTextOnFocus = false,
+		Text = "",
+		ZIndex = 2,
+		Parent = codeRow,
+	}, { corner(10), new("UITextSizeConstraint", { MaxTextSize = 26 }), new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }) })
+	chunkyButton({ Size = UDim2.new(0, 132, 1, -12), Position = UDim2.new(1, -138, 0, 6), Text = "Redeem", ZIndex = 2, Parent = codeRow }, PAINT.Green, function()
+		local code = codeInput.Text
+		codeInput.Text = ""
+		request("RedeemCode", code)
+	end)
+	header(2, "Coming soon!")
 	for n, item in STORE_ITEMS do
-		row(n, string.format("%s (%s)", item.Name, item.Kind), WHITE, "R$ ??", PAINT.Grey, function()
+		row(n + 2, string.format("%s (%s)", item.Name, item.Kind), WHITE, "R$ ??", PAINT.Grey, function()
 			toast("The Store opens soon!", ORANGE)
 		end)
 	end
@@ -955,45 +1056,201 @@ function menus.Index(d)
 	end
 end
 
--- The Speed Shop has two tabs: Treadmills (Candy) and Trails (Money).
+-- The Speed Shop has two tabs: Treadmills and Trails (both paid with Money). Every item is a studded card with a
+-- little 3D picture of it, its XP multiplier on a badge and a price / equip button underneath.
 local shopTab = "Treadmills"
+local SHOP_TABS = { { Name = "Treadmills", Paint = PAINT.Orange }, { Name = "Trails", Paint = PAINT.Purple } }
 local function tabRow(order: number)
-	local frame = spacer(order, 48)
-	for i, name in { "Treadmills", "Trails" } do
-		chunkyButton({
-			Size = UDim2.new(0.5, -6, 1, -6),
-			Position = UDim2.new((i - 1) * 0.5, (i - 1) * 6 + 3, 0, 3),
-			Text = name,
+	local frame = spacer(order, 54)
+	for i, tab in SHOP_TABS do
+		local active = shopTab == tab.Name
+		local b = chunkyButton({
+			Size = UDim2.new(0.5, -10, 1, if active then -4 else -12),
+			Position = UDim2.new((i - 1) * 0.5, (i - 1) * 6 + 4, 0, if active then 2 else 8),
+			Text = tab.Name,
 			Parent = frame,
-		}, if shopTab == name then PAINT.Orange else PAINT.Grey, function()
-			shopTab = name
+		}, if active then tab.Paint else PAINT.Grey, function()
+			shopTab = tab.Name
 			renderMenu()
 		end)
+		if active then
+			studs(b, 16, 12, WHITE, 0.6)
+		end
 	end
+end
+
+-- Builds a small blocky model for a shop picture. Parts get studded tops like the rest of the game.
+local function pictureBuilder(model: Model)
+	return function(size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, transparency: number?, shape: Enum.PartType?)
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.Size = size
+		p.CFrame = cf
+		p.Color = color
+		p.Material = material or Enum.Material.Plastic
+		p.Transparency = transparency or 0
+		p.TopSurface = Enum.SurfaceType.Studs
+		p.BottomSurface = Enum.SurfaceType.Inlet
+		if shape then
+			p.Shape = shape
+		end
+		p.Parent = model
+		return p
+	end
+end
+
+-- A mini treadmill in the tier's colour, with a little Halloween topper on the better ones.
+local function treadmillPicture(info, tier: number): Model
+	-- Use the real treadmill model for this tier (Assets.Treadmills.<tier>), seen from the console's front corner.
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("Treadmills")
+	local real = folder and folder:FindFirstChild(tostring(tier))
+	if real and real:IsA("Model") then
+		local copy = real:Clone()
+		for _, d in copy:GetDescendants() do
+			if d:IsA("LuaSourceContainer") or d:IsA("ProximityPrompt") or d:IsA("LayerCollector") then
+				d:Destroy()
+			end
+		end
+		copy.PrimaryPart = nil -- so the picture angle comes from WorldPivot, not the belt
+		copy.WorldPivot = CFrame.new(copy:GetBoundingBox().Position) * CFrame.Angles(0, math.rad(-40), 0)
+		copy:SetAttribute("Zoom", 0.8)
+		return copy
+	end
+	-- No model for this tier: draw a simple one instead.
+	local m = Instance.new("Model")
+	local p = pictureBuilder(m)
+	local c = info.Color
+	local light = c:Lerp(WHITE, 0.15)
+	local ghostly = if tier == 6 then 0.3 else 0
+	p(Vector3.new(4, 0.8, 7), CFrame.new(0, 0.4, 0), c:Lerp(BLACK, 0.15), nil, ghostly)
+	p(Vector3.new(3.2, 0.2, 6.6), CFrame.new(0, 0.9, 0), Color3.fromRGB(35, 30, 40), Enum.Material.SmoothPlastic)
+	for i = -2, 2 do
+		p(Vector3.new(3.2, 0.1, 0.35), CFrame.new(0, 1.04, i * 1.3), Color3.fromRGB(75, 70, 85), Enum.Material.SmoothPlastic)
+	end
+	for _, x in { -1.8, 1.8 } do
+		p(Vector3.new(0.5, 3.2, 0.5), CFrame.new(x, 2.4, -3), light, nil, ghostly)
+		p(Vector3.new(0.4, 0.4, 2.2), CFrame.new(x, 3.8, -2.1), light, nil, ghostly)
+		p(Vector3.new(0.15, 0.3, 7), CFrame.new(x * 1.14, 0.45, 0), light, Enum.Material.Neon)
+	end
+	p(Vector3.new(4, 0.4, 0.4), CFrame.new(0, 3.9, -3), light, nil, ghostly)
+	p(Vector3.new(2.6, 1.1, 0.7), CFrame.new(0, 4.3, -3.2), c:Lerp(BLACK, 0.55))
+	p(Vector3.new(2, 0.7, 0.1), CFrame.new(0, 4.35, -3.58), light, Enum.Material.Neon)
+	if tier == 4 then -- pumpkin
+		p(Vector3.new(1.3, 1.1, 1.3), CFrame.new(0, 5.4, -3.2), Color3.fromRGB(255, 120, 0), nil, nil, Enum.PartType.Ball)
+		p(Vector3.new(0.25, 0.5, 0.25), CFrame.new(0, 6.1, -3.2), Color3.fromRGB(90, 160, 50))
+	elseif tier == 5 then -- crossed bones
+		for _, a in { 35, -35 } do
+			p(Vector3.new(1.8, 0.3, 0.3), CFrame.new(0, 5.2, -3.2) * CFrame.Angles(0, 0, math.rad(a)), Color3.fromRGB(240, 235, 215))
+		end
+	elseif tier >= 6 then -- a tiny ghost, or a skull on the cursed one
+		local head = p(Vector3.new(1.1, 1.1, 1.1), CFrame.new(0, 5.4, -3.2), if tier == 6 then WHITE else Color3.fromRGB(235, 230, 215), nil, if tier == 6 then 0.15 else 0)
+		for _, x in { -0.25, 0.25 } do
+			p(Vector3.new(0.25, 0.3, 0.1), CFrame.new(x, 5.5, -3.78), if tier == 6 then BLACK else Color3.fromRGB(170, 60, 255), if tier == 6 then nil else Enum.Material.Neon)
+		end
+		head.TopSurface = Enum.SurfaceType.Smooth
+	end
+	m.WorldPivot = CFrame.new(0, 2.2, 0) * CFrame.Angles(0, math.rad(-35), 0)
+	return m
+end
+
+-- A blocky runner with a glowing streak of the trail's colour behind it.
+local function trailPicture(info, index: number): Model
+	local m = Instance.new("Model")
+	local p = pictureBuilder(m)
+	local skin = Color3.fromRGB(225, 225, 235)
+	p(Vector3.new(1.6, 1.8, 1), CFrame.new(0, 2.7, 0), skin)
+	p(Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 4.3, 0), skin)
+	for _, x in { -0.35, 0.35 } do
+		p(Vector3.new(0.25, 0.35, 0.1), CFrame.new(x, 4.4, -0.72), BLACK)
+	end
+	for i, x in { -0.45, 0.45 } do
+		local swing = if i == 1 then 35 else -35
+		p(Vector3.new(0.7, 1.7, 0.7), CFrame.new(x, 1.1, 0) * CFrame.Angles(math.rad(swing), 0, 0), skin)
+		p(Vector3.new(0.5, 1.5, 0.5), CFrame.new(x * 2.5, 2.8, 0) * CFrame.Angles(math.rad(-swing), 0, 0), skin)
+	end
+	local c = info.Color
+	for i = 1, 7 do
+		local s = 1.8 - i * 0.17
+		p(Vector3.new(s, s, s), CFrame.new(0, 2.8 + math.sin(i * 0.9) * 0.45, 0.7 + i * 1.05), c:Lerp(BLACK, i * 0.06), Enum.Material.Neon, (i - 1) * 0.09)
+	end
+	for i = 1, 2 + index do -- sparkles, more on the better trails
+		local a = i * 2.4
+		p(Vector3.new(0.35, 0.35, 0.35), CFrame.new(math.cos(a) * 1.4, 2.8 + math.sin(a * 1.7) * 1.6, 1.5 + (i % 6) * 1.1), c:Lerp(WHITE, 0.5), Enum.Material.Neon)
+	end
+	m.WorldPivot = CFrame.new(0, 2.8, 3) * CFrame.Angles(0, math.rad(-60), 0)
+	m:SetAttribute("Zoom", 0.82)
+	return m
+end
+
+local function shopGrid(order: number)
+	return new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order, Parent = list }, {
+		new("UIGridLayout", {
+			CellSize = UDim2.new(1 / 3, -8, 0, 226),
+			CellPadding = UDim2.fromOffset(8, 10),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+		new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
+	})
+end
+
+-- One shop item: studded card in the item's colour, name on top, picture window, XP badge and a button.
+local function shopCard(grid: Instance, order: number, name: string, color: Color3, model: Model, multiplier: number, buttonText: string, buttonPaint: { Color3 }, dim: boolean, onClick: (() -> ())?)
+	local top = if dim then Color3.fromRGB(175, 175, 190) else color:Lerp(WHITE, 0.45)
+	local bottom = if dim then Color3.fromRGB(110, 110, 125) else color:Lerp(BLACK, 0.15)
+	local card = box({ LayoutOrder = order, Parent = grid }, { top, bottom })
+	studs(card, 18, 12, WHITE, 0.72)
+	outlined({ Size = UDim2.new(1, -16, 0, 24), Position = UDim2.fromOffset(8, 6), Text = name, ZIndex = 3, Parent = card }, 2)
+	local window = new("Frame", {
+		Size = UDim2.new(1, -16, 1, -98),
+		Position = UDim2.fromOffset(8, 34),
+		BackgroundColor3 = Color3.fromRGB(35, 22, 60),
+		BackgroundTransparency = 0.2,
+		ZIndex = 2,
+		Parent = card,
+	}, { corner(10), new("UIStroke", { Color = BLACK, Thickness = 2.5 }) })
+	local viewport = modelViewport(model, window, { Size = UDim2.fromScale(1, 1), ZIndex = 3, ImageTransparency = if dim then 0.4 else 0 })
+	local camera = viewport.CurrentCamera
+	if camera then -- frame the picture tighter than the default
+		local center = model:GetBoundingBox().Position
+		camera.CFrame = CFrame.lookAt(center + (camera.CFrame.Position - center) * (model:GetAttribute("Zoom") or 0.68), center)
+	end
+	local badge = box({ AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(84, 30), Position = UDim2.new(1, -2, 1, -58), Rotation = -6, ZIndex = 4, Parent = card }, PAINT.Cyan)
+	outlined({ Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3), Text = "x" .. tostring(multiplier) .. " XP", ZIndex = 5, Parent = badge }, 2)
+	for _, child in badge:GetChildren() do
+		if child:IsA("Frame") then
+			child.ZIndex = 4
+		end
+	end
+	chunkyButton({ Size = UDim2.new(1, -16, 0, 44), Position = UDim2.new(0, 8, 1, -52), Text = buttonText, ZIndex = 2, Parent = card }, buttonPaint, onClick or function() end)
+	return card
 end
 
 function menus.Treadmills(d)
 	tabRow(-1)
 	if shopTab == "Trails" then
-		header(0, "Trails: paid with Money, multiply treadmill XP")
+		header(0, "Trails: paid with Money, multiply your Speed XP")
+		local grid = shopGrid(1)
 		for index, info in Config.Trails do
 			local owned = table.find(d.OwnedTrails or {}, index) ~= nil
 			local equipped = d.Trail == index
-			local text = string.format("%s  x%s XP", info.Name, tostring(info.Multiplier))
 			local buttonText = if equipped then "Equipped" elseif owned then "Equip" else "$" .. formatNumber(info.Price)
-			row(index, text, info.Color, buttonText, if equipped then PAINT.Grey elseif owned then PAINT.Orange else PAINT.Green, function()
+			local paint = if equipped then PAINT.Grey elseif owned then PAINT.Orange elseif d.Money >= info.Price then PAINT.Green else PAINT.Red
+			shopCard(grid, index, info.Name, info.Color, trailPicture(info, index), info.Multiplier, buttonText, paint, false, function()
 				request("BuyTrail", index)
 			end)
 		end
 		return
 	end
-	header(0, "Treadmills: paid with Candy")
+	header(0, "Treadmills: paid with Money, multiply your costume's XP while you run on them")
+	local grid = shopGrid(1)
 	for tier, info in Config.Treadmills do
-		local text = string.format("%s  +%d XP/s", info.Name, info.XpPerSecond)
+		local picture = treadmillPicture(info, tier)
 		if tier <= d.Treadmill then
-			row(tier, text, info.Color, if tier == d.Treadmill then "Owned" else "-", PAINT.Grey)
+			shopCard(grid, tier, info.Name, info.Color, picture, info.XpMultiplier, if tier == d.Treadmill then "Owned" else "-", PAINT.Grey, tier < d.Treadmill)
 		else
-			row(tier, text, info.Color, formatNumber(info.Price) .. " Candy", PAINT.Green, function()
+			shopCard(grid, tier, info.Name, info.Color, picture, info.XpMultiplier, "$" .. formatNumber(info.Price), if d.Money >= info.Price then PAINT.Green else PAINT.Red, false, function()
 				request("BuyTreadmill", tier)
 			end)
 		end
@@ -1040,8 +1297,8 @@ local function menuKey(d)
 		openMenu or "", shopTab, d.SpeedLevel, d.Rebirths, d.Treadmill, d.Trail or 0, #(d.OwnedTrails or {}), d.EquippedCostume,
 		table.concat(d.Eggs, ","), table.concat(incubating, ","), table.concat(d.Pets, ","), table.concat(d.Storage or {}, ","),
 		player:GetAttribute("FriendBoost") or 0,
-		table.concat(d.Discovered or {}, ","), table.concat(d.IndexClaimed or {}, ","), d.BaseLevel,
-		if openMenu == "Treadmills" then math.floor(if shopTab == "Trails" then d.Money / 1000 else d.Candy) else 0,
+		table.concat(d.Discovered or {}, ","), table.concat(d.IndexClaimed or {}, ","), d.PetCapLevel, d.PadLevel,
+		if openMenu == "Treadmills" then math.floor(d.Money / 1000) else 0,
 	}, "|")
 end
 
@@ -1107,12 +1364,149 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt)
 end)
 
 ---------------------------------------------------------------------------
+-- First-time tutorial: a player who has never owned a costume spawns in front of the Costume Shop. Arrows on the
+-- ground lead from the spawn point to the cheapest costume, a "Buy a Costume!" message floats on screen and over
+-- the costume, and the costume glows. Everything disappears the moment the first costume is bought, and players
+-- who already own a costume never see it. (Only this player sees it: the arrows are created on the client.)
+---------------------------------------------------------------------------
+local tutorialFolder: Folder? = nil
+local tutorialMessage: Frame? = nil
+-- The on-screen "Buy a Costume!" message hides while a menu is open so it doesn't cover the menu title.
+local function updateTutorialMessage()
+	if tutorialMessage then
+		tutorialMessage.Visible = not (panel.Visible or invPanel.Visible)
+	end
+end
+panel:GetPropertyChangedSignal("Visible"):Connect(updateTutorialMessage)
+invPanel:GetPropertyChangedSignal("Visible"):Connect(updateTutorialMessage)
+local tutorialRender: RBXScriptConnection? = nil
+
+local function stopTutorial()
+	if tutorialRender then
+		tutorialRender:Disconnect()
+		tutorialRender = nil
+	end
+	if tutorialFolder then
+		tutorialFolder:Destroy()
+		tutorialFolder = nil
+	end
+	if tutorialMessage then
+		tutorialMessage:Destroy()
+		tutorialMessage = nil
+	end
+end
+
+local function startTutorial()
+	if tutorialFolder then
+		return
+	end
+	local pedestal = CollectionService:GetTagged("TutorialCostume")[1]
+	local from = pedestal and pedestal:GetAttribute("TutorialSpawn")
+	if not (pedestal and pedestal:IsA("BasePart") and typeof(from) == "Vector3") then
+		return -- the shop has not streamed in yet; this runs again when it does
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "TutorialGuide"
+	folder.Parent = workspace
+	tutorialFolder = folder
+
+	-- Arrows (chevrons) on the ground, one every 6 studs, pointing toward the costume.
+	local flatDir = Vector3.new(pedestal.Position.X - from.X, 0, pedestal.Position.Z - from.Z)
+	local length = flatDir.Magnitude
+	local dir = flatDir.Unit
+	local params = RaycastParams.new()
+	params.FilterDescendantsInstances = { folder, player.Character }
+	local arrows: { { BasePart } } = {}
+	local count = math.max(1, math.floor((length - 6) / 6))
+	for i = 1, count do
+		local spot = from + dir * (i * 6)
+		local hit = workspace:Raycast(Vector3.new(spot.X, spot.Y + 30, spot.Z), Vector3.new(0, -80, 0), params)
+		local ground = if hit then hit.Position else spot
+		local tip = CFrame.lookAt(ground + Vector3.new(0, 0.15, 0), ground + Vector3.new(0, 0.15, 0) + dir) * CFrame.new(0, 0, -1.5)
+		local bars = {}
+		for _, angle in { math.rad(40), math.rad(-40) } do
+			local bar = Instance.new("Part")
+			bar.Name = "GuideArrow"
+			bar.Size = Vector3.new(1, 0.15, 3.2)
+			bar.CFrame = tip * CFrame.Angles(0, angle, 0) * CFrame.new(0, 0, 1.6)
+			bar.Color = Color3.fromRGB(255, 225, 60)
+			bar.Material = Enum.Material.Neon
+			bar.Anchored, bar.CanCollide, bar.CanQuery, bar.CanTouch, bar.CastShadow = true, false, false, false, false
+			bar.Parent = folder
+			table.insert(bars, bar)
+		end
+		table.insert(arrows, bars)
+	end
+
+	-- The costume glows and carries a bouncing label.
+	local display = pedestal.Parent
+	if display then
+		local glow = Instance.new("Highlight")
+		glow.FillTransparency = 1
+		glow.OutlineColor = Color3.fromRGB(255, 225, 60)
+		glow.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		glow.Adornee = display
+		glow.Parent = folder
+	end
+	local billboard = Instance.new("BillboardGui")
+	billboard.Size = UDim2.fromOffset(260, 70)
+	billboard.StudsOffset = Vector3.new(0, 12, 0)
+	billboard.AlwaysOnTop = true
+	billboard.LightInfluence = 0
+	billboard.MaxDistance = 400
+	billboard.Adornee = pedestal
+	outlined({ Size = UDim2.fromScale(1, 1), Text = "Buy a Costume!", TextColor3 = Color3.fromRGB(255, 225, 60), Parent = billboard }, 3)
+	billboard.Parent = folder
+
+	-- Message at the top of the screen.
+	local message = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Size = UDim2.fromOffset(420, 96),
+		Position = UDim2.new(0.5, 0, 0, 70),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	tutorialMessage = message
+	message.Visible = not (panel.Visible or invPanel.Visible)
+	local scale = new("UIScale", { Parent = message })
+	outlined({ Size = UDim2.new(1, 0, 0, 56), Text = "Buy a Costume!", TextColor3 = Color3.fromRGB(255, 225, 60), Parent = message }, 3)
+	outlined({ Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 60), Text = "Follow the arrows, then press E at the glowing costume", Parent = message }, 2)
+
+	tutorialRender = RunService.RenderStepped:Connect(function()
+		local t = os.clock()
+		for i, bars in arrows do
+			local transparency = 0.1 + 0.6 * (0.5 + 0.5 * math.sin(t * 4 - i * 0.7)) -- a pulse running toward the costume
+			for _, bar in bars do
+				bar.Transparency = transparency
+			end
+		end
+		billboard.StudsOffset = Vector3.new(0, 12 + math.sin(t * 3) * 0.7, 0)
+		scale.Scale = 1 + math.sin(t * 3) * 0.04
+	end)
+end
+
+local function updateTutorial(d: { [string]: any })
+	if Config.NeedsTutorial(d) then
+		startTutorial()
+	else
+		stopTutorial()
+	end
+end
+CollectionService:GetInstanceAddedSignal("TutorialCostume"):Connect(function()
+	if data and Config.NeedsTutorial(data) then
+		startTutorial()
+	end
+end)
+
+---------------------------------------------------------------------------
 -- Server events
 ---------------------------------------------------------------------------
 local function refreshStats(d)
 	candyLabel.Text = formatNumber(d.Candy)
 	moneyLabel.Text = formatNumber(d.Money)
-	speedLabel.Text = "Speed: " .. Config.WalkSpeedFor(d.SpeedLevel)
+	speedLabel.Text = "Speed: " .. Config.FormatSpeed(Config.ChosenSpeed(d))
+	refreshCustomSpeed(d)
 	rebirthLabel.Text = "Rebirth: x" .. tostring(Config.XpMultiplier(d.Rebirths))
 	levelLabel.Text = "Level " .. d.SpeedLevel
 	if d.SpeedLevel >= Config.MaxSpeedLevel then
@@ -1128,6 +1522,7 @@ end
 Remotes.DataChanged.OnClientEvent:Connect(function(newData)
 	data = newData
 	refreshStats(newData)
+	updateTutorial(newData)
 	if openMenu then
 		local key = menuKey(newData)
 		if key ~= lastMenuKey then
@@ -1163,33 +1558,129 @@ player:GetAttributeChangedSignal("CarryingEgg"):Connect(function()
 end)
 
 ---------------------------------------------------------------------------
--- Treadmill auto-run: standing on your own treadmill makes your character run by itself. Jump to get off.
+-- Treadmill: step onto your own belt and you are held in the middle, running in place while the belt scrolls.
+-- Press a move key or jump to step off; leave the belt and walk back on to start again.
 ---------------------------------------------------------------------------
-local jumpedOff = false
-RunService:BindToRenderStep("TreadmillAutoRun", Enum.RenderPriority.Character.Value + 1, function()
+local locked = false -- held on the belt, running
+local armed = false -- move keys let go since locking, so the next press steps off
+local released = false -- stepped off; stays free until leaving the belt
+local runTrack: AnimationTrack? = nil
+local runTrackOwner: Humanoid? = nil
+local beltScroll: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: any
+local jumpRequested = false
+game:GetService("UserInputService").JumpRequest:Connect(function()
+	jumpRequested = true
+end)
+
+local function playRun(character: Model, humanoid: Humanoid)
+	if runTrackOwner ~= humanoid then
+		runTrackOwner = humanoid
+		runTrack = nil
+		local animate = character:FindFirstChild("Animate")
+		local run = animate and animate:FindFirstChild("run")
+		local anim = run and run:FindFirstChildOfClass("Animation")
+		local animator = humanoid:FindFirstChildOfClass("Animator")
+		if anim and animator then
+			runTrack = animator:LoadAnimation(anim)
+			runTrack.Priority = Enum.AnimationPriority.Action
+			runTrack.Looped = true
+		end
+	end
+	if runTrack and not runTrack.IsPlaying then
+		runTrack:Play(0.2)
+	end
+end
+
+local function unlock()
+	locked = false
+	Remotes.TreadmillRunning:FireServer(false)
+	if runTrack then
+		runTrack:Stop(0.2)
+	end
+end
+
+-- Scroll the slats of every belt someone is running on (the server marks those treadmills "Running";
+-- our own belt follows our local state so it stops the instant we step off).
+local function scrollBelts(plots: Instance, dt: number)
+	for _, plot in plots:GetChildren() do
+		local treadmill = plot:FindFirstChild("Treadmill")
+		local belt = treadmill and treadmill:FindFirstChild("Belt") :: BasePart?
+		local slats = treadmill and treadmill:FindFirstChild("Slats")
+		if belt and slats then
+			local active = if plot.Name == player:GetAttribute("Plot") then locked else treadmill:GetAttribute("Running") == true
+			if active then
+				local len = belt.Size.Z
+				local list = slats:GetChildren()
+				local gap = len / #list
+				local off = ((beltScroll[belt] or 0) + dt * Config.TreadmillBeltSpeed * 1.4) % len
+				beltScroll[belt] = off
+				for i, s in list do
+					(s :: BasePart).CFrame = belt.CFrame * CFrame.new(0, belt.Size.Y / 2 + 0.03, -len / 2 + ((i - 0.5) * gap + off) % len)
+				end
+			end
+		end
+	end
+end
+
+RunService:BindToRenderStep("TreadmillAutoRun", Enum.RenderPriority.Character.Value + 1, function(dt)
+	local map = workspace:FindFirstChild("Map")
+	local plots = map and map:FindFirstChild("Plots")
+	if plots then
+		scrollBelts(plots, dt)
+	end
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local plotName = player:GetAttribute("Plot")
-	local map = workspace:FindFirstChild("Map")
-	local plots = map and map:FindFirstChild("Plots")
 	local plot = plots and plotName and plots:FindFirstChild(plotName)
 	local treadmill = plot and plot:FindFirstChild("Treadmill")
 	local belt = treadmill and treadmill:FindFirstChild("Belt") :: BasePart?
-	if not (humanoid and root and belt) then
+	local jumped = jumpRequested
+	jumpRequested = false
+	if not (character and humanoid and root and belt) or humanoid.Health <= 0 then
+		if locked then
+			unlock()
+		end
 		return
 	end
 	local offset = belt.CFrame:PointToObjectSpace(root.Position)
-	local onBelt = math.abs(offset.X) <= belt.Size.X / 2 + 0.5 and math.abs(offset.Z) <= belt.Size.Z / 2 + 0.5 and offset.Y > 0 and offset.Y < 6
-	if not onBelt then
-		jumpedOff = false
+	local overBelt = math.abs(offset.X) <= belt.Size.X / 2 + 0.5 and math.abs(offset.Z) <= belt.Size.Z / 2 + 0.5
+	if not overBelt then
+		released = false -- stepping off the treadmill re-arms it
+	end
+	if not overBelt or offset.Y <= 0 or offset.Y >= 6 or player:GetAttribute("CarryingEgg") then
+		if locked then
+			unlock()
+		end
 		return
 	end
-	if humanoid.Jump then
-		jumpedOff = true -- the belt carries you off the back once you stop running
+	if released then
+		return
 	end
-	if not jumpedOff then
-		humanoid:Move(belt.CFrame.LookVector, false)
+	local moving = humanoid.MoveDirection.Magnitude > 0.1
+	if locked and (jumped or (armed and moving)) then
+		unlock()
+		released = true
+		return
+	end
+	if not locked then
+		locked = true
+		armed = false
+		Remotes.TreadmillRunning:FireServer(true)
+		playRun(character, humanoid)
+	end
+	if not moving then
+		armed = true
+	end
+	-- Hold the runner in the middle of the belt, facing the console.
+	humanoid:Move(Vector3.zero, false)
+	local target = belt.CFrame * CFrame.new(0, belt.Size.Y / 2 + humanoid.HipHeight + root.Size.Y / 2, 0)
+	if (root.Position - target.Position).Magnitude > 0.2 or root.CFrame.LookVector:Dot(target.LookVector) < 0.99 then
+		root.CFrame = target
+	end
+	root.AssemblyLinearVelocity = Vector3.zero
+	if runTrack then
+		runTrack:AdjustSpeed(math.clamp(humanoid.WalkSpeed / 16, 1, 2.5))
 	end
 end)
 

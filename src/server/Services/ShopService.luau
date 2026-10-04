@@ -1,6 +1,7 @@
 -- Handles every purchase and menu action. The server re-checks all costs; the client only asks.
 -- Also wires the costume shop mannequins (walk up and buy) and the speed shop counter (opens the menu).
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -10,7 +11,23 @@ local DataService = require(script.Parent.DataService)
 
 local ShopService = {}
 
+-- Where a brand-new player spawns: on the ground in front of the Costume Shop, looking at the cheapest costume.
+local tutorialSpawn: CFrame? = nil
+function ShopService.GetTutorialSpawn(): CFrame?
+	return tutorialSpawn
+end
+
 local lastRequest: { [Player]: number } = {}
+
+-- Redeemable codes (typed in the Store menu). Each player can use a code once. Codes are not case sensitive.
+-- Keep them here, not in Config: Config is sent to every player, this script is not.
+-- Rewards: Money and/or Candy.
+local CODES: { [string]: { Money: number?, Candy: number? } } = {
+	DEV01 = { Money = 100000 },
+	DEV02 = { Candy = 10000 },
+	DEV03 = { Money = 100000000 },
+}
+local wrongCodes: { [Player]: { Count: number, ResetAt: number } } = {}
 
 local function fmt(n: number): string
 	local s = tostring(math.floor(n))
@@ -30,11 +47,11 @@ function actions.BuyTreadmill(player: Player, data, tier: any)
 	if tier <= data.Treadmill then
 		return false, "You already have a better treadmill"
 	end
-	if data.Candy < info.Price then
-		return false, "You need " .. fmt(info.Price) .. " Candy"
+	if data.Money < info.Price then
+		return false, "You need $" .. fmt(info.Price)
 	end
 	DataService.Update(player, function(d)
-		d.Candy -= info.Price
+		d.Money -= info.Price
 		d.Treadmill = tier
 	end)
 	return true, info.Name .. " is now in front of your base!"
@@ -78,15 +95,55 @@ function actions.BuyCostume(player: Player, data, costumeId: any)
 		end)
 		return true, costume.Name .. " equipped"
 	end
-	if data.Money < costume.Price then
-		return false, "You need $" .. fmt(costume.Price)
+	if data.Candy < costume.Price then
+		return false, "You need " .. fmt(costume.Price) .. " Candy"
 	end
 	DataService.Update(player, function(d)
-		d.Money -= costume.Price
+		d.Candy -= costume.Price
 		table.insert(d.OwnedCostumes, costumeId)
 		d.EquippedCostume = costumeId
 	end)
 	return true, "Bought and equipped " .. costume.Name .. "!"
+end
+
+function actions.RedeemCode(player: Player, data, code: any)
+	if type(code) ~= "string" or #code > 40 then
+		return false, "Type a code first"
+	end
+	local key = string.upper((string.gsub(code, "%s", "")))
+	if key == "" then
+		return false, "Type a code first"
+	end
+	local now = os.clock()
+	local tries = wrongCodes[player]
+	if tries and now < tries.ResetAt and tries.Count >= 5 then
+		return false, "Too many wrong codes. Wait a minute and try again."
+	end
+	local reward = CODES[key]
+	if not reward then
+		if not tries or now >= tries.ResetAt then
+			tries = { Count = 0, ResetAt = now + 60 }
+			wrongCodes[player] = tries
+		end
+		tries.Count += 1
+		return false, "That code does not exist"
+	end
+	if table.find(data.RedeemedCodes, key) then
+		return false, "You already used this code"
+	end
+	DataService.Update(player, function(d)
+		table.insert(d.RedeemedCodes, key)
+		d.Money += reward.Money or 0
+		d.Candy += reward.Candy or 0
+	end)
+	local parts = {}
+	if reward.Money then
+		table.insert(parts, "$" .. fmt(reward.Money))
+	end
+	if reward.Candy then
+		table.insert(parts, fmt(reward.Candy) .. " Candy")
+	end
+	return true, "Code accepted! You got " .. table.concat(parts, " and ") .. "!"
 end
 
 -- Put an egg from the bag into a free incubator. Hatching is free; rarer eggs take longer.
@@ -103,7 +160,7 @@ function actions.Hatch(player: Player, data, eggIndex: any)
 	if not egg then
 		return false, "That egg is gone"
 	end
-	if #data.Incubators >= Config.IncubatorsFor(data.BaseLevel) then
+	if #data.Incubators >= Config.IncubatorsFor(data.PadLevel) then
 		return false, "All your incubators are busy"
 	end
 	DataService.Update(player, function(d)
@@ -145,7 +202,7 @@ function actions.EquipPet(player: Player, data, petId: any)
 	if type(petId) ~= "string" or not table.find(data.Storage, petId) then
 		return false, "That pet is gone"
 	end
-	if #data.Pets >= Config.PetSlotsFor(data.BaseLevel) then
+	if #data.Pets >= Config.PetSlotsFor(data.PetCapLevel) then
 		return false, "Your base is full. Unequip a pet or upgrade your base."
 	end
 	DataService.Update(player, function(d)
@@ -176,7 +233,7 @@ function actions.EquipBest(player: Player, data)
 	table.sort(all, function(a, b)
 		return Config.Pets[a].MoneyPerSecond > Config.Pets[b].MoneyPerSecond
 	end)
-	local slots = Config.PetSlotsFor(data.BaseLevel)
+	local slots = Config.PetSlotsFor(data.PetCapLevel)
 	local best = { table.unpack(all, 1, math.min(slots, #all)) }
 	local rest = { table.unpack(all, slots + 1, #all) }
 	DataService.Update(player, function(d)
@@ -188,7 +245,7 @@ end
 
 -- Fills every free incubator with the rarest eggs in the bag.
 function actions.HatchBest(player: Player, data)
-	local free = Config.IncubatorsFor(data.BaseLevel) - #data.Incubators
+	local free = Config.IncubatorsFor(data.PadLevel) - #data.Incubators
 	if free <= 0 then
 		return false, "All your incubators are busy"
 	end
@@ -262,6 +319,19 @@ function actions.ClaimIndex(player: Player, data, count: any)
 	return true, string.format("Index reward: +$%s!", fmt(reward.Money))
 end
 
+-- Custom speed panel: run slower than your max speed. Picking your max (or more) goes back to always-max.
+function actions.SetCustomSpeed(player: Player, data, speed: any)
+	if type(speed) ~= "number" or speed ~= speed then
+		return false, "Pick a speed"
+	end
+	local max = Config.WalkSpeedFor(data.SpeedLevel)
+	speed = math.clamp(math.floor(speed * 2 + 0.5) / 2, math.min(Config.MinCustomSpeed, max), max)
+	DataService.Update(player, function(d)
+		d.CustomSpeed = if speed >= max then 0 else speed
+	end)
+	return true, "Speed set to " .. Config.FormatSpeed(speed)
+end
+
 local function runAction(player: Player, action: any, arg: any)
 	local now = os.clock()
 	if now - (lastRequest[player] or 0) < 0.15 then
@@ -284,30 +354,59 @@ local function wireCostumeShop(map: Instance)
 	if not mannequins then
 		return
 	end
+	local cheapestId = Config.Costumes[2].Id -- the first costume after "None"
+	local cheapestPedestal: BasePart? = nil
 	for _, display in mannequins:GetChildren() do
 		local costumeId = display:GetAttribute("Costume")
 		local costume = costumeId and Config.GetCostume(costumeId)
 		local pedestal = display:FindFirstChild("Pedestal")
 		if costume and costume.Id == costumeId and pedestal then
-			-- Name, Candy bonus and price; the client swaps the price for Owned / Wearing.
+			-- Name, Candy multiplier and XP rate, and price in Candy; the client swaps the price for Owned / Wearing.
 			local sign = pedestal:FindFirstChild("InfoSign")
 			if sign then
 				(sign:FindFirstChild("NameLabel", true) :: TextLabel).Text = costume.Name;
-				(sign:FindFirstChild("BonusLabel", true) :: TextLabel).Text = string.format("+%d%% Candy", costume.CandyBonus or 0);
-				(sign:FindFirstChild("PriceLabel", true) :: TextLabel).Text = "$" .. fmt(costume.Price)
+				(sign:FindFirstChild("BonusLabel", true) :: TextLabel).Text = string.format("x%s Candy  |  %s XP/s", tostring(costume.CandyMultiplier), tostring(costume.XpPerSecond));
+				(sign:FindFirstChild("PriceLabel", true) :: TextLabel).Text = fmt(costume.Price) .. " Candy"
+			end
+			if costume.Id == cheapestId and pedestal:IsA("BasePart") then
+				cheapestPedestal = pedestal
 			end
 			local prompt = Instance.new("ProximityPrompt")
 			prompt.ActionText = "Buy / Wear"
-			prompt.ObjectText = string.format("%s ($%s)", costume.Name, fmt(costume.Price))
+			prompt.ObjectText = string.format("%s (%s Candy)", costume.Name, fmt(costume.Price))
 			prompt.MaxActivationDistance = 9
 			prompt.RequiresLineOfSight = false
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
 			prompt.Parent = pedestal
 			prompt.Triggered:Connect(function(player)
+				-- Prompts can be fired from anywhere with cheats, so check the player really is at the mannequin.
+				local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if not (root and (root.Position - pedestal.Position).Magnitude <= prompt.MaxActivationDistance + 14) then
+					return
+				end
 				local ok, message = runAction(player, "BuyCostume", costume.Id)
 				Remotes.Notify:FireClient(player, message, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
 			end)
 		end
+	end
+
+	-- Tutorial: stand in front of the shop (on the side facing the hub's lobby spawn), look at the cheapest costume.
+	-- The pedestal is tagged "TutorialCostume" and carries the ground point where the guide arrows start, so the
+	-- client can draw the arrows for first-time players.
+	if cheapestPedestal and shop and shop:IsA("Model") then
+		local pedestal = cheapestPedestal :: BasePart
+		local lobby = workspace:FindFirstChild("LobbySpawn", true)
+		local toward = if lobby and lobby:IsA("BasePart") then lobby.Position else Vector3.zero
+		local center = shop:GetBoundingBox().Position
+		local out = Vector3.new(toward.X - center.X, 0, toward.Z - center.Z)
+		out = if out.Magnitude > 1 then out.Unit else Vector3.new(-1, 0, 0)
+		local want = pedestal.Position + out * 18
+		local hit = workspace:Raycast(Vector3.new(want.X, pedestal.Position.Y + 40, want.Z), Vector3.new(0, -120, 0))
+		local ground = if hit then hit.Position else Vector3.new(want.X, 0, want.Z)
+		local standAt = ground + Vector3.new(0, 3.5, 0)
+		tutorialSpawn = CFrame.lookAt(standAt, Vector3.new(pedestal.Position.X, standAt.Y, pedestal.Position.Z))
+		pedestal:SetAttribute("TutorialSpawn", ground)
+		CollectionService:AddTag(pedestal, "TutorialCostume")
 	end
 end
 
@@ -332,6 +431,7 @@ function ShopService.Start(map: Instance)
 	wireMenuCounters(map)
 	Players.PlayerRemoving:Connect(function(player)
 		lastRequest[player] = nil
+		wrongCodes[player] = nil
 	end)
 end
 
