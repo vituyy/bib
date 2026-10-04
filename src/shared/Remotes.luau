@@ -11,6 +11,7 @@ local DEFINITIONS = {
 	ChaseState = "RemoteEvent", -- server -> client: (isChased, ownerName?)
 	Request = "RemoteFunction", -- client -> server: (action, arg) -> (ok, message)
 	TreadmillRunning = "RemoteEvent", -- client -> server: (isRunning) held on the belt and running, or stepped off
+	Tutorial = "RemoteEvent", -- server -> client: ("StepDone", stepName, extra) or ("Skipped")
 }
 
 local Remotes = {}

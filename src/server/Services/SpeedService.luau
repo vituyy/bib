@@ -10,6 +10,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local DataService = require(script.Parent.DataService)
 local PlotService = require(script.Parent.PlotService)
+local ShopService = require(script.Parent.ShopService)
 
 local SpeedService = {}
 
@@ -204,6 +205,9 @@ function SpeedService.Start()
 
 				-- On the treadmill the character is held in place, so running there counts without moving.
 				local onTreadmill = belt ~= nil and running[player] == true and not player:GetAttribute("CarryingEgg") and isOnBelt(belt, root)
+				if onTreadmill then
+					ShopService.TutorialTreadmillTick(player) -- before the XP, so the tutorial sees both in one update
+				end
 				if onTreadmill or moved then
 					giveXp(player, Config.XpRateFor(data, onTreadmill) * Config.TreadmillTick)
 				end

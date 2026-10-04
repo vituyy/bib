@@ -157,9 +157,36 @@ function Config.GetCostume(id: string)
 	return Config.Costumes[1]
 end
 
--- True for a player who has never owned a costume: they get the first-time tutorial and spawn at the Costume Shop.
+---------------------------------------------------------------------------
+-- Tutorial: Scarecrow Jack walks new players through these steps in order. The step a player is on is saved
+-- (TutorialStep); TutorialDone means finished or skipped. Saves from before the tutorial skip it when the player
+-- already bought a costume.
+--   Costume    buy the first costume          Knock      Trick-or-Treat at House 1
+--   Run        run until you level up          Steal      steal an egg from House 1 (the owner can't catch you)
+--   Treadmill  run on the base treadmill       Hatch      hatch it (Fast Hatch is free this one time)
+--                                               Treadmill2 buy the second treadmill
+---------------------------------------------------------------------------
+Config.TutorialSteps = { "Costume", "Run", "Treadmill", "Knock", "Steal", "Hatch", "Treadmill2" }
+Config.TutorialDone = #Config.TutorialSteps + 1
+Config.TutorialTreadmillSeconds = 5 -- seconds of running on the treadmill the Treadmill step asks for
+Config.TutorialReward = { Candy = 250 } -- given when the last step is done (not when skipped)
+Config.StartingData.TutorialStep = 1
+Config.StartingData.TutorialMark = 0 -- the stat a step started from (Speed Level, Candy, eggs, pets) to see it go up
+
+-- Fast Hatch: hatches every egg on your pads right now. It is a Developer Product (create one for 5 Robux in the
+-- Creator Dashboard > Monetization > Developer Products and put its id here). 0 = not set up yet.
+-- During the tutorial's Hatch step it is free.
+Config.FastHatchProductId = 0
+Config.FastHatchRobux = 5 -- the price shown on the button; the real price is the one set on the product
+
+-- The tutorial step a player is on ("Costume", "Run", ...), or nil once it is done or skipped.
+function Config.TutorialStepName(data: { [string]: any }): string?
+	return Config.TutorialSteps[data.TutorialStep or Config.TutorialDone]
+end
+
+-- True for a player who has not bought a costume yet in the tutorial: they spawn at the Costume Shop.
 function Config.NeedsTutorial(data: { [string]: any }): boolean
-	return #data.OwnedCostumes <= 1
+	return Config.TutorialStepName(data) == "Costume" and #data.OwnedCostumes <= 1
 end
 
 -- Speed XP per second for a player's data. The base rate comes from the equipped costume; running on a

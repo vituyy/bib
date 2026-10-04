@@ -103,6 +103,8 @@ local function sanitize(data: { [string]: any })
 	cleanNumber(data, "PetCapLevel", 0, #Config.PetCapacityUpgrades, true)
 	cleanNumber(data, "PadLevel", 0, #Config.HatchPadUpgrades, true)
 	cleanNumber(data, "CustomSpeed", 0, Config.WalkSpeedFor(Config.MaxSpeedLevel))
+	cleanNumber(data, "TutorialStep", 1, Config.TutorialDone, true)
+	cleanNumber(data, "TutorialMark", 0)
 
 	data.OwnedTrails = cleanList(data.OwnedTrails, function(i)
 		return if isNumber(i) and Config.Trails[i] then i else nil
@@ -307,6 +309,16 @@ function DataService.Load(player: Player)
 		return
 	end
 
+	-- Saves from before the tutorial: a player who already bought a costume, has pets or rebirthed has played
+	-- before, so they skip it.
+	if type(data) == "table" and data.TutorialStep == nil then
+		local function count(list: any): number
+			return if type(list) == "table" then #list else 0
+		end
+		if count(data.OwnedCostumes) > 1 or count(data.Pets) > 0 or count(data.Storage) > 0 or (tonumber(data.Rebirths) or 0) > 0 then
+			data.TutorialStep = Config.TutorialDone
+		end
+	end
 	profiles[player] = reconcile(if type(data) == "table" then data else deepCopy(Config.StartingData))
 	sanitize(profiles[player])
 	-- Saves from before the Index: pets already on the base count as discovered.

@@ -23,7 +23,7 @@ File names follow the Rojo rules: `Name.server.luau` is a Script, `Name.client.l
 
 ## How to play the latest version
 
-1. Download `place/SpookyStealV3.2.rbxl` from this repo (open the file on GitHub and click the download button).
+1. Download `place/SpookyStealV3.2-Tutorial.rbxl` (the newest version, with the Scarecrow Jack tutorial) from this repo (open the file on GitHub and click the download button).
 2. Double-click it to open it in Roblox Studio, then press **Play**.
 
 Every code change is copied into the place file for you (`tools/sync_place.py`), so the download always has the latest scripts.

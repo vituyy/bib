@@ -68,6 +68,7 @@ type Carry = {
 	Started: number,
 	Chased: boolean,
 	Character: Model,
+	Tutorial: boolean, -- the tutorial's first steal from House 1: the owner can never catch this thief
 }
 
 local houses: { HouseState } = {}
@@ -522,6 +523,7 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 			alreadyChasing = true
 		end
 	end
+	local data = DataService.Get(player)
 	carrying[player] = {
 		House = state,
 		SpotIndex = spotIndex,
@@ -530,6 +532,7 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 		Started = os.clock(),
 		Chased = true,
 		Character = player.Character :: Model,
+		Tutorial = state.Index == 1 and data ~= nil and Config.TutorialStepName(data) == "Steal",
 	}
 	player:SetAttribute("CarryingEgg", eggId)
 	attachCarriedEgg(player, eggId, petId)
@@ -621,18 +624,32 @@ local function chaseStep()
 
 		if target then
 			state.ReturnStart = nil
+			local thiefHumanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+			-- Tutorial thief: the owner runs a little slower than them and trips instead of catching, so this chase
+			-- looks scary but can't be lost.
+			local tutorialChase = carrying[target].Tutorial
+			ownerHumanoid.WalkSpeed = if tutorialChase and thiefHumanoid
+				then math.min(state.Info.OwnerSpeed, thiefHumanoid.WalkSpeed * 0.85)
+				else state.Info.OwnerSpeed
 			if os.clock() < (state.AlertUntil or 0) then
 				-- Still noticing the thief: he stands there for a moment (and can not catch anyone yet).
 				state.Goal, state.Waypoints = nil, nil
 				ownerHumanoid:MoveTo(ownerRoot.Position)
 			elseif targetDistance <= Config.CatchDistance then
-				finishTheft(target, "caught")
+				if tutorialChase then
+					state.AlertUntil = os.clock() + 1.5
+					state.Goal, state.Waypoints = nil, nil
+					ownerHumanoid:MoveTo(ownerRoot.Position)
+					notify(target, state.OwnerName .. " tripped! Keep running!", GREEN)
+				else
+					finishTheft(target, "caught")
+				end
 			else
-				local thiefHumanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
 				local thiefRoot = rootOf(target.Character) :: BasePart
 				navigate(state, thiefRoot.Position, if thiefHumanoid then thiefHumanoid.HipHeight + thiefRoot.Size.Y / 2 else 3)
 			end
 		elseif not state.OwnerHome then
+			ownerHumanoid.WalkSpeed = state.Info.OwnerSpeed
 			-- Nobody left to chase: walk back to his spot.
 			local home = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
 			state.ReturnStart = state.ReturnStart or os.clock()
@@ -1234,8 +1251,9 @@ function HouseService.Start(map: Instance)
 		end
 	end)
 	DayNightService.OnDayStart(function()
-		for player in carrying do
-			finishTheft(player, "sunrise")
+		for player, carry in carrying do
+			-- The tutorial's egg is never lost to sunrise: it goes home with the thief.
+			finishTheft(player, if carry.Tutorial then "escaped" else "sunrise")
 		end
 		for _, state in houses do
 			clearEggs(state)

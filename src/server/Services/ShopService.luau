@@ -1,7 +1,9 @@
 -- Handles every purchase and menu action. The server re-checks all costs; the client only asks.
--- Also wires the costume shop mannequins (walk up and buy) and the speed shop counter (opens the menu).
+-- Also wires the costume shop mannequins (walk up and buy) and the speed shop counter (opens the menu),
+-- sells Fast Hatch (a Robux Developer Product), and runs the tutorial's steps (see "Tutorial" below).
 
 local CollectionService = game:GetService("CollectionService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -35,6 +37,139 @@ local function fmt(n: number): string
 end
 
 local actions = {}
+
+---------------------------------------------------------------------------
+-- Tutorial. The server decides when each step is done by watching the player's data (and the treadmill ticks
+-- SpeedService reports), so the client only shows it. Steps and their order are in Config.TutorialSteps; Scarecrow
+-- Jack, the arrows and the dialogue are drawn by the client (Main.client, "Tutorial").
+---------------------------------------------------------------------------
+local treadmillTicks: { [Player]: number } = {}
+local TREADMILL_TICKS = math.ceil(Config.TutorialTreadmillSeconds / Config.TreadmillTick)
+
+-- The stat these steps watch go up. It is saved as TutorialMark when the step starts.
+local COUNTED_STEPS = {
+	Run = function(data)
+		return data.SpeedLevel
+	end,
+	Knock = function(data)
+		return data.Candy
+	end,
+	Steal = function(data)
+		return #data.Eggs
+	end,
+	Hatch = function(data)
+		return #data.Pets + #data.Storage
+	end,
+}
+
+local function tutorialMark(step: string?, data): number
+	local count = step and COUNTED_STEPS[step]
+	return if count then count(data) else 0
+end
+
+local function advanceTutorial(player: Player, data, step: string)
+	-- What the client needs to react: the Candy the witch gave, or the pet that hatched.
+	local extra = nil
+	if step == "Knock" then
+		extra = data.Candy - data.TutorialMark
+	elseif step == "Hatch" then
+		extra = data.Pets[#data.Pets] or data.Storage[#data.Storage]
+	end
+	-- Sent before the new step, so the client finishes this step's lines before it starts the next one.
+	Remotes.Tutorial:FireClient(player, "StepDone", step, extra)
+	treadmillTicks[player] = nil
+	player:SetAttribute("TutorialTreadmill", nil)
+	DataService.Update(player, function(d)
+		d.TutorialStep += 1
+		local nextStep = Config.TutorialStepName(d)
+		d.TutorialMark = tutorialMark(nextStep, d)
+		if not nextStep then
+			d.Candy += Config.TutorialReward.Candy or 0
+			d.Money += Config.TutorialReward.Money or 0
+		end
+	end)
+end
+
+-- Runs after every data change: is the current step done?
+local function checkTutorial(player: Player, data)
+	local step = Config.TutorialStepName(data)
+	if not step then
+		return
+	end
+	local done = false
+	local count = COUNTED_STEPS[step]
+	if count then
+		local now = count(data)
+		if now < data.TutorialMark then
+			-- Went down (Candy spent, an egg hatched, a pet sold): count from here so the step can still finish.
+			DataService.Update(player, function(d)
+				d.TutorialMark = now
+			end)
+			return
+		end
+		done = now > data.TutorialMark
+	elseif step == "Costume" then
+		done = #data.OwnedCostumes > 1
+	elseif step == "Treadmill" then
+		done = (treadmillTicks[player] or 0) >= TREADMILL_TICKS
+	elseif step == "Treadmill2" then
+		done = data.Treadmill >= 2
+	end
+	if done then
+		advanceTutorial(player, data, step)
+	end
+end
+
+-- SpeedService calls this every time it pays treadmill XP.
+function ShopService.TutorialTreadmillTick(player: Player)
+	local data = DataService.Get(player)
+	if not (data and Config.TutorialStepName(data) == "Treadmill") then
+		return
+	end
+	local ticks = (treadmillTicks[player] or 0) + 1
+	treadmillTicks[player] = ticks
+	player:SetAttribute("TutorialTreadmill", math.min(ticks * Config.TreadmillTick, Config.TutorialTreadmillSeconds))
+end
+
+function actions.TutorialSkip(player: Player, data)
+	if not Config.TutorialStepName(data) then
+		return false, "You already finished the tutorial"
+	end
+	treadmillTicks[player] = nil
+	player:SetAttribute("TutorialTreadmill", nil)
+	Remotes.Tutorial:FireClient(player, "Skipped") -- before the data, so Jack says goodbye before he leaves
+	DataService.Update(player, function(d)
+		d.TutorialStep = Config.TutorialDone
+		d.TutorialMark = 0
+	end)
+	return true, "Tutorial skipped. Good luck out there!"
+end
+
+-- Fast Hatch: every egg on the player's pads hatches now (PlotService hatches it within a second).
+local function finishHatching(player: Player)
+	local now = os.time()
+	DataService.Update(player, function(d)
+		for _, entry in d.Incubators do
+			entry.EndsAt = math.min(entry.EndsAt, now)
+		end
+	end)
+end
+
+-- Free during the tutorial's Hatch step; otherwise it opens the Robux purchase (ProcessReceipt below hatches).
+function actions.FastHatch(player: Player, data)
+	if #data.Incubators == 0 then
+		return false, "Nothing is hatching. Put an egg on a hatching pad first!"
+	end
+	if Config.TutorialStepName(data) == "Hatch" then
+		finishHatching(player)
+		return true, "FAST HATCH! Free this time, thanks to Scarecrow Jack!"
+	end
+	if Config.FastHatchProductId == 0 then
+		return false, "Fast Hatch is not for sale yet."
+	end
+	MarketplaceService:PromptProductPurchase(player, Config.FastHatchProductId)
+	return true, ""
+end
 
 function actions.BuyTreadmill(player: Player, data, tier: any)
 	if type(tier) ~= "number" then
@@ -429,10 +564,26 @@ function ShopService.Start(map: Instance)
 	Remotes.Request.OnServerInvoke = runAction
 	wireCostumeShop(map)
 	wireMenuCounters(map)
+	DataService.OnChanged(checkTutorial)
 	Players.PlayerRemoving:Connect(function(player)
 		lastRequest[player] = nil
 		wrongCodes[player] = nil
+		treadmillTicks[player] = nil
 	end)
+
+	-- Robux purchases. Only one ProcessReceipt can exist in a game, so add any new Developer Products here too.
+	MarketplaceService.ProcessReceipt = function(receipt)
+		local player = Players:GetPlayerByUserId(receipt.PlayerId)
+		if Config.FastHatchProductId ~= 0 and receipt.ProductId == Config.FastHatchProductId then
+			if not (player and DataService.Get(player)) then
+				return Enum.ProductPurchaseDecision.NotProcessedYet -- Roblox tries again when they are back
+			end
+			finishHatching(player)
+			Remotes.Notify:FireClient(player, "FAST HATCH! Your eggs are hatching right now!", Color3.fromRGB(200, 120, 255))
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 end
 
 return ShopService

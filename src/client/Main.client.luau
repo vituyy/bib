@@ -374,7 +374,7 @@ local rebirthLabel = outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.ne
 local levelBar, xpFill = progressBar({ Size = UDim2.new(1, -56, 0, 46), Position = UDim2.fromOffset(0, 34), Parent = levelHud }, PAINT.LevelFill)
 local levelLabel = outlined({ Size = UDim2.new(0.5, -16, 1, -14), Position = UDim2.fromOffset(16, 7), Text = "", TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3, Parent = levelBar }, 2.5)
 local xpText = outlined({ Size = UDim2.new(0.5, -16, 1, -16), Position = UDim2.new(0.5, 0, 0, 8), Text = "", TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3, Parent = levelBar }, 2.5)
-chunkyButton({ Size = UDim2.fromOffset(46, 46), Position = UDim2.new(1, -46, 0, 34), Text = "+", Parent = levelHud }, PAINT.Orange, function()
+local speedShopButton = chunkyButton({ Size = UDim2.fromOffset(46, 46), Position = UDim2.new(1, -46, 0, 34), Text = "+", Parent = levelHud }, PAINT.Orange, function()
 	toggleMenu("Treadmills", true)
 end)
 
@@ -537,7 +537,19 @@ local function request(action: string, arg: any?)
 		toast("Something went wrong, try again.", RED)
 		return
 	end
-	toast(message or "", if success then GREEN else RED)
+	if message and message ~= "" then
+		toast(message, if success then GREEN else RED)
+	end
+end
+
+-- Fast Hatch: every egg on your pads hatches now. Free in the tutorial, otherwise a Robux purchase (the server
+-- opens it).
+local function fastHatch()
+	if data and #data.Incubators == 0 then
+		toast("Nothing is hatching. Tap an egg in the Eggs menu first!", ORANGE)
+		return
+	end
+	request("FastHatch")
 end
 
 -- Section heading: coloured outlined text straight on the panel.
@@ -904,7 +916,12 @@ function menus.Eggs(d)
 	footerButton(1, "Hatch Best", PAINT.Orange, function()
 		request("HatchBest")
 	end)
-	footerHint(2, "Tap an egg to hatch it. Hatching is free!")
+	if #d.Incubators > 0 then
+		local free = Config.TutorialStepName(d) == "Hatch"
+		footerButton(2, if free then "Fast Hatch FREE" else "Fast Hatch R$" .. Config.FastHatchRobux, if free then PAINT.Green else PAINT.Purple, fastHatch)
+	else
+		footerHint(2, "Tap an egg to hatch it. Hatching is free!")
+	end
 end
 
 searchBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -1298,6 +1315,7 @@ local function menuKey(d)
 		table.concat(d.Eggs, ","), table.concat(incubating, ","), table.concat(d.Pets, ","), table.concat(d.Storage or {}, ","),
 		player:GetAttribute("FriendBoost") or 0,
 		table.concat(d.Discovered or {}, ","), table.concat(d.IndexClaimed or {}, ","), d.PetCapLevel, d.PadLevel,
+		d.TutorialStep or 0,
 		if openMenu == "Treadmills" then math.floor(d.Money / 1000) else 0,
 	}, "|")
 end
@@ -1364,140 +1382,1138 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt)
 end)
 
 ---------------------------------------------------------------------------
--- First-time tutorial: a player who has never owned a costume spawns in front of the Costume Shop. Arrows on the
--- ground lead from the spawn point to the cheapest costume, a "Buy a Costume!" message floats on screen and over
--- the costume, and the costume glows. Everything disappears the moment the first costume is bought, and players
--- who already own a costume never see it. (Only this player sees it: the arrows are created on the client.)
+-- Tutorial: Scarecrow Jack, a pumpkin-headed scarecrow, hops along next to new players and walks them through
+-- Config.TutorialSteps: buy a costume, run and level up, use the base treadmill, knock on House 1, steal an egg
+-- (a chase that can't be lost), Fast Hatch it (free once) and buy the second treadmill.
+-- The server decides when a step is done (ShopService "Tutorial") and tells us with Remotes.Tutorial; everything
+-- here is only drawn for this player: Jack, his dialogue box, the objective card (top centre) with a Skip button,
+-- arrows on the ground, a spinning arrow and a glow on the target, an arrow on the screen edge when the target is
+-- off screen, a hand pointing at buttons, confetti and the hatch reveal. It all lives in its own function so it
+-- does not use up the main chunk's local variables.
 ---------------------------------------------------------------------------
-local tutorialFolder: Folder? = nil
-local tutorialMessage: Frame? = nil
--- The on-screen "Buy a Costume!" message hides while a menu is open so it doesn't cover the menu title.
-local function updateTutorialMessage()
-	if tutorialMessage then
-		tutorialMessage.Visible = not (panel.Visible or invPanel.Visible)
-	end
-end
-panel:GetPropertyChangedSignal("Visible"):Connect(updateTutorialMessage)
-invPanel:GetPropertyChangedSignal("Visible"):Connect(updateTutorialMessage)
-local tutorialRender: RBXScriptConnection? = nil
+local updateTutorial: (d: { [string]: any }) -> () = (function()
+	local Debris = game:GetService("Debris")
+	local GuiService = game:GetService("GuiService")
+	local SoundService = game:GetService("SoundService")
 
-local function stopTutorial()
-	if tutorialRender then
-		tutorialRender:Disconnect()
-		tutorialRender = nil
-	end
-	if tutorialFolder then
-		tutorialFolder:Destroy()
-		tutorialFolder = nil
-	end
-	if tutorialMessage then
-		tutorialMessage:Destroy()
-		tutorialMessage = nil
-	end
-end
+	local GOLD = Color3.fromRGB(255, 225, 60)
+	local LAVENDER = Color3.fromRGB(205, 190, 240)
+	local PUMPKIN = Color3.fromRGB(255, 130, 20)
+	local GUIDE_NAME = "Scarecrow Jack"
 
-local function startTutorial()
-	if tutorialFolder then
-		return
-	end
-	local pedestal = CollectionService:GetTagged("TutorialCostume")[1]
-	local from = pedestal and pedestal:GetAttribute("TutorialSpawn")
-	if not (pedestal and pedestal:IsA("BasePart") and typeof(from) == "Vector3") then
-		return -- the shop has not streamed in yet; this runs again when it does
-	end
+	-- Built-in Roblox sounds. Swap in your own ids ("rbxassetid://123") to change them; "" turns one off.
+	local SOUNDS = {
+		Talk = "rbxasset://sounds/electronicpingshort.wav",
+		Poof = "rbxasset://sounds/swoosh.wav",
+		Step = "rbxasset://sounds/victory.wav",
+		Click = "rbxasset://sounds/button.wav",
+		Shake = "rbxasset://sounds/clickfast.wav",
+	}
 
-	local folder = Instance.new("Folder")
-	folder.Name = "TutorialGuide"
-	folder.Parent = workspace
-	tutorialFolder = folder
+	-- What Jack says when a step starts, and when it is done. Knock's line needs the Candy the witch gave.
+	local INTRO: { [string]: { string } } = {
+		Costume = {
+			"Boo! Hehe, did I scare ya? I'm Scarecrow Jack, and this spooky street is my patch.",
+			"Around here we trick-or-treat for Candy, steal eggs from creepy houses and hatch them into pets!",
+			"But nobody hands out candy to a kid with no costume. Follow the arrows and grab the Bedsheet Ghost!",
+		},
+		Run = {
+			"Next up: SPEED! Running anywhere earns Speed XP. Fill the bar at the bottom to level up.",
+			"Race me back to your base! Ready... set... GO!",
+		},
+		Treadmill = { "See that treadmill in front of your base? Hop on and run! It multiplies the XP your costume gives you." },
+		Knock = { "Now the fun part. Go to House 1, the Old Witch's place, knock on her door and shout Trick-or-Treat!" },
+		Steal = { "Sneak into House 1, hold F on an egg to grab it, then RUN it back to your base!" },
+		Hatch = { "Eggs hatch on your base. Open the Eggs menu and tap your egg to put it on a hatching pad." },
+		Treadmill2 = {
+			"Your pet earns Money every second, even while you play. Save up for the Wooden Treadmill!",
+			"Press the + next to your speed bar to open the Speed Shop. Keep stealing eggs while you wait!",
+		},
+	}
+	local DONE: { [string]: any } = {
+		Costume = { "Ooooh, now THAT is spooky! Costumes get you more Candy at every door and help you train faster." },
+		Run = { "LEVEL UP! Every level makes you faster for good. Faster legs, fewer catches!" },
+		Treadmill = { "Feel the burn! Better treadmills train you even faster. Remember that, it matters later!" },
+		Knock = function(candy: number)
+			return {
+				string.format("That old witch gave you only %d %s??? Well, we'll have to do a Steal/trick to teach her a lesson!", candy, if candy == 1 then "candy" else "candies"),
+				"She hides eggs inside her house. Sneak in, grab one and run home. Don't worry, I tied her shoelaces together. She won't catch you this time!",
+			}
+		end,
+		Steal = { "HAHA! You actually did it! Listen to her screech! That's what she gets for being stingy." },
+		Hatch = { "Look at that little guy! Pets live on your base and earn you Money every single second." },
+		Treadmill2 = {
+			"You're a natural, kid! Now hit the scarier houses, steal rarer eggs and become the spookiest thief on the street!",
+			string.format("Here's %d Candy for the road. See ya around!", Config.TutorialReward.Candy or 0),
+		},
+	}
+	-- These steps already got their instructions in the previous step's "done" lines.
+	local SKIP_INTRO_AFTER_DONE = { Steal = true }
+	local HATCH_HINT = "Too slow? Smash that FAST HATCH button. It's on me this time, totally free!"
+	local CHASE_LINE = "RUN!!! Back to your base! Don't look back!"
 
-	-- Arrows (chevrons) on the ground, one every 6 studs, pointing toward the costume.
-	local flatDir = Vector3.new(pedestal.Position.X - from.X, 0, pedestal.Position.Z - from.Z)
-	local length = flatDir.Magnitude
-	local dir = flatDir.Unit
-	local params = RaycastParams.new()
-	params.FilterDescendantsInstances = { folder, player.Character }
-	local arrows: { { BasePart } } = {}
-	local count = math.max(1, math.floor((length - 6) / 6))
-	for i = 1, count do
-		local spot = from + dir * (i * 6)
-		local hit = workspace:Raycast(Vector3.new(spot.X, spot.Y + 30, spot.Z), Vector3.new(0, -80, 0), params)
-		local ground = if hit then hit.Position else spot
-		local tip = CFrame.lookAt(ground + Vector3.new(0, 0.15, 0), ground + Vector3.new(0, 0.15, 0) + dir) * CFrame.new(0, 0, -1.5)
-		local bars = {}
-		for _, angle in { math.rad(40), math.rad(-40) } do
-			local bar = Instance.new("Part")
-			bar.Name = "GuideArrow"
-			bar.Size = Vector3.new(1, 0.15, 3.2)
-			bar.CFrame = tip * CFrame.Angles(0, angle, 0) * CFrame.new(0, 0, 1.6)
-			bar.Color = Color3.fromRGB(255, 225, 60)
-			bar.Material = Enum.Material.Neon
-			bar.Anchored, bar.CanCollide, bar.CanQuery, bar.CanTouch, bar.CastShadow = true, false, false, false, false
-			bar.Parent = folder
-			table.insert(bars, bar)
+	local step: string? = nil -- the step on screen (nil when there is no tutorial)
+	local seen = false -- got the first data yet
+	local active = false -- Jack and the tutorial UI exist
+	local hatchHinted = false
+	local lastEgg: { Egg: string, Pet: string? }? = nil -- the egg on the first pad, for the hatch reveal
+	local root: BasePart? = nil
+
+	local function sfx(name: string, volume: number?, pitch: number?)
+		local id = SOUNDS[name]
+		if not id or id == "" then
+			return
 		end
-		table.insert(arrows, bars)
+		local sound = Instance.new("Sound")
+		sound.SoundId = id
+		sound.Volume = volume or 0.5
+		sound.PlaybackSpeed = pitch or 1
+		sound.Parent = SoundService
+		sound:Play()
+		Debris:AddItem(sound, 8)
 	end
 
-	-- The costume glows and carries a bouncing label.
-	local display = pedestal.Parent
-	if display then
-		local glow = Instance.new("Highlight")
-		glow.FillTransparency = 1
-		glow.OutlineColor = Color3.fromRGB(255, 225, 60)
-		glow.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-		glow.Adornee = display
-		glow.Parent = folder
+	local function isNight(): boolean
+		return ReplicatedStorage:GetAttribute("IsNight") == true
 	end
-	local billboard = Instance.new("BillboardGui")
-	billboard.Size = UDim2.fromOffset(260, 70)
-	billboard.StudsOffset = Vector3.new(0, 12, 0)
-	billboard.AlwaysOnTop = true
-	billboard.LightInfluence = 0
-	billboard.MaxDistance = 400
-	billboard.Adornee = pedestal
-	outlined({ Size = UDim2.fromScale(1, 1), Text = "Buy a Costume!", TextColor3 = Color3.fromRGB(255, 225, 60), Parent = billboard }, 3)
-	billboard.Parent = folder
 
-	-- Message at the top of the screen.
-	local message = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Size = UDim2.fromOffset(420, 96),
-		Position = UDim2.new(0.5, 0, 0, 70),
-		BackgroundTransparency = 1,
-		Parent = gui,
-	})
-	tutorialMessage = message
-	message.Visible = not (panel.Visible or invPanel.Visible)
-	local scale = new("UIScale", { Parent = message })
-	outlined({ Size = UDim2.new(1, 0, 0, 56), Text = "Buy a Costume!", TextColor3 = Color3.fromRGB(255, 225, 60), Parent = message }, 3)
-	outlined({ Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 60), Text = "Follow the arrows, then press E at the glowing costume", Parent = message }, 2)
+	local function nightIn(): string
+		local endsAt = ReplicatedStorage:GetAttribute("PhaseEndsAt")
+		return if endsAt then formatTime(endsAt - workspace:GetServerTimeNow()) else "soon"
+	end
 
-	tutorialRender = RunService.RenderStepped:Connect(function()
-		local t = os.clock()
-		for i, bars in arrows do
-			local transparency = 0.1 + 0.6 * (0.5 + 0.5 * math.sin(t * 4 - i * 0.7)) -- a pulse running toward the costume
-			for _, bar in bars do
-				bar.Transparency = transparency
+	-------------------------------------------------------------------------
+	-- Scarecrow Jack: a wooden pole, a plaid shirt stuffed with straw, a glowing carved pumpkin head, a straw
+	-- hat and a crow friend on his arm. Built from parts so it needs no uploaded model. He faces -Z and his
+	-- pivot is the bottom of the pole.
+	-------------------------------------------------------------------------
+	local guide: Model? = nil
+	local face: { Mouth: Frame, Eyes: { TextLabel } }? = nil
+
+	local function buildGuide(): Model
+		local model = Instance.new("Model")
+		model.Name = "ScarecrowJack"
+		local function part(size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, round: boolean?, className: string?): BasePart
+			local p = Instance.new(className or "Part") :: BasePart
+			p.Size = size
+			p.CFrame = cf
+			p.Color = color
+			p.Material = material or Enum.Material.SmoothPlastic
+			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+			p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+			if round then
+				new("SpecialMesh", { MeshType = Enum.MeshType.Sphere, Parent = p })
+			end
+			p.Parent = model
+			return p
+		end
+		local C = CFrame.new
+		local WOOD = Color3.fromRGB(115, 78, 45)
+		local STRAW = Color3.fromRGB(240, 205, 95)
+		local SHIRT = Color3.fromRGB(185, 55, 45)
+		local PLAID = Color3.fromRGB(95, 25, 30)
+		local HAT = Color3.fromRGB(210, 170, 95)
+
+		part(Vector3.new(0.5, 3.6, 0.5), C(0, 1.8, 0), WOOD, Enum.Material.Wood)
+		for i = 0, 9 do -- straw sticking out under the shirt
+			local a = i / 10 * math.pi * 2
+			part(Vector3.new(0.2, 1.1, 0.2), C(math.cos(a) * 0.8, 3.05, math.sin(a) * 0.42) * CFrame.Angles(math.sin(a) * 0.4, 0, -math.cos(a) * 0.4), STRAW)
+		end
+		part(Vector3.new(2.2, 2.3, 1.2), C(0, 4.45, 0), SHIRT, Enum.Material.Fabric)
+		for _, x in { -0.55, 0.55 } do -- plaid
+			part(Vector3.new(0.14, 2.32, 1.24), C(x, 4.45, 0), PLAID, Enum.Material.Fabric)
+		end
+		for _, y in { 4.0, 4.9 } do
+			part(Vector3.new(2.24, 0.14, 1.24), C(0, y, 0), PLAID, Enum.Material.Fabric)
+		end
+		part(Vector3.new(2.3, 0.28, 1.3), C(0, 3.45, 0), Color3.fromRGB(140, 105, 60), Enum.Material.Fabric) -- rope belt
+		part(Vector3.new(0.62, 0.62, 0.08), C(0.55, 4.2, -0.63) * CFrame.Angles(0, 0, math.rad(12)), Color3.fromRGB(70, 115, 175), Enum.Material.Fabric) -- patch
+		part(Vector3.new(6.2, 0.45, 0.45), C(0, 5.1, 0), WOOD, Enum.Material.Wood) -- arms
+		for _, side in { -1, 1 } do
+			part(Vector3.new(1.7, 0.95, 0.95), C(side * 1.9, 5.1, 0), SHIRT, Enum.Material.Fabric)
+			for k = -1, 1 do -- straw hands
+				part(Vector3.new(1, 0.16, 0.16), C(side * 3.1, 5.1 + k * 0.2, k * 0.14) * CFrame.Angles(0, k * 0.45, side * k * 0.35), STRAW)
 			end
 		end
-		billboard.StudsOffset = Vector3.new(0, 12 + math.sin(t * 3) * 0.7, 0)
-		scale.Scale = 1 + math.sin(t * 3) * 0.04
-	end)
-end
 
-local function updateTutorial(d: { [string]: any })
-	if Config.NeedsTutorial(d) then
-		startTutorial()
-	else
-		stopTutorial()
+		-- The pumpkin head: a squashed ball with four ribs, a curly stem hidden under the hat.
+		local headY = 6.8
+		part(Vector3.new(2.7, 2.3, 2.6), C(0, headY, 0), PUMPKIN, nil, true)
+		for i = 0, 3 do
+			local a = i / 4 * math.pi * 2 + math.pi / 4
+			part(Vector3.new(1.55, 2.2, 1.55), C(math.cos(a) * 0.62, headY, math.sin(a) * 0.6), PUMPKIN:Lerp(Color3.fromRGB(150, 60, 0), 0.15), nil, true)
+		end
+		local glow = Instance.new("PointLight")
+		glow.Color = Color3.fromRGB(255, 170, 60)
+		glow.Brightness = 1.6
+		glow.Range = 12
+		glow.Parent = part(Vector3.new(0.2, 0.2, 0.2), C(0, headY, -0.6), PUMPKIN)
+
+		-- The carved face glows (it ignores the night lighting).
+		local facePart = part(Vector3.new(2.1, 1.9, 0.05), C(0, headY - 0.05, -1.28), PUMPKIN)
+		facePart.Transparency = 1
+		local surface = new("SurfaceGui", { Face = Enum.NormalId.Front, LightInfluence = 0, PixelsPerStud = 100, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, Parent = facePart })
+		local eyes = {}
+		for i, x in { 0.1, 0.58 } do
+			eyes[i] = new("TextLabel", {
+				Size = UDim2.fromScale(0.32, 0.36), Position = UDim2.fromScale(x, 0.08), BackgroundTransparency = 1,
+				Font = Enum.Font.GothamBlack, Text = "▲", TextScaled = true, TextColor3 = Color3.fromRGB(255, 235, 110),
+				TextStrokeColor3 = Color3.fromRGB(120, 40, 0), TextStrokeTransparency = 0, Parent = surface,
+			})
+		end
+		new("TextLabel", {
+			Size = UDim2.fromScale(0.16, 0.18), Position = UDim2.fromScale(0.42, 0.42), BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBlack, Text = "▲", TextScaled = true, TextColor3 = Color3.fromRGB(255, 220, 90), Parent = surface,
+		})
+		local mouth = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromScale(0.74, 0.2), Position = UDim2.fromScale(0.5, 0.64),
+			BackgroundColor3 = Color3.fromRGB(255, 235, 110), Parent = surface,
+		}, { new("UICorner", { CornerRadius = UDim.new(0.45, 0) }), new("UIStroke", { Color = Color3.fromRGB(120, 40, 0), Thickness = 3 }) })
+		for _, x in { 0.3, 0.7 } do -- two pumpkin "teeth" hang into the grin
+			new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.13, 0.5), Position = UDim2.fromScale(x, 0.05), Rotation = 45, BackgroundColor3 = PUMPKIN, BorderSizePixel = 0, Parent = mouth })
+		end
+		face = { Mouth = mouth, Eyes = eyes }
+
+		-- Straw hat, tipped to one side, with a band and straw poking out.
+		local hatBase = C(0, headY, 0) * CFrame.Angles(0, 0, math.rad(-9))
+		local upright = CFrame.Angles(0, 0, math.pi / 2)
+		part(Vector3.new(0.22, 4.4, 4.4), hatBase * C(0, 1.0, 0) * upright, HAT, Enum.Material.Fabric).Shape = Enum.PartType.Cylinder
+		part(Vector3.new(1.5, 2.3, 2.3), hatBase * C(0, 1.75, 0) * upright, HAT, Enum.Material.Fabric).Shape = Enum.PartType.Cylinder
+		part(Vector3.new(0.32, 2.36, 2.36), hatBase * C(0, 1.25, 0) * upright, Color3.fromRGB(150, 40, 60), Enum.Material.Fabric).Shape = Enum.PartType.Cylinder
+		for _, side in { -1, 1 } do
+			for k = 0, 2 do
+				part(Vector3.new(0.14, 0.75, 0.14), hatBase * C(side * (1.25 + k * 0.12), 0.65, -0.3 + k * 0.3) * CFrame.Angles(0, 0, side * (0.6 + k * 0.15)), STRAW)
+			end
+		end
+
+		-- His crow, perched on the left arm.
+		local crow = Color3.fromRGB(30, 28, 38)
+		part(Vector3.new(0.75, 0.7, 1), C(-2.45, 5.75, 0.05), crow, nil, true)
+		part(Vector3.new(0.5, 0.5, 0.5), C(-2.45, 6.2, -0.35), crow, nil, true)
+		part(Vector3.new(0.18, 0.14, 0.32), C(-2.45, 6.17, -0.68), Color3.fromRGB(255, 190, 40))
+		part(Vector3.new(0.6, 0.1, 0.5), C(-2.45, 5.75, 0.6) * CFrame.Angles(math.rad(-25), 0, 0), crow)
+
+		new("Highlight", { FillTransparency = 1, OutlineColor = BLACK, OutlineTransparency = 0.2, DepthMode = Enum.HighlightDepthMode.Occluded, Parent = model })
+		model.WorldPivot = CFrame.identity
+		return model
 	end
-end
-CollectionService:GetInstanceAddedSignal("TutorialCostume"):Connect(function()
-	if data and Config.NeedsTutorial(data) then
-		startTutorial()
+
+	-- A burst of orange and purple sparks.
+	local function poof(at: Vector3, count: number?)
+		local holder = Instance.new("Part")
+		holder.Anchored, holder.CanCollide, holder.CanQuery, holder.CanTouch = true, false, false, false
+		holder.Transparency = 1
+		holder.Size = Vector3.one
+		holder.CFrame = CFrame.new(at)
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, PUMPKIN), ColorSequenceKeypoint.new(0.5, GOLD), ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 80, 255)) })
+		emitter.LightEmission = 0.7
+		emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 0) })
+		emitter.Transparency = NumberSequence.new(0, 1)
+		emitter.Lifetime = NumberRange.new(0.6, 1.1)
+		emitter.Speed = NumberRange.new(8, 16)
+		emitter.SpreadAngle = Vector2.new(180, 180)
+		emitter.Drag = 4
+		emitter.Rate = 0
+		emitter.Parent = holder
+		holder.Parent = workspace
+		emitter:Emit(count or 40)
+		Debris:AddItem(holder, 2)
 	end
-end)
+
+	-------------------------------------------------------------------------
+	-- Screen UI: dialogue box (bottom), objective card (top centre), Fast Hatch button, pointers.
+	-------------------------------------------------------------------------
+	-- Dialogue box, above the speed bar: Jack's portrait, his name and the typed-out line. Tap it to skip ahead.
+	local dialog = new("TextButton", {
+		Name = "TutorialDialog",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Size = UDim2.new(0.9, 0, 0, 122),
+		Position = UDim2.new(0.5, 0, 1, -104),
+		BackgroundColor3 = Color3.fromRGB(40, 22, 70),
+		BackgroundTransparency = 0.06,
+		AutoButtonColor = false,
+		Text = "",
+		Visible = false,
+		ZIndex = 5,
+		Parent = gui,
+	}, {
+		corner(18),
+		border(4),
+		new("UISizeConstraint", { MaxSize = Vector2.new(620, 122) }),
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(170, 160, 200)) }),
+	})
+	local dialogScale = new("UIScale", { Parent = dialog })
+
+	-- Portrait: a drawn pumpkin with a straw hat, sticking out of the top-left corner. Its mouth moves as he talks.
+	local portrait = new("Frame", { Size = UDim2.fromOffset(104, 104), Position = UDim2.fromOffset(-20, -34), BackgroundTransparency = 1, ZIndex = 7, Parent = dialog })
+	new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.58), Size = UDim2.fromScale(0.92, 0.8), BackgroundColor3 = WHITE, ZIndex = 7, Parent = portrait }, {
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		gradient({ Color3.fromRGB(255, 175, 60), Color3.fromRGB(230, 95, 10) }),
+		border(4),
+	})
+	for _, x in { 0.36, 0.64 } do -- ribs
+		new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(x, 0.58), Size = UDim2.fromScale(0.08, 0.66), BackgroundColor3 = Color3.fromRGB(205, 85, 10), BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 7, Parent = portrait }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+	end
+	for _, x in { 0.3, 0.7 } do
+		outlined({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(x, 0.5), Size = UDim2.fromScale(0.26, 0.24), Text = "▲", TextColor3 = Color3.fromRGB(255, 240, 120), ZIndex = 8, Parent = portrait }, 2.5)
+	end
+	local portraitMouth = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.76), Size = UDim2.fromScale(0.5, 0.1),
+		BackgroundColor3 = Color3.fromRGB(255, 240, 120), ZIndex = 8, Parent = portrait,
+	}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), new("UIStroke", { Color = Color3.fromRGB(110, 35, 0), Thickness = 2.5 }) })
+	local hatColors = { Color3.fromRGB(235, 200, 120), Color3.fromRGB(180, 135, 60) }
+	new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.22), Size = UDim2.fromScale(1.05, 0.12), Rotation = -8, BackgroundColor3 = WHITE, ZIndex = 9, Parent = portrait }, { corner(6), gradient(hatColors), border(3) })
+	new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.53, 0.2), Size = UDim2.fromScale(0.52, 0.24), Rotation = -8, BackgroundColor3 = WHITE, ZIndex = 9, Parent = portrait }, { corner(8), gradient(hatColors), border(3) })
+
+	local nameLabel = outlined({ Size = UDim2.new(1, -130, 0, 28), Position = UDim2.fromOffset(96, 8), Text = GUIDE_NAME, TextColor3 = ORANGE, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6, Parent = dialog }, 2.5)
+	nameLabel.TextScaled = false
+	nameLabel.TextSize = 24
+	local body = new("TextLabel", {
+		Size = UDim2.new(1, -116, 1, -46),
+		Position = UDim2.fromOffset(96, 38),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.FredokaOne,
+		TextColor3 = WHITE,
+		TextSize = 21,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Text = "",
+		ZIndex = 6,
+		Parent = dialog,
+	}, { new("UIStroke", { Color = BLACK, Thickness = 1.8, LineJoinMode = Enum.LineJoinMode.Round }), new("UITextSizeConstraint", { MaxTextSize = 21, MinTextSize = 12 }) })
+	body.TextScaled = true
+	local nextArrow = outlined({ AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(28, 22), Position = UDim2.new(1, -12, 1, -6), Text = "▼", TextColor3 = GOLD, ZIndex = 6, Visible = false, Parent = dialog }, 2)
+
+	local TOAST_HOME = toastHolder.Position
+	local function showDialog(show: boolean)
+		if dialog.Visible == show then
+			return
+		end
+		if show then
+			dialog.Visible = true
+			dialogScale.Scale = 0.7
+			TweenService:Create(dialogScale, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+			TweenService:Create(toastHolder, TweenInfo.new(0.25), { Position = TOAST_HOME - UDim2.fromOffset(0, 140) }):Play()
+		else
+			dialog.Visible = false
+			TweenService:Create(toastHolder, TweenInfo.new(0.25), { Position = TOAST_HOME }):Play()
+		end
+	end
+
+	-- Objective card, top centre under the night timer and chase banner (the player list covers the top right):
+	-- step number, what to do, a progress bar and a Skip button.
+	local card = box({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(360, 112), Position = UDim2.new(0.5, 0, 0, 116), Visible = false, Parent = gui }, { Color3.fromRGB(90, 50, 150), Color3.fromRGB(45, 22, 85) })
+	local cardScale = new("UIScale", { Parent = card })
+	local stepLabel = outlined({ Size = UDim2.new(1, -110, 0, 22), Position = UDim2.fromOffset(12, 8), Text = "", TextColor3 = ORANGE, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2)
+	local titleLabel = outlined({ Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(12, 30), Text = "", TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2.5)
+	local detailLabel = outlined({ Size = UDim2.new(1, -24, 0, 20), Position = UDim2.fromOffset(12, 62), Text = "", TextColor3 = LAVENDER, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 1.5)
+	local cardBar, cardFill = progressBar({ Size = UDim2.new(1, -24, 0, 16), Position = UDim2.fromOffset(12, 88), ZIndex = 2, Parent = card }, PAINT.XpFill)
+	for _, d in cardBar:GetDescendants() do
+		if d:IsA("GuiObject") then
+			d.ZIndex = 3
+		end
+	end
+	local skipArmed = 0
+	local skipButton: TextButton
+	skipButton = chunkyButton({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(92, 30), Position = UDim2.new(1, -8, 0, 6), Text = "Skip", ZIndex = 3, Parent = card }, PAINT.Grey, function()
+		-- Tap twice so one stray tap doesn't throw the tutorial away.
+		local label = skipButton:FindFirstChildOfClass("TextLabel") :: TextLabel
+		if os.clock() - skipArmed > 3 then
+			skipArmed = os.clock()
+			label.Text = "Sure?"
+			task.delay(3, function()
+				if os.clock() - skipArmed >= 3 then
+					label.Text = "Skip"
+				end
+			end)
+			return
+		end
+		skipArmed = 0
+		label.Text = "Skip"
+		request("TutorialSkip")
+	end)
+
+	-- Fast Hatch button next to the speed bar, shown while an egg is on a pad. Free in the tutorial's Hatch step.
+	local fastButton = chunkyButton({ Size = UDim2.fromOffset(170, 46), Position = UDim2.new(1, 12, 0, 34), Text = "", Visible = false, Parent = levelHud }, PAINT.Purple, fastHatch)
+	local fastGradient = fastButton:FindFirstChildOfClass("UIGradient") :: UIGradient
+	local fastLabel = fastButton:FindFirstChildOfClass("TextLabel") :: TextLabel
+	local function refreshFastButton(d)
+		local free = Config.TutorialStepName(d) == "Hatch"
+		fastButton.Visible = #d.Incubators > 0
+		fastLabel.Text = if free then "⚡ FAST HATCH: FREE" else "⚡ FAST HATCH R$" .. Config.FastHatchRobux
+		local paint = if free then PAINT.Green else PAINT.Purple
+		fastGradient.Color = ColorSequence.new(paint[1], paint[2])
+	end
+	task.spawn(function() -- a gentle heartbeat so it gets noticed
+		while true do
+			local scale = fastButton:FindFirstChildOfClass("UIScale") :: UIScale?
+			if fastButton.Visible and scale and scale.Scale == 1 then
+				TweenService:Create(scale, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true), { Scale = 1.08 }):Play()
+			end
+			task.wait(1.6)
+		end
+	end)
+
+	-- Hand that points at a button, with a glowing ring around the button.
+	local ring = new("Frame", { BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = gui }, {
+		new("UICorner", { CornerRadius = UDim.new(0, 16) }),
+		new("UIStroke", { Color = GOLD, Thickness = 5 }),
+	})
+	local ringStroke = ring:FindFirstChildOfClass("UIStroke") :: UIStroke
+	local hand = outlined({ Size = UDim2.fromOffset(64, 64), Visible = false, Text = "👆", ZIndex = 21, Parent = gui }, 0)
+	local pointAt: GuiObject? = nil
+
+	-- Off-screen arrow on the screen edge, pointing toward the target, with its distance.
+	local edge = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(70, 70), BackgroundTransparency = 1, Visible = false, Parent = gui })
+	local edgeArrow = outlined({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.8, 0.8), Text = "➤", TextColor3 = GOLD, Parent = edge }, 3)
+	local edgeDistance = outlined({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.fromOffset(90, 24), Text = "", Parent = edge }, 2)
+
+	-------------------------------------------------------------------------
+	-- World pointers: chevrons on the ground from the player toward the target, a spinning arrow above the
+	-- target with its distance, and a glow on the target itself.
+	-------------------------------------------------------------------------
+	local folder: Folder? = nil
+	local chevrons: { { BasePart } } = {}
+	local bigArrow: Model? = nil
+	local arrowDistance: TextLabel? = nil
+	local targetGlow: Highlight? = nil
+	local target: { Position: Vector3, Top: number, Instance: Instance? }? = nil
+	local CHEVRONS = 8
+
+	local function worldPart(size: Vector3, color: Color3, className: string?): BasePart
+		local p = Instance.new(className or "Part") :: BasePart
+		p.Size = size
+		p.Color = color
+		p.Material = Enum.Material.Neon
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+		p.Parent = folder
+		return p
+	end
+
+	local function buildPointers()
+		local f = Instance.new("Folder")
+		f.Name = "TutorialPointers"
+		f.Parent = workspace
+		folder = f
+		chevrons = {}
+		for i = 1, CHEVRONS do
+			chevrons[i] = { worldPart(Vector3.new(1, 0.15, 3.2), GOLD), worldPart(Vector3.new(1, 0.15, 3.2), GOLD) }
+		end
+
+		-- A fat arrow pointing down: a shaft and a two-wedge head, spinning above the target.
+		local arrow = Instance.new("Model")
+		arrow.Name = "TargetArrow"
+		local W, H, T = 3.4, 2.4, 1
+		local head = { worldPart(Vector3.new(T, H, W / 2), GOLD, "WedgePart"), worldPart(Vector3.new(T, H, W / 2), GOLD, "WedgePart") }
+		head[1].CFrame = CFrame.new(0, 0, W / 4) * CFrame.Angles(math.pi, 0, 0)
+		head[2].CFrame = CFrame.new(0, 0, -W / 4) * CFrame.Angles(0, 0, math.pi)
+		local shaft = worldPart(Vector3.new(T, 2.4, 1.4), GOLD)
+		shaft.CFrame = CFrame.new(0, H / 2 + 1.2, 0)
+		for _, p in { head[1], head[2], shaft } do
+			p.Parent = arrow
+		end
+		arrow.WorldPivot = CFrame.identity -- the arrow's tip is at its pivot... roughly: the head's bottom point
+		new("Highlight", { FillTransparency = 1, OutlineColor = BLACK, OutlineTransparency = 0, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop, Parent = arrow })
+		local tag = new("BillboardGui", { Size = UDim2.fromOffset(120, 34), StudsOffset = Vector3.new(0, 5, 0), AlwaysOnTop = true, LightInfluence = 0, Adornee = shaft, Parent = arrow })
+		arrowDistance = outlined({ Size = UDim2.fromScale(1, 1), Text = "", TextColor3 = GOLD, Parent = tag }, 2.5)
+		arrow.Parent = f
+		bigArrow = arrow
+
+		targetGlow = new("Highlight", { FillColor = GOLD, FillTransparency = 0.75, OutlineColor = GOLD, OutlineTransparency = 0, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop, Enabled = false, Parent = f })
+	end
+
+	-- Where things are. The map is fully loaded on the client (no streaming), so these can just look.
+	-- House 1 is any Model with Index 1 and an EggSpots folder (like HouseService finds it). Look on the street
+	-- first, then everywhere, at most every few seconds.
+	local houseOne: Model? = nil
+	local houseSearchAt = 0
+	local function isHouseOne(d: Instance): boolean
+		return d:IsA("Model") and d:GetAttribute("Index") == 1 and d:FindFirstChild("EggSpots") ~= nil
+	end
+	local function findHouseOne(): Model?
+		if houseOne and houseOne.Parent then
+			return houseOne
+		end
+		if os.clock() - houseSearchAt < 3 then
+			return nil
+		end
+		houseSearchAt = os.clock()
+		local map = workspace:FindFirstChild("Map")
+		local street = map and map:FindFirstChild("Street")
+		local houses = street and street:FindFirstChild("Houses")
+		for pass = 1, 2 do
+			for _, d in if pass == 1 then (if houses then houses:GetChildren() else {}) else workspace:GetDescendants() do
+				if isHouseOne(d) then
+					houseOne = d :: Model
+					return houseOne
+				end
+			end
+		end
+		return nil
+	end
+
+	local function myPlot(): Instance?
+		local map = workspace:FindFirstChild("Map")
+		local plots = map and map:FindFirstChild("Plots")
+		local name = player:GetAttribute("Plot")
+		return plots and name and plots:FindFirstChild(name)
+	end
+
+	local function topOf(inst: Instance): (Vector3, number)
+		if inst:IsA("Model") then
+			local cf, size = inst:GetBoundingBox()
+			return cf.Position, cf.Position.Y + size.Y / 2
+		elseif inst:IsA("BasePart") then
+			return inst.Position, inst.Position.Y + inst.Size.Y / 2
+		end
+		return Vector3.zero, 0
+	end
+
+	local function targetFor(inst: Instance?, glow: boolean?): { Position: Vector3, Top: number, Instance: Instance? }?
+		if not inst then
+			return nil
+		end
+		local position, top = topOf(inst)
+		return { Position = position, Top = top, Instance = if glow == false then nil else inst }
+	end
+
+	local function baseTarget()
+		local plot = myPlot()
+		local spawnPart = plot and plot:FindFirstChild("PlayerSpawn")
+		local t = targetFor(spawnPart, false)
+		if t then
+			t.Top -= 3
+		end
+		return t
+	end
+
+	-- The thing the current step wants: (world target or nil, button to point at or nil).
+	local function resolveTarget(d): ({ Position: Vector3, Top: number, Instance: Instance? }?, GuiObject?)
+		if step == "Costume" then
+			local pedestal = CollectionService:GetTagged("TutorialCostume")[1]
+			return targetFor(pedestal and pedestal.Parent), nil
+		elseif step == "Run" then
+			return baseTarget(), nil
+		elseif step == "Treadmill" then
+			local plot = myPlot()
+			return targetFor(plot and plot:FindFirstChild("Treadmill")), nil
+		elseif step == "Knock" then
+			local house = findHouseOne()
+			return targetFor(house and house:FindFirstChild("Door")), nil
+		elseif step == "Steal" then
+			if player:GetAttribute("CarryingEgg") then
+				return baseTarget(), nil
+			end
+			local house = findHouseOne()
+			local best, bestDistance = nil, math.huge
+			if house and root then
+				for _, child in house:GetChildren() do
+					if child.Name == "Egg" and child:IsA("Model") then
+						local distance = (child:GetPivot().Position - root.Position).Magnitude
+						if distance < bestDistance then
+							best, bestDistance = child, distance
+						end
+					end
+				end
+			end
+			return targetFor(best or (house and house:FindFirstChild("Door"))), nil
+		elseif step == "Hatch" then
+			if #d.Incubators > 0 then
+				local plot = myPlot()
+				local visuals = plot and plot:FindFirstChild("IncubatorVisuals")
+				return targetFor(visuals and visuals:FindFirstChild("IncubatingEgg")), fastButton
+			elseif #d.Eggs > 0 then
+				local eggsOpen = invPanel.Visible and invTitle.Text == TITLES.Eggs
+				return nil, if eggsOpen then nil else menuButtons:FindFirstChild("EggsButton") :: GuiObject?
+			end
+		elseif step == "Treadmill2" then
+			local shopOpen = panel.Visible and panelTitle.Text == TITLES.Treadmills
+			if d.Money >= Config.Treadmills[2].Price and not shopOpen then
+				return nil, speedShopButton
+			end
+		end
+		return nil, nil
+	end
+
+	-- Objective card text for the current step: (title, detail, progress 0-1 or nil).
+	local function objective(d): (string, string, number?)
+		if step == "Costume" then
+			return "Buy a costume", "Press E at the glowing Bedsheet Ghost", nil
+		elseif step == "Run" then
+			local need = Config.XpToNext(d.SpeedLevel)
+			return "Run and level up", string.format("Speed XP %s / %s", formatNumber(d.SpeedXp), formatNumber(need)), d.SpeedXp / need
+		elseif step == "Treadmill" then
+			local seconds = player:GetAttribute("TutorialTreadmill") or 0
+			return "Use your treadmill", string.format("Run on it: %ds / %ds", math.floor(seconds), Config.TutorialTreadmillSeconds), seconds / Config.TutorialTreadmillSeconds
+		elseif step == "Knock" then
+			if not isNight() then
+				return "Knock on House 1", "Houses open at night: " .. nightIn(), nil
+			end
+			return "Knock on House 1", "Press E at the Old Witch's door", nil
+		elseif step == "Steal" then
+			if player:GetAttribute("CarryingEgg") then
+				return "Get home!", "Run the egg back to your base", nil
+			elseif not isNight() then
+				return "Steal an egg", "Houses open at night: " .. nightIn(), nil
+			end
+			return "Steal an egg", "Sneak into House 1 and hold F on an egg", nil
+		elseif step == "Hatch" then
+			if #d.Incubators > 0 then
+				return "Hatch your egg", "Press FAST HATCH. It's free!", nil
+			end
+			return "Hatch your egg", "Open the Eggs menu and tap your egg", nil
+		elseif step == "Treadmill2" then
+			local price = Config.Treadmills[2].Price
+			if d.Money >= price then
+				return "Buy a better treadmill", "Open the Speed Shop and buy the Wooden Treadmill", 1
+			end
+			return "Buy a better treadmill", string.format("Save up: $%s / $%s", formatNumber(d.Money), formatNumber(price)), d.Money / price
+		end
+		return "", "", nil
+	end
+
+	local function refresh(d)
+		refreshFastButton(d)
+		if #d.Incubators > 0 then
+			lastEgg = { Egg = d.Incubators[1].Egg, Pet = d.Incubators[1].Pet }
+		end
+		if not (active and step) then
+			return
+		end
+		local index = table.find(Config.TutorialSteps, step) or 1
+		stepLabel.Text = string.format("STEP %d / %d", index, #Config.TutorialSteps)
+		local title, detail, progress = objective(d)
+		titleLabel.Text = title
+		detailLabel.Text = detail
+		cardBar.Visible = progress ~= nil
+		if progress then
+			setBar(cardFill, progress, true)
+		end
+		local t, button = resolveTarget(d)
+		target = t
+		pointAt = button
+		if targetGlow then
+			targetGlow.Adornee = if t then t.Instance else nil
+			targetGlow.Enabled = t ~= nil and t.Instance ~= nil
+		end
+	end
+
+	-------------------------------------------------------------------------
+	-- Dialogue queue: lines are typed out one at a time; a function in the queue (the hatch reveal) runs in
+	-- order with the lines.
+	-------------------------------------------------------------------------
+	local queue: { any } = {}
+	local talking = false
+	local typing = false
+	local tapped = false
+	local interrupt = false
+	local onQueueEmpty: (() -> ())? = nil
+
+	dialog.Activated:Connect(function()
+		tapped = true
+	end)
+
+	local function sayLine(text: string)
+		showDialog(true)
+		nextArrow.Visible = false
+		body.Text = text
+		body.MaxVisibleGraphemes = 0
+		tapped, typing = false, true
+		local length = utf8.len(text) or #text
+		for i = 1, length do
+			if tapped or interrupt then
+				break
+			end
+			body.MaxVisibleGraphemes = i
+			if i % 3 == 1 then
+				sfx("Talk", 0.12, 1.5 + math.random() * 0.4)
+			end
+			task.wait(0.024)
+		end
+		body.MaxVisibleGraphemes = -1
+		typing = false
+		tapped = false
+		nextArrow.Visible = true
+		local readUntil = os.clock() + math.min(2.4 + length * 0.04, 10)
+		while os.clock() < readUntil and not tapped and not interrupt do
+			task.wait(0.05)
+		end
+		nextArrow.Visible = false
+		if tapped then
+			sfx("Click", 0.3)
+		end
+	end
+
+	local function pump()
+		if talking then
+			return
+		end
+		talking = true
+		task.spawn(function()
+			while #queue > 0 do
+				local item = table.remove(queue, 1)
+				interrupt = false
+				if type(item) == "function" then
+					showDialog(false)
+					item()
+				else
+					sayLine(item)
+				end
+			end
+			talking = false
+			showDialog(false)
+			if onQueueEmpty then
+				local callback = onQueueEmpty
+				onQueueEmpty = nil
+				callback()
+			end
+		end)
+	end
+
+	local function say(lines: { any }?)
+		for _, line in lines or {} do
+			table.insert(queue, line)
+		end
+		pump()
+	end
+
+	-- Drop whatever he was saying and say this now.
+	local function sayNow(lines: { any })
+		table.clear(queue)
+		interrupt = talking
+		say(lines)
+	end
+
+	-------------------------------------------------------------------------
+	-- Celebrations: confetti, a "STEP COMPLETE!" stamp and sparks around the player.
+	-------------------------------------------------------------------------
+	local CONFETTI = { GOLD, PUMPKIN, Color3.fromRGB(170, 80, 255), Color3.fromRGB(90, 230, 255), Color3.fromRGB(120, 255, 120), Color3.fromRGB(255, 110, 190) }
+	local function confetti(count: number)
+		for _ = 1, count do
+			local piece = new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.3),
+				Size = UDim2.fromOffset(math.random(8, 14), math.random(14, 22)),
+				Rotation = math.random(0, 360),
+				BackgroundColor3 = CONFETTI[math.random(#CONFETTI)],
+				BorderSizePixel = 0,
+				ZIndex = 50,
+				Parent = gui,
+			}, { new("UIStroke", { Color = BLACK, Thickness = 1.5 }) })
+			local angle = math.random() * math.pi * 2
+			local burst = UDim2.new(0.5 + math.cos(angle) * (0.1 + math.random() * 0.25), 0, 0.3 + math.sin(angle) * (0.08 + math.random() * 0.2), 0)
+			local up = TweenService:Create(piece, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = burst, Rotation = piece.Rotation + math.random(-180, 180) })
+			up:Play()
+			up.Completed:Connect(function()
+				local fall = TweenService:Create(piece, TweenInfo.new(1.4 + math.random(), Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+					Position = burst + UDim2.new(math.random() * 0.1 - 0.05, 0, 0.75, 0),
+					Rotation = piece.Rotation + math.random(-360, 360),
+					BackgroundTransparency = 0.6,
+				})
+				fall:Play()
+				fall.Completed:Connect(function()
+					piece:Destroy()
+				end)
+			end)
+		end
+	end
+
+	local function stamp(text: string, sub: string?)
+		local holder = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.26), Size = UDim2.fromOffset(560, 110), BackgroundTransparency = 1, Rotation = -4, ZIndex = 31, Parent = gui })
+		local scale = new("UIScale", { Scale = 2.2, Parent = holder })
+		local big = outlined({ Size = UDim2.new(1, 0, 0, 70), Text = text, ZIndex = 31, Parent = holder }, 5)
+		gradient(PAINT.MoneyText).Parent = big
+		local small = if sub then outlined({ Size = UDim2.new(1, 0, 0, 34), Position = UDim2.fromOffset(0, 74), Text = sub, TextColor3 = WHITE, ZIndex = 31, Parent = holder }, 3) else nil
+		TweenService:Create(scale, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+		task.delay(1.9, function()
+			local fade = TweenInfo.new(0.35)
+			TweenService:Create(scale, fade, { Scale = 0.6 }):Play()
+			for _, label in { big, small } do
+				if label then
+					TweenService:Create(label, fade, { TextTransparency = 1 }):Play()
+					TweenService:Create(label:FindFirstChildOfClass("UIStroke") :: UIStroke, fade, { Transparency = 1 }):Play()
+				end
+			end
+			task.wait(0.4)
+			holder:Destroy()
+		end)
+	end
+
+	local function celebrate(final: boolean)
+		sfx("Step", 0.6)
+		confetti(if final then 90 else 45)
+		if final then
+			stamp("TUTORIAL COMPLETE!", string.format("+%d Candy", Config.TutorialReward.Candy or 0))
+		else
+			stamp("STEP COMPLETE!")
+		end
+		if root then
+			poof(root.Position, 30)
+		end
+	end
+
+	-------------------------------------------------------------------------
+	-- Hatch reveal: the egg shakes harder and harder, flashes, and the pet pops out spinning.
+	-------------------------------------------------------------------------
+	local function hatchReveal(eggId: string?, petId: string)
+		local pet = Config.Pets[petId]
+		if not pet then
+			return
+		end
+		local rarityColor = Config.Rarities[pet.Rarity].Color
+		-- Reaches up over the top bar too.
+		local overlay = new("TextButton", { Size = UDim2.new(1, 0, 1, 60), Position = UDim2.fromOffset(0, -60), BackgroundColor3 = BLACK, BackgroundTransparency = 1, AutoButtonColor = false, Text = "", ZIndex = 40, Parent = gui })
+		TweenService:Create(overlay, TweenInfo.new(0.3), { BackgroundTransparency = 0.35 }):Play()
+		local rays = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(520, 520), BackgroundTransparency = 1, ZIndex = 41, Visible = false, Parent = overlay })
+		for i = 1, 12 do
+			new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 34, 1, 0), Rotation = i * 15, BackgroundColor3 = rarityColor, BackgroundTransparency = 0.55, BorderSizePixel = 0, ZIndex = 41, Parent = rays }, {
+				new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1) }) }),
+			})
+		end
+		local stage = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(320, 320), BackgroundTransparency = 1, ZIndex = 42, Parent = overlay })
+		local egg = if eggId then Art.Egg(eggId, petId) else nil
+		local view = modelViewport(egg, stage, { Size = UDim2.fromScale(1, 1), ZIndex = 42 })
+		local caption = outlined({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.45, 170), Size = UDim2.fromOffset(600, 50), Text = "Hatching...", ZIndex = 43, Parent = overlay }, 3.5)
+		local sub = outlined({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.45, 222), Size = UDim2.fromOffset(500, 30), Text = "", TextColor3 = GREEN, ZIndex = 43, Parent = overlay }, 2.5)
+
+		-- Shake, getting wilder.
+		local eggPivot = if egg then egg:GetPivot() else nil
+		local t0 = os.clock()
+		while os.clock() - t0 < 1.8 do
+			local a = (os.clock() - t0) / 1.8
+			local wobble = math.sin(os.clock() * (25 + a * 30))
+			if egg and eggPivot then
+				egg:PivotTo(eggPivot * CFrame.Angles(0, 0, math.rad(wobble * (5 + a * 18))))
+			end
+			stage.Position = UDim2.new(0.5, wobble * a * 6, 0.45, 0)
+			if math.random() < 0.12 then
+				sfx("Shake", 0.25, 0.8 + a)
+			end
+			task.wait()
+		end
+		stage.Position = UDim2.fromScale(0.5, 0.45)
+
+		-- Flash, then the pet.
+		local flash = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, ZIndex = 45, Parent = overlay })
+		TweenService:Create(flash, TweenInfo.new(0.6), { BackgroundTransparency = 1 }):Play()
+		Debris:AddItem(flash, 0.7)
+		sfx("Step", 0.6)
+		view:Destroy()
+		local model = petModel(petId)
+		local petView = modelViewport(model, stage, { Size = UDim2.fromScale(1, 1), ZIndex = 42 })
+		local stageScale = new("UIScale", { Scale = 0.3, Parent = stage })
+		TweenService:Create(stageScale, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+		rays.Visible = true
+		caption.Text = "You hatched a " .. pet.Name .. "!"
+		caption.TextColor3 = rarityColor
+		sub.Text = string.format("%s pet  |  earns $%s/s", pet.Rarity, formatNumber(pet.MoneyPerSecond))
+		confetti(60)
+
+		local closed = false
+		overlay.Activated:Connect(function()
+			closed = true
+		end)
+		local pivot = if model then model:GetPivot() else nil
+		local shown = os.clock()
+		while not closed and os.clock() - shown < 5 do
+			rays.Rotation = (os.clock() * 25) % 360
+			if model and pivot then
+				model:PivotTo(pivot * CFrame.Angles(0, (os.clock() - shown) * 1.6, 0))
+			end
+			task.wait()
+		end
+		local fade = TweenInfo.new(0.3)
+		TweenService:Create(overlay, fade, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(stageScale, fade, { Scale = 0 }):Play()
+		rays.Visible = false
+		caption.Visible = false
+		sub.Visible = false
+		task.wait(0.3)
+		petView:Destroy()
+		overlay:Destroy()
+	end
+
+	-------------------------------------------------------------------------
+	-- Start / stop, and the per-frame animation.
+	-------------------------------------------------------------------------
+	local render: RBXScriptConnection? = nil
+	local guidePos: Vector3? = nil
+	local hop = 0
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	local function ground(at: Vector3, fallback: number): Vector3
+		local hit = workspace:Raycast(at + Vector3.new(0, 6, 0), Vector3.new(0, -40, 0), rayParams)
+		return if hit then hit.Position else Vector3.new(at.X, fallback, at.Z)
+	end
+
+	local function frame(dt: number)
+		local character = player.Character
+		root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local now = os.clock()
+		local ignore: { Instance } = { folder :: Folder }
+		if character then
+			table.insert(ignore, character)
+		end
+		rayParams.FilterDescendantsInstances = ignore
+
+		-- Jack hops along beside you on his pole and turns to face you.
+		if guide and root then
+			local feet = root.Position.Y - 3
+			local want = ground((root.CFrame * CFrame.new(4.5, 0, -1.5)).Position, feet)
+			if not guidePos or (want - guidePos).Magnitude > 80 then
+				if guidePos then
+					poof(guidePos + Vector3.new(0, 4, 0), 25)
+				end
+				guidePos = want
+				poof(want + Vector3.new(0, 4, 0), 25)
+				sfx("Poof", 0.4)
+			end
+			local before = guidePos :: Vector3
+			local nextPos = before:Lerp(want, 1 - math.exp(-dt * 5))
+			guidePos = nextPos
+			local speed = (nextPos - before).Magnitude / math.max(dt, 1 / 240)
+			hop += dt * (if speed > 1 then 11 else 0)
+			local lift = if speed > 1 then math.abs(math.sin(hop)) * math.min(speed / 8, 1.3) else 0
+			if typing then
+				lift += math.abs(math.sin(now * 14)) * 0.25 -- bounces while he talks
+			end
+			local look = Vector3.new(root.Position.X, nextPos.Y, root.Position.Z)
+			local cf = if (look - nextPos).Magnitude > 0.5 then CFrame.lookAt(nextPos, look) else CFrame.new(nextPos)
+			guide:PivotTo(cf * CFrame.new(0, lift, 0) * CFrame.Angles(0, 0, math.sin(now * 1.7) * 0.06))
+			if face then
+				face.Mouth.Size = UDim2.fromScale(0.74, if typing then 0.14 + math.abs(math.sin(now * 16)) * 0.16 else 0.2)
+				local blink = (now % 4) < 0.12
+				for _, eye in face.Eyes do
+					eye.Size = UDim2.fromScale(0.32, if blink then 0.06 else 0.36)
+					eye.Position = UDim2.fromScale(eye.Position.X.Scale, if blink then 0.24 else 0.08)
+				end
+			end
+		end
+		portraitMouth.Size = UDim2.fromScale(0.5, if typing then 0.06 + math.abs(math.sin(now * 16)) * 0.12 else 0.1)
+		nextArrow.Position = UDim2.new(1, -12, 1, -6 + math.sin(now * 6) * 3)
+
+		-- Ground chevrons from you toward the target, pulsing toward it.
+		local t = target
+		local distance = if t and root then (Vector3.new(t.Position.X, 0, t.Position.Z) - Vector3.new(root.Position.X, 0, root.Position.Z)).Magnitude else 0
+		for i, bars in chevrons do
+			local along = 3 + i * 4.5
+			local show = t ~= nil and root ~= nil and along < distance - 3
+			if show and t and root then
+				local flat = Vector3.new(t.Position.X - root.Position.X, 0, t.Position.Z - root.Position.Z).Unit
+				local spot = ground(root.Position + flat * along, root.Position.Y - 3)
+				local tip = CFrame.lookAt(spot + Vector3.new(0, 0.15, 0), spot + Vector3.new(0, 0.15, 0) + flat) * CFrame.new(0, 0, -1.5)
+				local transparency = 0.15 + 0.6 * (0.5 + 0.5 * math.sin(now * 5 - i * 0.8))
+				for k, bar in bars do
+					bar.CFrame = tip * CFrame.Angles(0, if k == 1 then math.rad(40) else math.rad(-40), 0) * CFrame.new(0, 0, 1.6)
+					bar.Transparency = transparency
+				end
+			else
+				for _, bar in bars do
+					bar.Transparency = 1
+				end
+			end
+		end
+
+		-- Spinning arrow over the target, and the edge arrow when the target is off screen.
+		local camera = workspace.CurrentCamera
+		if bigArrow then
+			if t then
+				local tipAt = Vector3.new(t.Position.X, t.Top + 1.8 + math.abs(math.sin(now * 3)) * 1.2, t.Position.Z)
+				bigArrow:PivotTo(CFrame.new(tipAt + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, now * 2.5, 0))
+				if arrowDistance then
+					arrowDistance.Text = if distance > 12 then math.floor(distance) .. "m" else ""
+				end
+			else
+				bigArrow:PivotTo(CFrame.new(0, -1000, 0))
+			end
+		end
+		if targetGlow and targetGlow.Enabled then
+			targetGlow.FillTransparency = 0.6 + 0.3 * math.sin(now * 4)
+		end
+		local edgeShown = false
+		if t and camera then
+			local screen, onScreen = camera:WorldToViewportPoint(Vector3.new(t.Position.X, t.Top + 2, t.Position.Z))
+			if not onScreen or screen.Z < 0 then
+				local size = camera.ViewportSize
+				local center = size / 2
+				local dir = Vector2.new(screen.X, screen.Y) - center
+				if screen.Z < 0 then
+					dir = -dir
+				end
+				if dir.Magnitude > 1 then
+					local margin = 80
+					local scale = math.min((center.X - margin) / math.max(math.abs(dir.X), 1), (center.Y - margin) / math.max(math.abs(dir.Y), 1))
+					local pos = center + dir * scale
+					-- The GUI sits under the top bar inset, viewport points don't.
+					local inset = GuiService:GetGuiInset()
+					edge.Position = UDim2.fromOffset(pos.X - inset.X, pos.Y - inset.Y)
+					edgeArrow.Rotation = math.deg(math.atan2(dir.Y, dir.X))
+					edgeDistance.Text = math.floor(distance) .. "m"
+					edgeShown = true
+				end
+			end
+		end
+		edge.Visible = edgeShown
+
+		-- Hand and ring on a button.
+		local button = pointAt
+		if button and button.Parent and button.Visible and button.AbsoluteSize.X > 0 then
+			local p, s = button.AbsolutePosition, button.AbsoluteSize
+			ring.Visible = true
+			ring.Position = UDim2.fromOffset(p.X - 6, p.Y - 6)
+			ring.Size = UDim2.fromOffset(s.X + 12, s.Y + 12)
+			ringStroke.Transparency = 0.2 + 0.4 * (0.5 + 0.5 * math.sin(now * 6))
+			hand.Visible = true
+			local bob = math.abs(math.sin(now * 5)) * 10
+			-- Point from wherever there is room: buttons low on the screen get the hand from above.
+			if p.Y > gui.AbsoluteSize.Y * 0.6 then
+				hand.Text = "👇"
+				hand.Position = UDim2.fromOffset(p.X + s.X / 2 - 32, p.Y - 70 - bob)
+			else
+				hand.Text = "👈"
+				hand.Position = UDim2.fromOffset(p.X + s.X + 8 + bob, p.Y + s.Y / 2 - 32)
+			end
+		else
+			ring.Visible = false
+			hand.Visible = false
+		end
+	end
+
+	local function start()
+		if active then
+			return
+		end
+		active = true
+		buildPointers()
+		local model = buildGuide()
+		model.Parent = folder
+		guide = model
+		guidePos = nil
+		card.Visible = true
+		cardScale.Scale = 0.5
+		TweenService:Create(cardScale, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+		render = RunService.RenderStepped:Connect(frame)
+	end
+
+	local function stop()
+		if not active then
+			return
+		end
+		active = false
+		if render then
+			render:Disconnect()
+			render = nil
+		end
+		if guidePos then
+			poof(guidePos + Vector3.new(0, 4, 0), 50)
+			sfx("Poof", 0.5)
+		end
+		if folder then
+			folder:Destroy()
+		end
+		folder, guide, face, bigArrow, targetGlow, arrowDistance, target, pointAt = nil, nil, nil, nil, nil, nil, nil, nil
+		chevrons = {}
+		ring.Visible = false
+		hand.Visible = false
+		edge.Visible = false
+		local fade = TweenService:Create(cardScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), { Scale = 0 })
+		fade:Play()
+		fade.Completed:Connect(function()
+			if not active then
+				card.Visible = false
+			end
+		end)
+	end
+
+	-- Pop the objective card when a new step starts.
+	local function bumpCard()
+		cardScale.Scale = 0.8
+		TweenService:Create(cardScale, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	end
+
+	-------------------------------------------------------------------------
+	-- Events from the server.
+	-------------------------------------------------------------------------
+	Remotes.Tutorial.OnClientEvent:Connect(function(kind: string, stepName: string?, extra: any)
+		if kind == "StepDone" and stepName then
+			local final = stepName == Config.TutorialSteps[#Config.TutorialSteps]
+			if stepName == "Hatch" and type(extra) == "string" then
+				local egg = lastEgg
+				table.insert(queue, function()
+					hatchReveal(egg and egg.Egg, extra)
+					celebrate(false)
+				end)
+			else
+				celebrate(final)
+			end
+			local lines = DONE[stepName]
+			if type(lines) == "function" then
+				lines = lines(tonumber(extra) or 0)
+			end
+			say(lines)
+		elseif kind == "Skipped" then
+			sayNow({ "Alright, alright, you already know your stuff! See ya around, kid!" })
+		end
+	end)
+
+	Remotes.ChaseState.OnClientEvent:Connect(function(isChased: boolean)
+		if isChased and step == "Steal" then
+			sayNow({ CHASE_LINE })
+		end
+	end)
+
+	-- Refresh the card and pointers a few times a second (night timer, treadmill seconds, nearest egg, etc.).
+	task.spawn(function()
+		while true do
+			task.wait(0.25)
+			if active and data then
+				refresh(data)
+			end
+		end
+	end)
+
+	return function(d)
+		local name = Config.TutorialStepName(d)
+		if not seen then
+			seen = true
+			step = name
+			if name then
+				start()
+				if name == "Costume" and #d.OwnedCostumes <= 1 then
+					say(INTRO.Costume)
+				else
+					say({ "Hey, welcome back! Let's pick up where we left off." })
+					say(INTRO[name])
+				end
+			end
+			refresh(d)
+			return
+		end
+		if name ~= step then
+			local previous = step
+			step = name
+			if name then
+				start()
+				bumpCard()
+				if not (previous and SKIP_INTRO_AFTER_DONE[name]) then
+					say(INTRO[name])
+				end
+			else
+				-- Finished or skipped: Jack says goodbye, then vanishes in a puff.
+				onQueueEmpty = stop
+				pump()
+			end
+		end
+		if name == "Hatch" and #d.Incubators > 0 and not hatchHinted then
+			hatchHinted = true
+			say({ HATCH_HINT })
+		end
+		refresh(d)
+	end
+end)()
 
 ---------------------------------------------------------------------------
 -- Server events
