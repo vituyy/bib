@@ -5,6 +5,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Art = require(ReplicatedStorage.Shared.Art)
+local Skins = require(ReplicatedStorage.Shared.Skins)
+local CostumeOutfits = require(ReplicatedStorage.Shared.CostumeOutfits)
 local DataService = require(script.Parent.DataService)
 
 local CharacterService = {}
@@ -33,7 +35,95 @@ local function setHidden(character: Model, mode: string)
 	end
 end
 
+-- The player's own look, saved when a Marketplace costume first goes on, so it can be put back.
+local ownLook: { [Model]: HumanoidDescription } = setmetatable({}, { __mode = "k" }) :: any
+
+-- Puts the player's own avatar back if a Marketplace costume changed it (runs in the background).
+local function restoreOwnLook(character: Model, costumeId: string)
+	local own = ownLook[character]
+	if not own then
+		return
+	end
+	task.spawn(function()
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid and character.Parent and character:GetAttribute("CostumeWorn") == costumeId and ownLook[character] == own then
+			ownLook[character] = nil
+			pcall(humanoid.ApplyDescription, humanoid, own)
+		end
+	end)
+end
+
 local function wearArt(character: Model, costume): boolean
+	-- Marketplace costume (Shared.CostumeOutfits): a whole avatar look applied to the character, so it looks
+	-- the same on everybody and keeps the avatar's animations.
+	if CostumeOutfits.Has(costume.Id) then
+		local id = costume.Id
+		task.spawn(function()
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			if not humanoid then
+				return
+			end
+			-- Wait until the player's own avatar has finished loading, or it would cover the costume.
+			local player = Players:GetPlayerFromCharacter(character)
+			local waited = 0
+			while player and not player:HasAppearanceLoaded() and waited < 10 do
+				waited += task.wait(0.2)
+			end
+			task.wait(0.1)
+			if not ownLook[character] then
+				local ok, own = pcall(humanoid.GetAppliedDescription, humanoid)
+				if ok then
+					ownLook[character] = own
+				end
+			end
+			local desc = CostumeOutfits.Description(id)
+			if desc and character.Parent and character:GetAttribute("CostumeWorn") == id then
+				local ok, err = pcall(humanoid.ApplyDescription, humanoid, desc)
+				if not ok then
+					warn("[CharacterService] costume", id, err)
+				end
+			end
+		end)
+		return true
+	end
+	-- Full-body skin (Shared.Skins): replaces the whole avatar, so it looks the same on everybody.
+	if Skins.Has(costume.Id) then
+		local id = costume.Id
+		local function build()
+			if character:GetAttribute("CostumeWorn") ~= id then
+				return
+			end
+			local old = character:FindFirstChild("CostumeArt")
+			if old then
+				old:Destroy()
+			end
+			local skin = Skins.Build(character, id)
+			if skin then
+				skin.Parent = character
+			end
+			setHidden(character, "Body")
+		end
+		build()
+		-- The avatar finishes loading after spawn: body parts get swapped in and accessories and clothing arrive.
+		-- Rebuild the skin when a body part changes, and hide anything else that shows up, while this costume is on.
+		local pending = false
+		local conn: RBXScriptConnection
+		conn = character.DescendantAdded:Connect(function(d)
+			if character:GetAttribute("CostumeWorn") ~= id then
+				conn:Disconnect()
+				return
+			end
+			if d:FindFirstAncestor("CostumeArt") or not (d:IsA("BasePart") or d:IsA("Decal")) or pending then
+				return
+			end
+			pending = true
+			task.delay(0.1, function()
+				pending = false
+				build()
+			end)
+		end)
+		return true
+	end
 	local head = character:FindFirstChild("Head") :: BasePart?
 	local torso = (character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")) :: BasePart?
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -99,6 +189,9 @@ function CharacterService.Refresh(player: Player)
 		end
 	end
 	setHidden(character, "None")
+	if not CostumeOutfits.Has(costume.Id) then
+		restoreOwnLook(character, costume.Id)
+	end
 	if costume.Id == "None" then
 		return
 	end
@@ -196,7 +289,93 @@ local function watchMovement()
 	end
 end
 
+-- Costume Shop mannequins: when the game starts, each one becomes a full avatar wearing its Marketplace costume,
+-- standing on its pedestal and facing the shop entrance. (In Edit mode they keep the simple placeholder look.)
+local function dressMannequins()
+	local map = workspace:FindFirstChild("Map")
+	local hub = map and map:FindFirstChild("Hub")
+	local shop = hub and hub:FindFirstChild("CostumeShop")
+	local mannequins = shop and shop:FindFirstChild("Mannequins")
+	if not mannequins then
+		return
+	end
+	for _, man in mannequins:GetChildren() do
+		local id = man:GetAttribute("Costume")
+		local art = man:FindFirstChild("Art")
+		local cap = man:FindFirstChild("Cap") :: BasePart?
+		if not (id and art and cap and CostumeOutfits.Has(id)) then
+			continue
+		end
+		task.spawn(function()
+			local desc = CostumeOutfits.Description(id)
+			if not desc then
+				return
+			end
+			local ok, rig = pcall(Players.CreateHumanoidModelFromDescription, Players, desc, Enum.HumanoidRigType.R15)
+			if not ok then
+				warn("[CharacterService] mannequin", id, rig)
+				return
+			end
+			-- Face the same way as the placeholder, feet on the pedestal top.
+			local pivot = art:GetPivot()
+			local look = Vector3.new(pivot.LookVector.X, 0, pivot.LookVector.Z)
+			local placeholder = art:FindFirstChild("SkinRig")
+			if placeholder and placeholder:IsA("Model") then
+				local l = placeholder:GetPivot().LookVector
+				look = Vector3.new(l.X, 0, l.Z)
+			end
+			if look.Magnitude < 0.01 then
+				look = Vector3.new(-1, 0, 0)
+			end
+			-- Highest point of the pedestal (its parts are rotated cylinders, so use their world extents).
+			local top = -math.huge
+			for _, name in { "Pedestal", "Cap" } do
+				local p = man:FindFirstChild(name) :: BasePart?
+				if p then
+					local c = p.CFrame
+					local h = math.abs(c.RightVector.Y) * p.Size.X + math.abs(c.UpVector.Y) * p.Size.Y + math.abs(c.LookVector.Y) * p.Size.Z
+					top = math.max(top, p.Position.Y + h / 2)
+				end
+			end
+			local humanoid = rig:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+			end
+			rig.Name = "CostumeAvatar"
+			rig:PivotTo(CFrame.lookAt(Vector3.new(cap.Position.X, top + 5, cap.Position.Z), Vector3.new(cap.Position.X, top + 5, cap.Position.Z) + look.Unit))
+			for _, p in rig:GetDescendants() do
+				if p:IsA("BasePart") then
+					p.CanCollide = false
+					p.CanQuery = false
+					p.CanTouch = false
+				end
+			end
+			local root = rig:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root then
+				root.Anchored = true
+			end
+			rig.Parent = man
+			task.wait(1) -- let the rig settle before lining up the feet
+			-- Stand on the feet (a long robe may hang lower than them).
+			local bottom = math.huge
+			for _, name in { "LeftFoot", "RightFoot", "Left Leg", "Right Leg" } do
+				local f = rig:FindFirstChild(name) :: BasePart?
+				if f then
+					bottom = math.min(bottom, f.Position.Y - f.Size.Y / 2)
+				end
+			end
+			if bottom == math.huge then
+				local cf, size = rig:GetBoundingBox()
+				bottom = cf.Position.Y - size.Y / 2
+			end
+			rig:PivotTo(rig:GetPivot() + Vector3.new(0, top - bottom, 0))
+			art.Parent = nil -- the placeholder is no longer needed
+		end)
+	end
+end
+
 function CharacterService.Start()
+	task.spawn(dressMannequins)
 	task.spawn(function()
 		while true do
 			task.wait(WATCH_INTERVAL)

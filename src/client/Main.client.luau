@@ -35,8 +35,12 @@ local PAINT = {
 	Grey = { Color3.fromRGB(195, 195, 205), Color3.fromRGB(125, 125, 140) },
 	Panel = { WHITE, Color3.fromRGB(230, 235, 245) },
 	Header = { Color3.fromRGB(100, 215, 255), Color3.fromRGB(25, 125, 230) },
-	CandyText = { Color3.fromRGB(255, 175, 220), Color3.fromRGB(240, 60, 150) },
-	MoneyText = { Color3.fromRGB(255, 240, 60), Color3.fromRGB(255, 160, 0) },
+	CandyText = { Color3.fromRGB(255, 165, 220), Color3.fromRGB(240, 70, 170) },
+	MoneyText = { Color3.fromRGB(255, 232, 60), Color3.fromRGB(255, 165, 15) },
+	-- Big HUD numbers: glossy top, main colour, deep bottom (top to bottom), plus a darker inner rim colour.
+	MoneyNumber = { Color3.fromRGB(255, 246, 140), Color3.fromRGB(255, 229, 59), Color3.fromRGB(255, 154, 26), Color3.fromRGB(224, 122, 0) },
+	CandyNumber = { Color3.fromRGB(255, 214, 238), Color3.fromRGB(255, 150, 210), Color3.fromRGB(255, 63, 160), Color3.fromRGB(196, 44, 126) },
+	SpeedNumber = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(240, 255, 225), Color3.fromRGB(170, 240, 90), Color3.fromRGB(55, 140, 30) },
 	LevelFill = { Color3.fromRGB(255, 100, 20), Color3.fromRGB(255, 235, 60) },
 	XpFill = { Color3.fromRGB(100, 215, 30), Color3.fromRGB(190, 250, 80) },
 }
@@ -164,7 +168,14 @@ local function formatNumber(n: number): string
 	if i == 1 then
 		return tostring(n)
 	end
-	return string.format("%.1f%s", value, suffixes[i])
+	-- Three significant digits, rounded down so it never shows more than you have: 3.45K, 12.8K, 128K.
+	local text = if value >= 100 then tostring(math.floor(value))
+		elseif value >= 10 then string.format("%.1f", math.floor(value * 10) / 10)
+		else string.format("%.2f", math.floor(value * 100) / 100)
+	if string.find(text, "%.") then
+		text = string.gsub(string.gsub(text, "0+$", ""), "%.$", "")
+	end
+	return text .. suffixes[i]
 end
 
 local function formatTime(seconds: number): string
@@ -185,7 +196,7 @@ local gui = new("ScreenGui", { Name = "SpookyHUD", ResetOnSpawn = false, IgnoreG
 -- Money and Candy, right side in the middle: a cartoon icon and a big number in gradient letters
 -- with a thick black outline. The icons are drawn from shapes; to use your own pictures instead,
 -- upload them to Roblox and put their ids here (e.g. "rbxassetid://123").
-local CURRENCY_IMAGES = { Money = "", Candy = "" }
+local CURRENCY_IMAGES = { Money = "rbxassetid://99468623653894", Candy = "rbxassetid://78583971411293" }
 
 local function circle(props: { [string]: any }, paint: { Color3 }, outline: number?)
 	props.BackgroundColor3 = WHITE
@@ -241,26 +252,52 @@ end
 
 local currencyStack = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0.5),
-	Size = UDim2.fromOffset(270, 140),
+	Size = UDim2.fromOffset(300, 160),
 	Position = UDim2.new(1, -16, 0.5, 0),
 	BackgroundTransparency = 1,
 	Parent = gui,
 }, {
 	new("UIListLayout", { Padding = UDim.new(0, 10), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
 })
-local function currencyRow(order: number, image: string, draw: (Frame) -> (), textPaint: { Color3 })
-	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 62), BackgroundTransparency = 1, LayoutOrder = order, Parent = currencyStack })
+-- Big chunky HUD number, built from two labels: a black copy behind with a very thick outline (dropped a little
+-- lower for depth), and the coloured copy in front with a glossy gradient and a thin darker rim. Setting the
+-- returned label's Text updates both.
+local function bigNumber(props: { [string]: any }, paint: { Color3 }, outline: number?): TextLabel
+	local backProps = table.clone(props)
+	backProps.TextColor3 = BLACK
+	backProps.Position = (props.Position :: UDim2) + UDim2.fromOffset(0, 3)
+	backProps.ZIndex = (props.ZIndex or 1)
+	local back = outlined(backProps, outline or 7)
+	props.ZIndex = (props.ZIndex or 1) + 1
+	local front = outlined(props, 2.5)
+	;(front:FindFirstChildOfClass("UIStroke") :: UIStroke).Color = paint[4]
+	new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, paint[1]),
+			ColorSequenceKeypoint.new(0.42, paint[2]),
+			ColorSequenceKeypoint.new(1, paint[3]),
+		}),
+		Parent = front,
+	})
+	front:GetPropertyChangedSignal("Text"):Connect(function()
+		back.Text = front.Text
+	end)
+	back.Text = front.Text
+	return front
+end
+
+local function currencyRow(order: number, image: string, draw: (Frame) -> (), numberPaint: { Color3 })
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 72), BackgroundTransparency = 1, LayoutOrder = order, Parent = currencyStack })
 	if image ~= "" then
-		new("ImageLabel", { Size = UDim2.fromOffset(78, 62), BackgroundTransparency = 1, Image = image, ScaleType = Enum.ScaleType.Fit, Parent = holder })
+		new("ImageLabel", { Size = UDim2.fromOffset(92, 72), BackgroundTransparency = 1, Image = image, ScaleType = Enum.ScaleType.Fit, Parent = holder })
 	else
 		draw(new("Frame", { Size = UDim2.fromOffset(74, 56), Position = UDim2.fromOffset(2, 3), BackgroundTransparency = 1, Parent = holder }))
 	end
-	local value = outlined({ Size = UDim2.new(1, -86, 1, -4), Position = UDim2.fromOffset(84, 2), Text = "0", TextXAlignment = Enum.TextXAlignment.Left, Parent = holder }, 4)
-	gradient(textPaint).Parent = value -- a UIGradient on a text label colours the letters
-	return value
+	return bigNumber({ Size = UDim2.new(1, -100, 1, -6), Position = UDim2.fromOffset(98, 1), Text = "0", Font = Enum.Font.FredokaOne, TextXAlignment = Enum.TextXAlignment.Left, Parent = holder }, numberPaint)
 end
-local moneyLabel = currencyRow(1, CURRENCY_IMAGES.Money, drawCoins, PAINT.MoneyText)
-local candyLabel = currencyRow(2, CURRENCY_IMAGES.Candy, drawCandy, PAINT.CandyText)
+local moneyLabel = currencyRow(1, CURRENCY_IMAGES.Money, drawCoins, PAINT.MoneyNumber)
+local candyLabel = currencyRow(2, CURRENCY_IMAGES.Candy, drawCandy, PAINT.CandyNumber)
 
 -- Friend boost, bottom left: +10% pet Money for each friend in this server.
 local friendHud = new("Frame", { AnchorPoint = Vector2.new(0, 1), Size = UDim2.fromOffset(270, 34), Position = UDim2.new(0, 16, 1, -16), BackgroundTransparency = 1, Parent = gui })
@@ -276,28 +313,67 @@ refreshFriendBoost()
 
 -- Custom speed, under Money and Candy: run slower than your max speed if you want. Type a number or use - / +.
 -- The server clamps it between Config.MinCustomSpeed and your max and saves it.
-local customSpeedHud = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(270, 112), Position = UDim2.new(1, -16, 0.5, 80), BackgroundTransparency = 1, Parent = gui })
-outlined({ Size = UDim2.fromOffset(62, 62), Position = UDim2.fromOffset(0, 26), Text = "⚡", TextColor3 = Color3.fromRGB(255, 200, 30), Parent = customSpeedHud }, 3)
-outlined({ Size = UDim2.new(1, -66, 0, 30), Position = UDim2.fromOffset(66, 0), Text = "Custom speed", Parent = customSpeedHud }, 3)
+-- Same look as the Money / Candy rows: a glossy icon on the left (lined up with theirs) and a chunky number, here
+-- sitting in a studded green panel with a thick black outline.
+local SPEED_ICON = "rbxassetid://114617581745294"
+local customSpeedHud = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(300, 124), Position = UDim2.new(1, -16, 0.5, 86), BackgroundTransparency = 1, Parent = gui })
+new("ImageLabel", { Size = UDim2.fromOffset(92, 92), Position = UDim2.fromOffset(2, 18), BackgroundTransparency = 1, Image = SPEED_ICON, ScaleType = Enum.ScaleType.Fit, ZIndex = 3, Parent = customSpeedHud })
+outlined({ Size = UDim2.new(1, -98, 0, 30), Position = UDim2.fromOffset(98, 0), Text = "Custom speed", ZIndex = 3, Parent = customSpeedHud }, 3)
 local speedBox = new("Frame", {
-	Size = UDim2.new(1, -66, 0, 54),
-	Position = UDim2.fromOffset(66, 32),
-	BackgroundColor3 = Color3.fromRGB(15, 70, 25),
-	BackgroundTransparency = 0.3,
+	Size = UDim2.new(1, -98, 0, 62),
+	Position = UDim2.fromOffset(98, 32),
+	BackgroundColor3 = WHITE,
 	Parent = customSpeedHud,
-}, { corner(12), new("UIStroke", { Color = Color3.fromRGB(10, 40, 15), Thickness = 2, Transparency = 0.3 }) })
+}, {
+	corner(14),
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(45, 150, 60), Color3.fromRGB(20, 85, 35)) }),
+	new("UIStroke", { Color = BLACK, Thickness = 4, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+})
+do -- faint stud outlines across the panel, like the menus
+	local grid = new("Frame", {
+		Size = UDim2.new(1, -8, 1, -8),
+		Position = UDim2.fromOffset(4, 4),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		ZIndex = 1,
+		Parent = speedBox,
+	}, { new("UIGridLayout", { CellSize = UDim2.fromOffset(18, 18), CellPadding = UDim2.new(), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center }) })
+	for _ = 1, 39 do
+		local slot = new("Frame", { BackgroundTransparency = 1, ZIndex = 1, Parent = grid })
+		new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.6, 0.6), BackgroundTransparency = 1, ZIndex = 1, Parent = slot }, {
+			new("UICorner", { CornerRadius = UDim.new(0.25, 0) }),
+			new("UIStroke", { Color = WHITE, Transparency = 0.8, Thickness = 2 }),
+		})
+	end
+end
+-- The typed number, drawn with the big-number look: a black copy behind for the thick outline.
+local speedBack = outlined({ Size = UDim2.new(1, -104, 1, -10), Position = UDim2.fromOffset(52, 8), Text = "", TextColor3 = BLACK, ZIndex = 3, Parent = speedBox }, 6)
 local speedInput = new("TextBox", {
-	Size = UDim2.new(1, -96, 1, -8),
-	Position = UDim2.fromOffset(48, 4),
+	Size = UDim2.new(1, -104, 1, -10),
+	Position = UDim2.fromOffset(52, 5),
 	BackgroundTransparency = 1,
 	Font = Enum.Font.FredokaOne,
 	TextColor3 = WHITE,
 	TextScaled = true,
 	ClearTextOnFocus = false,
 	Text = "",
+	ZIndex = 4,
 	Parent = speedBox,
-}, { new("UIStroke", { Color = BLACK, Thickness = 2, LineJoinMode = Enum.LineJoinMode.Round }) })
-local maxSpeedLabel = outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.new(1, -66, 0, 22), Position = UDim2.new(1, -4, 0, 89), Text = "Max: 0", TextXAlignment = Enum.TextXAlignment.Right, Parent = customSpeedHud }, 2)
+}, {
+	new("UIStroke", { Color = PAINT.SpeedNumber[4], Thickness = 2.5, LineJoinMode = Enum.LineJoinMode.Round }),
+	new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, PAINT.SpeedNumber[1]),
+			ColorSequenceKeypoint.new(0.45, PAINT.SpeedNumber[2]),
+			ColorSequenceKeypoint.new(1, PAINT.SpeedNumber[3]),
+		}),
+	}),
+})
+speedInput:GetPropertyChangedSignal("Text"):Connect(function()
+	speedBack.Text = speedInput.Text
+end)
+local maxSpeedLabel = outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.new(1, -98, 0, 24), Position = UDim2.new(1, -6, 0, 98), Text = "Max: 0", TextColor3 = Color3.fromRGB(200, 255, 140), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3, Parent = customSpeedHud }, 2.5)
 
 local shownSpeed: number? = nil -- what the panel shows; nil until the first data arrives
 local sendSpeedAt = 0
@@ -325,8 +401,8 @@ end
 for _, step in { -1, 1 } do
 	chunkyButton({
 		AnchorPoint = Vector2.new(if step < 0 then 0 else 1, 0.5),
-		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(if step < 0 then 0 else 1, if step < 0 then 6 else -6, 0.5, 0),
+		Size = UDim2.fromOffset(42, 42),
+		Position = UDim2.new(if step < 0 then 0 else 1, if step < 0 then 7 else -7, 0.5, 0),
 		Text = if step < 0 then "-" else "+",
 		ZIndex = 2,
 		Parent = speedBox,
