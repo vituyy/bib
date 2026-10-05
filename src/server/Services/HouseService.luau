@@ -77,6 +77,11 @@ type Carry = {
 }
 
 local houses: { HouseState } = {}
+
+-- How fast this owner runs right now: angrier (faster) during the Blood Moon.
+local function ownerSpeed(state: HouseState): number
+	return state.Info.OwnerSpeed * (if Config.IsBloodMoon() then Config.BloodMoon.OwnerSpeedMult else 1)
+end
 local openChaseDoor: (HouseState) -> () -- defined with the door code below
 local closeChaseDoor: (HouseState, boolean) -> () -- (state, instant)
 local carrying: { [Player]: Carry } = {}
@@ -199,7 +204,7 @@ local function resetOwner(state: HouseState)
 	end
 	assert(owner and humanoid, "owner rig missing")
 
-	humanoid.WalkSpeed = state.Info.OwnerSpeed
+	humanoid.WalkSpeed = ownerSpeed(state)
 	if spawnPart then
 		owner:PivotTo(spawnPart.CFrame)
 	end
@@ -292,8 +297,15 @@ local function spawnEggs(state: HouseState)
 	clearEggs(state)
 	-- Roll one egg per spot, then put the rarest eggs on the hardest-to-reach spots.
 	local rolled = {}
+	local bloodMoon = Config.IsBloodMoon()
+	local moonChance = Config.BloodMoon.MoonEggChance[state.Index] or 0.35
 	for _ = 1, #state.Spots do
-		table.insert(rolled, rollEgg(state.Info.EggWeights))
+		-- Blood Moon: some spots hold a Blood Moon Egg instead of the house's usual egg.
+		if bloodMoon and math.random() < moonChance then
+			table.insert(rolled, Config.BloodMoon.MoonEggId)
+		else
+			table.insert(rolled, rollEgg(state.Info.EggWeights))
+		end
 	end
 	table.sort(rolled, function(a, b)
 		return rarityOrder(a) < rarityOrder(b)
@@ -303,7 +315,7 @@ local function spawnEggs(state: HouseState)
 		local eggId = rolled[spotIndex]
 		-- The pet is decided now, so the egg can look like what is inside it. Size and material are two
 		-- separate rolls, so an egg can get both, one or neither.
-		local size, material = Config.RollVariant()
+		local size, material = Config.RollVariant(if bloodMoon then Config.BloodMoon.LuckMultiplier else 1, bloodMoon)
 		local petId = Config.MakePetId(PlotService.RollPet(eggId), size, material)
 		placeEgg(state, spotIndex, eggId, petId)
 	end
@@ -514,7 +526,7 @@ local function followGoal(state: HouseState, dt: number)
 	local waypoints = state.Waypoints
 	if waypoints then
 		local index = state.WpIndex
-		local reach = math.max(3, state.Info.OwnerSpeed * dt * 1.5)
+		local reach = math.max(3, ownerSpeed(state) * dt * 1.5)
 		while index <= #waypoints do
 			local p = waypoints[index].Position + Vector3.new(0, state.GroundOffset, 0)
 			if Vector3.new(p.X - root.Position.X, 0, p.Z - root.Position.Z).Magnitude < reach then
@@ -540,7 +552,7 @@ local function followGoal(state: HouseState, dt: number)
 	local flat = Vector3.new(target.X - root.Position.X, 0, target.Z - root.Position.Z)
 	local distance = flat.Magnitude
 	if distance > 0.25 then
-		local speed = math.min(state.Info.OwnerSpeed, distance / math.max(dt, 1 / 120))
+		local speed = math.min(ownerSpeed(state), distance / math.max(dt, 1 / 120))
 		local direction = flat / distance
 		local velocity = root.AssemblyLinearVelocity
 		root.AssemblyLinearVelocity = Vector3.new(direction.X * speed, velocity.Y, direction.Z * speed)
@@ -635,14 +647,14 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 		end
 		local ownerHumanoid = state.Owner:FindFirstChildOfClass("Humanoid")
 		if ownerHumanoid then
-			ownerHumanoid.WalkSpeed = state.Info.OwnerSpeed
+			ownerHumanoid.WalkSpeed = ownerSpeed(state)
 		end
 		openChaseDoor(state)
 	end
 	-- The owner needs a moment to notice; a rarer (heavier) egg gives a longer head start.
 	if not alreadyChasing and state.Owner then
 		local egg = Config.Eggs[eggId]
-		local reaction = Config.OwnerReaction + Config.OwnerReactionPerRarity * Config.Rarities[egg.Rarity].Order
+		local reaction = (Config.OwnerReaction + Config.OwnerReactionPerRarity * Config.Rarities[egg.Rarity].Order) * (if Config.IsBloodMoon() then Config.BloodMoon.OwnerReactionMult else 1)
 		state.AlertUntil = os.clock() + reaction
 		state.Goal, state.Waypoints = nil, nil
 		state.PathGen += 1
@@ -683,8 +695,8 @@ local function chaseStep()
 					ownerRoot:SetNetworkOwner(nil) -- a client simulating him would lag behind the server's view
 				end)
 			end
-			if ownerHumanoid.WalkSpeed ~= state.Info.OwnerSpeed then
-				ownerHumanoid.WalkSpeed = state.Info.OwnerSpeed
+			if ownerHumanoid.WalkSpeed ~= ownerSpeed(state) then
+				ownerHumanoid.WalkSpeed = ownerSpeed(state)
 			end
 			local home = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
 			if home and ownerRoot.Position.Y < home.Position.Y - 40 then
@@ -739,7 +751,7 @@ local function chaseStep()
 			end
 			local gaveUp
 			if entry.Carry.ChaseFrom then
-				gaveUp = os.clock() - entry.Carry.ChaseFrom > Config.ChaseMaxDuration or distance > Config.ChaseGiveUpDistance
+				gaveUp = os.clock() - entry.Carry.ChaseFrom > Config.ChaseMaxDuration * (if Config.IsBloodMoon() then Config.BloodMoon.ChaseDurationMult else 1) or distance > Config.ChaseGiveUpDistance
 			else
 				gaveUp = os.clock() - (entry.Carry.ActivatedAt or 0) > 60
 			end

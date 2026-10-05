@@ -280,6 +280,57 @@ def chase_theme():
     return normalise(buf, 0.78)
 
 
+def keep_random_state(fn):
+    """New sounds use random noise too; restore the generator afterwards so the older sounds stay identical."""
+    def wrapper(*args, **kwargs):
+        state = RNG.bit_generator.state
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            RNG.bit_generator.state = state
+    return wrapper
+
+
+@keep_random_state
+def blood_theme():
+    """Blood Moon: a low drone, a heartbeat, far tolling bells and dissonant strings. 24 bars at 60 bpm, 96 s."""
+    beat = 1.0
+    bars = 24
+    length = int(bars * 4 * beat * SR)
+    buf = np.zeros(length + 8 * SR)
+    # drone: A1 with a flat fifth and a tritone underneath, slowly breathing
+    n = len(buf)
+    t = np.arange(n) / SR
+    drone = np.zeros(n)
+    for m, amp in ((33, 1.0), (40, 0.5), (39, 0.35), (45, 0.4)):
+        f = float(mtof(m))
+        drone += amp * (sine(f, n) + 0.4 * sine(f * 2.003, n)) * (0.75 + 0.25 * np.sin(2 * np.pi * t / 12.0 + m))
+    buf += lp(drone, 500) * 0.16
+    for bar in range(bars):
+        t0 = bar * 4 * beat
+        # heartbeat: lub-dub every two seconds, getting louder in the second half
+        gain = 0.55 if bar < 12 else 0.8
+        for k in range(2):
+            mix_at(buf, kick(gain) * 0.9, t0 + k * 2.0)
+            mix_at(buf, kick(gain * 0.6) * 0.7, t0 + k * 2.0 + 0.32)
+        # dissonant strings: a minor second that rubs against itself
+        if bar % 4 == 1:
+            k = int(4 * beat * SR)
+            y = lp(saw(float(mtof(57)), k) + saw(float(mtof(58)), k) * 0.8 + saw(float(mtof(64)), k) * 0.5, 1400)
+            mix_at(buf, y * adsr(k, 1.6, 0.4, 0.7, 1.4) * 0.05, t0)
+        # a far bell toll every four bars
+        if bar % 4 == 3:
+            mix_at(buf, bell(45, 5.0, 0.3) * 0.5, t0 + 2.0)
+        # whispers: filtered noise swells
+        if bar % 3 == 2:
+            k = int(4 * beat * SR)
+            w = hp(lp(noise(k), 3200), 900) * np.hanning(k) * 0.035
+            mix_at(buf, w, t0)
+    buf = reverb(buf, 0.4, 3.5, 2800)
+    buf = fold_loop(buf, length)
+    return normalise(buf, 0.75)
+
+
 # ---------------------------------------------------------------- sound effects
 def chime(midis, spacing=0.07, dur=1.0, vol=1.0):
     total = spacing * len(midis) + dur
@@ -393,6 +444,18 @@ def sfx():
     mix_at(pl2, pl, 0)
     mix_at(pl2, chime([88], dur=0.5, vol=0.4), 0.05)
     out["egg_place"] = pl2
+    # blood moon rising: a swelling drone and a deep bell (drawn with the random state saved, see below)
+    state = RNG.bit_generator.state
+    n = int(3.2 * SR)
+    t = np.arange(n) / SR
+    rise = lp(saw(55, n) + saw(55.4, n) + saw(82.5, n) * 0.5, 600 + 900 * (t / 3.2)[0:1].mean()) * np.linspace(0, 1, n) ** 1.5 * 0.35
+    out["blood_rise"] = add(rise, bell(33, 3.2, 0.2) * 0.7)
+    # thunder: a noise burst that rolls off
+    n = int(2.4 * SR)
+    th = lp(noise(n), 400) * decay(n, 0.6) * 1.2 + lp(noise(n), 120) * decay(n, 1.0)
+    th[: int(0.05 * SR)] *= np.linspace(0, 1, int(0.05 * SR))
+    out["thunder"] = th
+    RNG.bit_generator.state = state
     # whoosh (sprint / generic)
     n = int(0.5 * SR)
     wh = lp(noise(n), 2500) * np.hanning(n) * 0.5
@@ -415,6 +478,7 @@ def write_mp3(name, y, peak, is_music):
 def main():
     write_mp3("music_chill", chill_theme(), 0.7, True)
     write_mp3("music_chase", chase_theme(), 0.78, True)
+    write_mp3("music_blood", blood_theme(), 0.75, True)
     for name, y in sfx().items():
         write_mp3(name, y, 0.85, False)
 

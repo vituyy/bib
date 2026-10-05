@@ -22,6 +22,7 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Quests (5.1) | A Quests window with daily and weekly quests, chests, a day streak, rerolls and achievements. Every quest shows its effort in minutes next to its reward, and the reward is computed from that effort and from how much the player normally earns. |
 | Phantom furniture (5.1) | Furniture inside the houses no longer blocks players. |
 | Playtime Rewards and potions (5.1) | Twelve daily gifts for playing time, and timed boost potions (Speed XP, Candy, Money, hatching). |
+| Blood Moon event (5.1) | An hourly 5-minute night with a red sky, better eggs, a Blood variant, angrier owners, an event quest and a countdown on screen. |
 | Kick (5.0) | A caught thief is kicked about 100 studs away from the owner with a kick sound. `Config.KickDistance`, `KickAngle` and `KickSounds` tune it; the movement anti-cheat ignores the flight. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
@@ -394,6 +395,25 @@ A **Rewards** button (gift icon, red number = gifts ready) opens a window with t
 - **Gifts scale with the player.** Currency gifts are worth minutes of what the player normally earns (the same rates as Quests: pet income, Candy per knock, Speed XP per minute). Eggs are the most common egg of the best house the player can rob. A full egg bag blocks an egg gift until there is room.
 - **Potions** (bottom of the window): Speed Potion (x2 Speed XP), Candy Potion (x2 Candy from knocks), Money Potion (x2 Money from pets), Hatch Potion (eggs hatch 2x faster, applied when the egg goes into an incubator). Each lasts 10 minutes. Drinking another of the same kind adds its time (a boost never runs longer than 2 hours from now). Boosts end at a clock time, so they run while the player is away. Active boosts show as small coloured pills under the night/day timer.
 - Settings are in `Config.Playtime` and `Config.Potions`; the counting and paying are in `DataService`; the window in `Main.client`. The Admin panel can add 30 minutes of play time or 3 of every potion.
+
+### 2.18 Blood Moon (hourly event)
+
+**When:** every hour at :00 by the real clock (UTC), so every server runs it at the same moment. It lasts 5 minutes (`Config.BloodMoon.Seconds`). If a normal night is running it is ended quietly (eggs dropped, nobody sent home) and the Blood Moon starts at once. A **countdown pill** ("🩸 BLOOD MOON IN 12:30") sits at the top of the screen under the night/day timer; in the last minute it turns red and pulses, in the last 10 seconds it is big. A red chat warning appears 60 and 10 seconds before.
+
+**What changes while it lasts**
+
+| Area | Change |
+|---|---|
+| Sky and mood | Red sky and fog, a huge red moon, lightning flashes with thunder, a red banner, a rising-moon sound |
+| Music | An ominous track (low drone, heartbeat, far bells) replaces the chill theme; the chase music still takes over during chases |
+| Eggs | Each house puts a Blood Moon Egg (the Legendary egg, pets like the Blood Moon Bat) on some spots: 15% / 15% / 20% / 30% / 35% for houses 1 to 5 and 35% for the rest. Spots are fixed, so this replaces eggs instead of adding more |
+| Variant luck | Every Big / Huge / Gigantic and Golden / Diamond / Rainbow chance is doubled for eggs spawned that night |
+| Blood variant | A new material that only drops during the event (3%, 6% with the doubled luck): x15 income, red glow. It stacks with sizes like the others (a "Big Blood Bat") |
+| Angrier owners | 18% faster, notice a thief in 60% of the usual time, give up after 1.5x as long |
+| Blood Moon Quest | "Bring 4 eggs home" (about 8 minutes of effort, reward worth 1.2x), shown on top of the Quests window; finishing it opens a chest with an egg and a potion |
+| Reward for everyone | Everyone who brought at least 1 egg home gets a random potion when it ends |
+
+New pets and models: none. The Blood variant and the Blood Moon Egg use the existing glow and the existing (block) models. Everything is tuned in `Config.BloodMoon` (and the Blood entry in `Config.Materials`). The Admin panel has a "Start the Blood Moon now" button. The new audio files are `music_blood.mp3`, `blood_rise.mp3` and `thunder.mp3`; paste their ids into `Config.Audio`.
 
 ## 3. Built so far
 

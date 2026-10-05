@@ -145,6 +145,16 @@ local function sanitize(data: { [string]: any })
 		LastStreakDay = if isNumber(quests.LastStreakDay) then quests.LastStreakDay else 0,
 		Salt = if isNumber(quests.Salt) then quests.Salt else 0, -- the Admin panel changes it to get a different set
 	}
+	local blood = quests.Blood
+	if type(blood) == "table" and isNumber(blood.Id) and isNumber(blood.Target) and isNumber(blood.Progress) and type(blood.Reward) == "table" then
+		local reward = {}
+		for _, currency in { "Money", "Candy", "Xp" } do
+			if isNumber(blood.Reward[currency]) and blood.Reward[currency] > 0 then
+				reward[currency] = blood.Reward[currency]
+			end
+		end
+		data.Quests.Blood = { Id = blood.Id, Target = math.max(1, blood.Target), Progress = math.clamp(blood.Progress, 0, math.max(1, blood.Target)), Claimed = blood.Claimed == true, Reward = reward }
+	end
 	local stats = if type(data.Stats) == "table" then data.Stats else {}
 	data.Stats = {}
 	for _, key in { "Knocks", "Hatched", "Caught" } do
@@ -270,6 +280,8 @@ local achSeen: { [Player]: { [string]: number } } = {} -- highest achievement st
 local lastActive: { [Player]: number } = {} -- when each player last did something (for the playtime clock)
 local lastSample: { [Player]: Vector3 } = {}
 local playtimeNewDay: ({ [string]: any }) -> boolean
+local bloodDelivered: { [Player]: number } = {} -- eggs brought home during the current Blood Moon
+local ensureBloodQuest: (Player, { [string]: any }) -> ()
 local checkAchievements: (Player, { [string]: any }) -> ()
 
 local function clock(seconds: number): string
@@ -479,6 +491,10 @@ function DataService.Load(player: Player)
 	profiles[player] = reconcile(if type(data) == "table" then data else deepCopy(Config.StartingData))
 	sanitize(profiles[player])
 	refreshQuests(player, profiles[player])
+	if Config.IsBloodMoon() then
+		bloodDelivered[player] = 0
+		ensureBloodQuest(player, profiles[player])
+	end
 	playtimeNewDay(profiles[player])
 	lastActive[player] = os.clock()
 	-- Saves from before the Index: pets already on the base count as discovered.
@@ -510,6 +526,7 @@ function DataService.Release(player: Player)
 	releasing[player] = nil
 	sessionStart[player], milestones[player], milestoneSeen[player], lastSnapshot[player], lastWritten[player] = nil, nil, nil, nil, nil
 	achSeen[player] = nil
+	bloodDelivered[player] = nil
 	lastActive[player], lastSample[player] = nil, nil
 	if loadedSignals[player] then
 		loadedSignals[player]:Destroy()
@@ -713,6 +730,18 @@ function DataService.QuestEvent(player: Player, kind: string, amount: number, in
 		data.Stats.Caught += amount
 	end
 	local finished = 0
+	if kind == "Deliver" and Config.IsBloodMoon() then
+		ensureBloodQuest(player, data)
+		bloodDelivered[player] = (bloodDelivered[player] or 0) + amount
+		local blood = data.Quests.Blood
+		if blood and not blood.Claimed and blood.Progress < blood.Target then
+			blood.Progress = math.min(blood.Target, blood.Progress + amount)
+			if blood.Progress >= blood.Target then
+				finished += 1
+				notify(player, "Blood Moon quest complete! Open Quests to open the chest.", QUEST_GREEN)
+			end
+		end
+	end
 	for _, list in { data.Quests.Daily, data.Quests.Weekly } do
 		for _, quest in list do
 			local template = QuestCfg.Templates[quest.Id]
@@ -976,6 +1005,79 @@ function DataService.DrinkPotion(player: Player, kind: any): (boolean, string)
 		d.Boosts[kind] = ends
 	end)
 	return true, string.format("%s: %s for %d:%02d min", potion.Name, potion.Text, (ends - now) // 60, (ends - now) % 60)
+end
+
+---------------------------------------------------------------------------
+-- Blood Moon (rules: Config.BloodMoon; the clock and the sky are in DayNightService): a one-off quest per event
+-- ("bring N eggs home tonight", with a bonus chest) and a potion for everyone who brought an egg home.
+---------------------------------------------------------------------------
+ensureBloodQuest = function(player: Player, data: { [string]: any })
+	local id = game:GetService("ReplicatedStorage"):GetAttribute("BloodMoonId")
+	local current = data.Quests.Blood
+	if not id or (current and current.Id == id) then
+		return
+	end
+	local settings = Config.BloodMoon.Quest
+	data.Quests.Blood = {
+		Id = id,
+		Target = settings.Target,
+		Progress = 0,
+		Claimed = false,
+		Reward = QuestCfg.Reward(data, settings.Minutes, settings.Share, settings.Mult),
+	}
+end
+
+-- Called when a Blood Moon begins: every player in the server gets the quest.
+function DataService.BloodMoonStarted()
+	for player, data in profiles do
+		bloodDelivered[player] = 0
+		ensureBloodQuest(player, data)
+		publish(player)
+	end
+end
+
+-- Called when it ends: a random potion for everyone who brought an egg home.
+function DataService.BloodMoonEnded()
+	local rng = Random.new(os.time())
+	for player, data in profiles do
+		if (bloodDelivered[player] or 0) > 0 then
+			local kind = Config.PotionOrder[rng:NextInteger(1, #Config.PotionOrder)]
+			DataService.Update(player, function(d)
+				d.Potions[kind] += 1
+			end)
+			notify(player, "Blood Moon reward: a " .. Config.Potions[kind].Name .. " for brave egg thieves!", QUEST_GREEN)
+		end
+		bloodDelivered[player] = nil
+	end
+end
+
+-- Claim the Blood Moon quest: its reward plus the chest (an egg if the bag has room, and a potion).
+function DataService.ClaimBloodQuest(player: Player): (boolean, string)
+	local data = profiles[player]
+	local quest = data and data.Quests.Blood
+	if not quest then
+		return false, "There is no Blood Moon quest"
+	elseif quest.Claimed then
+		return false, "Already claimed"
+	elseif quest.Progress < quest.Target then
+		return false, "Not finished yet"
+	end
+	local rng = Random.new(os.clock() * 1000 + player.UserId)
+	local kind = Config.PotionOrder[rng:NextInteger(1, #Config.PotionOrder)]
+	local eggId = Config.Playtime.EggFor(data)
+	local giveEgg = #data.Eggs < Config.MaxEggsHeld
+	DataService.Update(player, function(d)
+		quest.Claimed = true
+		d.Money += quest.Reward.Money or 0
+		d.Candy += quest.Reward.Candy or 0
+		d.Potions[kind] += 1
+		if giveEgg then
+			table.insert(d.Eggs, Config.MakeEggEntry(eggId, nil))
+		end
+	end)
+	grant(player, quest.Reward)
+	local chest = (if giveEgg then Config.Eggs[eggId].Name .. " + " else "") .. Config.Potions[kind].Name
+	return true, "Blood Moon quest: " .. rewardText(quest.Reward) .. ". Chest: " .. chest
 end
 
 ---------------------------------------------------------------------------

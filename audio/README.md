@@ -16,6 +16,7 @@ Sounds that have no id play a built-in Roblox sound (clicks, buy ping, error, ki
 |---|---|---|
 | `music_chill.mp3` | Music.Chill | Always, slow spooky waltz (68 s loop). Fades away during a chase and returns after. |
 | `music_chase.mp3` | Music.Chase | While an owner chases you (50 s loop, fast and tense). |
+| `music_blood.mp3` | Music.Blood | During the hourly Blood Moon (96 s loop, ominous). |
 | `ui_click.mp3` | Click | Every button; pressing E on a prompt |
 | `ui_hover.mp3` | Hover | Mouse over a button (not on phones) |
 | `ui_open.mp3` / `ui_close.mp3` | Open / Close | A menu opens or closes |
@@ -32,6 +33,8 @@ Sounds that have no id play a built-in Roblox sound (clicks, buy ping, error, ki
 | `caught.mp3` | Caught | The owner caught you (with the kick) |
 | `kick.mp3` | Kick | The kick, heard by everyone nearby |
 | `knock.mp3` / `door_creak.mp3` | Knock / DoorCreak | Trick-or-Treat: knocks, then the door opens |
+| `blood_rise.mp3` | BloodRise | The Blood Moon rises |
+| `thunder.mp3` | Thunder | Lightning flashes during the Blood Moon |
 | `ui_notify.mp3`, `whoosh.mp3` | Notify, Whoosh | Spare effects, not used yet |
 
 `Grunt` (the "oof" after the kick) has no file: it uses Roblox's built-in grunt unless you give it an id.

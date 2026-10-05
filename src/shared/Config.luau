@@ -292,24 +292,30 @@ Config.Materials = {
 	Golden = { Name = "Golden", Chance = 0.15, Multiplier = 3, Color = Color3.fromRGB(255, 205, 50) },
 	Diamond = { Name = "Diamond", Chance = 0.05, Multiplier = 8, Color = Color3.fromRGB(120, 230, 255) },
 	Rainbow = { Name = "Rainbow", Chance = 0.01, Multiplier = 25, Color = Color3.fromRGB(255, 120, 200) }, -- cycles through every colour
+	Blood = { Name = "Blood", Chance = 0.03, Multiplier = 15, Color = Color3.fromRGB(200, 10, 30), EventOnly = true }, -- only found during the Blood Moon
 }
 local SIZE_ORDER = { "Gigantic", "Huge", "Big" } -- rarest first
-local MATERIAL_ORDER = { "Rainbow", "Diamond", "Golden" }
+local MATERIAL_ORDER = { "Blood", "Rainbow", "Diamond", "Golden" }
 
-local function rollTier(pool, order: { string }): string?
+local function rollTier(pool, order: { string }, luck: number, event: boolean): string?
 	local roll = math.random()
 	for _, name in order do
-		roll -= pool[name].Chance
-		if roll < 0 then
-			return name
+		local info = pool[name]
+		if event or not info.EventOnly then
+			roll -= info.Chance * luck
+			if roll < 0 then
+				return name
+			end
 		end
 	end
 	return nil
 end
 
--- Rolls a freshly spawned egg's size and material: (size or nil, material or nil).
-function Config.RollVariant(): (string?, string?)
-	return rollTier(Config.Sizes, SIZE_ORDER), rollTier(Config.Materials, MATERIAL_ORDER)
+-- Rolls a freshly spawned egg's size and material: (size or nil, material or nil). `luck` multiplies every chance
+-- (the Blood Moon doubles them); `event` lets the event-only Blood material drop.
+function Config.RollVariant(luck: number?, event: boolean?): (string?, string?)
+	local multiplier = luck or 1
+	return rollTier(Config.Sizes, SIZE_ORDER, multiplier, event == true), rollTier(Config.Materials, MATERIAL_ORDER, multiplier, event == true)
 end
 
 -- "Bat+Big+Golden" -> "Bat", "Big", "Golden". A plain id gives (id, nil, nil).
@@ -493,6 +499,31 @@ Config.StealHoldDuration = 1 -- seconds holding the prompt
 Config.ChaseMaxDuration = 30 -- owner gives up after this long
 Config.ChaseGiveUpDistance = 150 -- owner gives up if the thief gets this far ahead
 Config.CatchDistance = 5 -- studs between owner and thief that counts as caught
+
+---------------------------------------------------------------------------
+-- Blood Moon: every hour at :00 (UTC, so every server at the same moment) a special night starts for Seconds.
+-- A warning appears WarningSeconds before. While it lasts: the sky and music change; every house puts a Blood
+-- Moon Egg on some spots (MoonEggChance per house, the rest are the house's normal eggs); variant chances are
+-- multiplied by LuckMultiplier and the event-only Blood material can drop; owners run OwnerSpeedMult faster,
+-- notice thieves sooner (OwnerReactionMult) and chase longer (ChaseDurationMult). Quest: bring home Quest.Target
+-- eggs for a reward and a bonus chest; everyone who brought home an egg gets a potion at the end.
+---------------------------------------------------------------------------
+Config.BloodMoon = {
+	Seconds = 300,
+	WarningSeconds = 60,
+	LuckMultiplier = 2,
+	OwnerSpeedMult = 1.18,
+	OwnerReactionMult = 0.6,
+	ChaseDurationMult = 1.5,
+	MoonEggId = "MoonEgg",
+	MoonEggChance = { 0.15, 0.15, 0.2, 0.3, 0.35, 0.35, 0.35, 0.35, 0.35 }, -- per house; low houses get fewer so a new player is not handed a Legendary pet
+	Quest = { Target = 4, Minutes = 8, Mult = 1.2, Share = { Money = 0.4, Candy = 0.3, Xp = 0.3 } },
+}
+
+-- True while the Blood Moon is on (the server sets this attribute; clients can read it too).
+function Config.IsBloodMoon(): boolean
+	return game:GetService("ReplicatedStorage"):GetAttribute("BloodMoon") == true
+end
 -- Furniture inside the houses is phantom: players run straight through tables, chairs, shelves and beds, so nobody
 -- gets stuck during a chase. Every part inside a house's Decor folder whose name contains one of Folders is
 -- switched to CanCollide = false when the server starts, except parts whose own name contains one of Keep
@@ -533,6 +564,7 @@ Config.Audio = {
 	Music = {
 		Chill = { Id = "104408838738669", File = "music_chill.mp3", Volume = 0.45 }, -- slow spooky waltz, always playing
 		Chase = { Id = "84750268429068", File = "music_chase.mp3", Volume = 0.7 }, -- replaces it while an owner chases you
+		Blood = { Id = "", File = "music_blood.mp3", Volume = 0.55 }, -- replaces the chill theme during the Blood Moon
 	},
 	Sfx = {
 		Click = { Id = "90777076070251", File = "ui_click.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/clickfast.wav" },
@@ -556,6 +588,8 @@ Config.Audio = {
 		Knock = { Id = "131329535742082", File = "knock.mp3", Volume = 1 },
 		DoorCreak = { Id = "137180994933404", File = "door_creak.mp3", Volume = 0.8 },
 		Whoosh = { Id = "73038656223943", File = "whoosh.mp3", Volume = 0.5 },
+		BloodRise = { Id = "", File = "blood_rise.mp3", Volume = 0.9 },
+		Thunder = { Id = "", File = "thunder.mp3", Volume = 0.8 },
 	},
 }
 
