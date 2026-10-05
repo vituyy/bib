@@ -480,7 +480,7 @@ local BOARDS = {
 		Format = function(score: number): string
 			return string.format("Rebirth %d  Lv %d", score // 1000, score % 1000)
 		end,
-		Spot = Vector3.new(-8, 0, -22),
+		Spot = Vector3.new(-100, 10, -0.55), -- on the hub's front wall, left of the street entrance
 		Accent = Color3.fromRGB(255, 190, 40),
 	},
 	{
@@ -493,7 +493,7 @@ local BOARDS = {
 		Format = function(score: number): string
 			return score .. " eggs"
 		end,
-		Spot = Vector3.new(68, 0, -22),
+		Spot = Vector3.new(160, 10, -0.55), -- on the wall to the right of the street entrance
 		Accent = Color3.fromRGB(190, 120, 255),
 	},
 }
@@ -512,9 +512,8 @@ local function nameOf(userId: number): string
 end
 
 local function buildBoard(parent: Instance, def): { [number]: { Rank: TextLabel, Name: TextLabel, Score: TextLabel } }
-	local facing = Vector3.new(30, 0, -30) -- the lobby spawn: the boards turn toward it
-	local center = def.Spot + Vector3.new(0, 11, 0)
-	local cf = CFrame.lookAt(center, Vector3.new(facing.X, center.Y, facing.Z))
+	-- Hung on the hub's front wall (its face is at z = 0, the wall is 20 studs tall), looking into the hub (-Z).
+	local cf = CFrame.new(def.Spot)
 	local model = Instance.new("Model")
 	model.Name = "Leaderboard_" .. def.Key
 
@@ -528,9 +527,6 @@ local function buildBoard(parent: Instance, def): { [number]: { Rank: TextLabel,
 	end
 	local board = block("Board", Vector3.new(24, 16, 1), cf, Color3.fromRGB(24, 16, 36))
 	block("Frame", Vector3.new(25.4, 17.4, 0.8), cf * CFrame.new(0, 0, 0.35), def.Accent, Enum.Material.Metal)
-	for _, side in { -1, 1 } do
-		block("Post", Vector3.new(1.2, 12.4, 1.2), cf * CFrame.new(side * 9, -4.6, 0.9), Color3.fromRGB(70, 45, 30), Enum.Material.Wood)
-	end
 
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front

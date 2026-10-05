@@ -93,6 +93,7 @@ local function shine(parent: GuiObject)
 		Position = UDim2.fromOffset(5, 3),
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 0.55,
+		ZIndex = parent.ZIndex, -- level with the thing it shines on, so it is never hidden behind it
 		Parent = parent,
 	}, {
 		new("UICorner", { CornerRadius = UDim.new(0, 8) }),
@@ -130,7 +131,7 @@ local function chunkyButton(props: { [string]: any }, paint: { Color3 }, onClick
 	props.AutoButtonColor = false
 	local b = new("TextButton", props, { corner(), gradient(paint), border() })
 	shine(b)
-	outlined({ Size = UDim2.new(1, -14, 1, -12), Position = UDim2.fromOffset(7, 6), Text = text, ZIndex = 2, Parent = b }, 2)
+	outlined({ Size = UDim2.new(1, -14, 1, -12), Position = UDim2.fromOffset(7, 6), Text = text, ZIndex = (props.ZIndex or 1) + 1, Parent = b }, 2)
 	bounce(b)
 	b.Activated:Connect(onClick)
 	return b
