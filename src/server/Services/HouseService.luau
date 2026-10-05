@@ -1298,6 +1298,39 @@ local function setupHouse(house: Model, index: number)
 		end
 	end
 
+	-- Furniture is phantom for players as well: nobody gets stuck on a table or chair during a chase.
+	if decor then
+		local phantom = 0
+		for _, folder in decor:GetChildren() do
+			local inside = false
+			for _, word in Config.PhantomFurniture.Folders do
+				if string.find(string.lower(folder.Name), string.lower(word), 1, true) then
+					inside = true
+				end
+			end
+			if inside then
+				for _, p in folder:GetDescendants() do
+					if p:IsA("BasePart") and p.CanCollide then
+						local lower = string.lower(p.Name)
+						local standOn = false
+						for _, word in Config.PhantomFurniture.Keep do
+							if string.find(lower, word, 1, true) then
+								standOn = true
+								break
+							end
+						end
+						if not standOn then
+							p.CanCollide = false
+							phantom += 1
+						end
+					end
+				end
+			end
+		end
+		if phantom > 0 then
+			print(string.format("[HouseService] House %d: %d furniture parts are phantom", index, phantom))
+		end
+	end
 
 	local door = house:FindFirstChild("Door") :: BasePart?
 	if door then

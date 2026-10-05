@@ -490,6 +490,15 @@ Config.StealHoldDuration = 1 -- seconds holding the prompt
 Config.ChaseMaxDuration = 30 -- owner gives up after this long
 Config.ChaseGiveUpDistance = 150 -- owner gives up if the thief gets this far ahead
 Config.CatchDistance = 5 -- studs between owner and thief that counts as caught
+-- Furniture inside the houses is phantom: players run straight through tables, chairs, shelves and beds, so nobody
+-- gets stuck during a chase. Every part inside a house's Decor folder whose name contains one of Folders is
+-- switched to CanCollide = false when the server starts, except parts whose own name contains one of Keep
+-- (floors, stairs, loft planks: things to stand on). Walls and floors in the Structure folder, and everything
+-- outdoors (yard, fence, trees), are not touched.
+Config.PhantomFurniture = {
+	Folders = { "Interior", "Kitchen", "Pantry", "Altar", "Craftsmanship" },
+	Keep = { "plank", "floor", "stair", "step", "landing", "platform", "deck", "walkway", "balcon", "mezzan", "ramp", "bridge", "loft", "ladder" },
+}
 -- No cutting off: if the owner is nearer to the thief's base than the thief is (and more than InterceptMinDistance
 -- away), he first runs to a spot InterceptBehind studs behind the thief and InterceptSide studs to the side, and only then
 -- chases normally. A chase only counts its time and give-up distance once the owner is actually after that thief.
