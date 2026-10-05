@@ -13,6 +13,7 @@ local SpeedService = require(Services.SpeedService)
 local HouseService = require(Services.HouseService)
 local ShopService = require(Services.ShopService)
 local DayNightService = require(Services.DayNightService)
+local RoadCandyService = require(Services.RoadCandyService)
 
 -- The model gallery is only for looking at the art in Studio; players never see it.
 local gallery = workspace:FindFirstChild("ModelGallery")
@@ -29,5 +30,6 @@ PlotService.Start(map)
 SpeedService.Start()
 HouseService.Start(map) -- registers its night/day callbacks before the cycle starts
 DayNightService.Start(map)
+RoadCandyService.Start(map)
 
 print("[SpookySteal] Server ready")

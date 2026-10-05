@@ -458,23 +458,23 @@ end
 -- CostumeTier: the minimum costume tier that gets Candy at the door.
 ---------------------------------------------------------------------------
 Config.Houses = {
-	{ Owner = "Old Witch", OwnerSpeed = 17, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
+	{ Owner = "Old Witch", OwnerSpeed = 20, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
 		EggWeights = { SwampEgg = 100 } },
-	{ Owner = "Friendly Mummy", OwnerSpeed = 38, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
+	{ Owner = "Friendly Mummy", OwnerSpeed = 41, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
 		EggWeights = { PyramidEgg = 100 } },
-	{ Owner = "Scarecrow", OwnerSpeed = 53, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
+	{ Owner = "Scarecrow", OwnerSpeed = 56, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { HarvestEgg = 100 } },
-	{ Owner = "Zombie Chef", OwnerSpeed = 72, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
+	{ Owner = "Zombie Chef", OwnerSpeed = 75, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
 		EggWeights = { BakeryEgg = 100 } },
-	{ Owner = "Gravedigger", OwnerSpeed = 84, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
+	{ Owner = "Gravedigger", OwnerSpeed = 87, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
 		EggWeights = { PumpkinEgg = 20, BatEgg = 45, GhostEgg = 30, MoonEgg = 5 } },
-	{ Owner = "Count Vlad", OwnerSpeed = 88, CandyPerKnock = 160, CostumeTier = 4, Floors = 2, Scale = 1.25, EggCount = 6,
+	{ Owner = "Count Vlad", OwnerSpeed = 91, CandyPerKnock = 160, CostumeTier = 4, Floors = 2, Scale = 1.25, EggCount = 6,
 		EggWeights = { BatEgg = 40, GhostEgg = 40, MoonEgg = 18, CursedEgg = 2 } },
-	{ Owner = "Banshee", OwnerSpeed = 105, CandyPerKnock = 320, CostumeTier = 5, Floors = 2, Scale = 1.3, EggCount = 6,
+	{ Owner = "Banshee", OwnerSpeed = 108, CandyPerKnock = 320, CostumeTier = 5, Floors = 2, Scale = 1.3, EggCount = 6,
 		EggWeights = { BatEgg = 20, GhostEgg = 45, MoonEgg = 30, CursedEgg = 5 } },
-	{ Owner = "Headless Horseman", OwnerSpeed = 125, CandyPerKnock = 650, CostumeTier = 6, Floors = 2, Scale = 1.35, EggCount = 6,
+	{ Owner = "Headless Horseman", OwnerSpeed = 128, CandyPerKnock = 650, CostumeTier = 6, Floors = 2, Scale = 1.35, EggCount = 6,
 		EggWeights = { GhostEgg = 40, MoonEgg = 40, CursedEgg = 18, NightmareEgg = 2 } },
-	{ Owner = "Lich King", OwnerSpeed = 145, CandyPerKnock = 1300, CostumeTier = 7, Floors = 2, Scale = 1.45, EggCount = 6,
+	{ Owner = "Lich King", OwnerSpeed = 148, CandyPerKnock = 1300, CostumeTier = 7, Floors = 2, Scale = 1.45, EggCount = 6,
 		EggWeights = { GhostEgg = 20, MoonEgg = 45, CursedEgg = 30, NightmareEgg = 5 } },
 }
 
@@ -486,6 +486,13 @@ Config.StealHoldDuration = 1 -- seconds holding the prompt
 Config.ChaseMaxDuration = 30 -- owner gives up after this long
 Config.ChaseGiveUpDistance = 150 -- owner gives up if the thief gets this far ahead
 Config.CatchDistance = 5 -- studs between owner and thief that counts as caught
+-- No cutting off: if the owner is nearer to the thief's base than the thief is (and more than InterceptMinDistance
+-- away), he first runs to a spot InterceptBehind studs behind the thief and InterceptSide studs to the side, and only then
+-- chases normally. A chase only counts its time and give-up distance once the owner is actually after that thief.
+Config.InterceptMinDistance = 18
+Config.InterceptBehind = 22
+Config.InterceptSide = 14
+Config.InterceptMaxSeconds = 8 -- never stays in this mode longer than this
 Config.OwnerReaction = 0.8 -- seconds the owner needs to notice a thief before he starts running
 Config.OwnerReactionPerRarity = 0.2 -- extra seconds per egg rarity step (Common = 1 step, Secret = 7): rarer eggs give a bigger head start
 Config.CaughtStunTime = 1.5 -- seconds the thief is slowed after being caught
@@ -499,31 +506,31 @@ Config.KickAngle = 35 -- degrees above the ground the kick launches the thief (a
 ---------------------------------------------------------------------------
 Config.Audio = {
 	Music = {
-		Chill = { Id = "", File = "music_chill.mp3", Volume = 0.45 }, -- slow spooky waltz, always playing
-		Chase = { Id = "", File = "music_chase.mp3", Volume = 0.7 }, -- replaces it while an owner chases you
+		Chill = { Id = "104408838738669", File = "music_chill.mp3", Volume = 0.45 }, -- slow spooky waltz, always playing
+		Chase = { Id = "84750268429068", File = "music_chase.mp3", Volume = 0.7 }, -- replaces it while an owner chases you
 	},
 	Sfx = {
-		Click = { Id = "", File = "ui_click.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/clickfast.wav" },
-		Hover = { Id = "", File = "ui_hover.mp3", Volume = 0.25 },
-		Open = { Id = "", File = "ui_open.mp3", Volume = 0.5 },
-		Close = { Id = "", File = "ui_close.mp3", Volume = 0.45 },
-		Buy = { Id = "", File = "ui_buy.mp3", Volume = 0.7, Fallback = "rbxasset://sounds/electronicpingshort.wav" },
-		Error = { Id = "", File = "ui_error.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/bass.wav" },
-		Notify = { Id = "", File = "ui_notify.mp3", Volume = 0.45 },
-		Candy = { Id = "", File = "ui_candy.mp3", Volume = 0.5 },
-		LevelUp = { Id = "", File = "ui_levelup.mp3", Volume = 0.7 },
-		Fanfare = { Id = "", File = "fanfare.mp3", Volume = 0.8 },
-		EggPickup = { Id = "", File = "egg_pickup.mp3", Volume = 0.7 },
-		EggPlace = { Id = "", File = "egg_place.mp3", Volume = 0.6 },
-		EggHatch = { Id = "", File = "egg_hatch.mp3", Volume = 0.8 },
-		ChaseAlert = { Id = "", File = "chase_alert.mp3", Volume = 0.8 },
-		Escape = { Id = "", File = "escape.mp3", Volume = 0.8 },
-		Caught = { Id = "", File = "caught.mp3", Volume = 0.8 },
-		Kick = { Id = "", File = "kick.mp3", Volume = 1.2, Fallback = "rbxasset://sounds/Kickhit.wav" },
+		Click = { Id = "90777076070251", File = "ui_click.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/clickfast.wav" },
+		Hover = { Id = "136773357162673", File = "ui_hover.mp3", Volume = 0.25 },
+		Open = { Id = "112378718438149", File = "ui_open.mp3", Volume = 0.5 },
+		Close = { Id = "140705850204002", File = "ui_close.mp3", Volume = 0.45 },
+		Buy = { Id = "111698847950410", File = "ui_buy.mp3", Volume = 0.7, Fallback = "rbxasset://sounds/electronicpingshort.wav" },
+		Error = { Id = "112807538408601", File = "ui_error.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/bass.wav" },
+		Notify = { Id = "140436292459203", File = "ui_notify.mp3", Volume = 0.45 },
+		Candy = { Id = "136234586640642", File = "ui_candy.mp3", Volume = 0.5 },
+		LevelUp = { Id = "70844323367904", File = "ui_levelup.mp3", Volume = 0.7 },
+		Fanfare = { Id = "102746230510443", File = "fanfare.mp3", Volume = 0.8 },
+		EggPickup = { Id = "117400458549929", File = "egg_pickup.mp3", Volume = 0.7 },
+		EggPlace = { Id = "113778628585626", File = "egg_place.mp3", Volume = 0.6 },
+		EggHatch = { Id = "138241628258698", File = "egg_hatch.mp3", Volume = 0.8 },
+		ChaseAlert = { Id = "138434141721230", File = "chase_alert.mp3", Volume = 0.8 },
+		Escape = { Id = "110374782293236", File = "escape.mp3", Volume = 0.8 },
+		Caught = { Id = "110987063379359", File = "caught.mp3", Volume = 0.8 },
+		Kick = { Id = "88984337474065", File = "kick.mp3", Volume = 1.2, Fallback = "rbxasset://sounds/Kickhit.wav" },
 		Grunt = { Id = "", Volume = 0.9, Fallback = "rbxasset://sounds/uuhhh.mp3" },
-		Knock = { Id = "", File = "knock.mp3", Volume = 1 },
-		DoorCreak = { Id = "", File = "door_creak.mp3", Volume = 0.8 },
-		Whoosh = { Id = "", File = "whoosh.mp3", Volume = 0.5 },
+		Knock = { Id = "131329535742082", File = "knock.mp3", Volume = 1 },
+		DoorCreak = { Id = "137180994933404", File = "door_creak.mp3", Volume = 0.8 },
+		Whoosh = { Id = "73038656223943", File = "whoosh.mp3", Volume = 0.5 },
 	},
 }
 

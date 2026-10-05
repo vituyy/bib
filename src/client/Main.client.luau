@@ -392,23 +392,23 @@ end
 player:GetAttributeChangedSignal("FriendBoost"):Connect(refreshFriendBoost)
 refreshFriendBoost()
 
--- Custom speed, under Money and Candy: run slower than your max speed if you want. Type a number or use - / +.
+-- Custom speed, under Money and Candy: run slower than your max speed if you want. Type the number in the panel.
 -- The server clamps it between Config.MinCustomSpeed and your max and saves it.
--- Same look as the Money / Candy rows: a glossy icon on the left (lined up with theirs) and a chunky number, here
--- sitting in a studded green panel with a thick black outline.
-local SPEED_ICON = "rbxassetid://114617581745294"
+-- Look: Viktor's speed bolt, big, overlapping the left edge of a see-through near-black studded panel, "Custom speed"
+-- above it, a big white number with a black outline inside and "Max:" under the right side.
+local SPEED_ICON = "rbxassetid://70813922518734"
 local customSpeedHud = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(300, 124), Position = UDim2.new(1, -16, 0.5, 86), BackgroundTransparency = 1, Parent = gui })
-new("ImageLabel", { Size = UDim2.fromOffset(92, 92), Position = UDim2.fromOffset(2, 18), BackgroundTransparency = 1, Image = SPEED_ICON, ScaleType = Enum.ScaleType.Fit, ZIndex = 3, Parent = customSpeedHud })
-outlined({ Size = UDim2.new(1, -98, 0, 30), Position = UDim2.fromOffset(98, 0), Text = "Custom speed", ZIndex = 3, Parent = customSpeedHud }, 3)
+new("ImageLabel", { Size = UDim2.fromOffset(112, 112), Position = UDim2.fromOffset(-14, 7), BackgroundTransparency = 1, Image = SPEED_ICON, ScaleType = Enum.ScaleType.Fit, ZIndex = 6, Parent = customSpeedHud })
+outlined({ Size = UDim2.new(1, -60, 0, 30), Position = UDim2.fromOffset(60, 0), Text = "Custom speed", ZIndex = 3, Parent = customSpeedHud }, 3)
 local speedBox = new("Frame", {
-	Size = UDim2.new(1, -98, 0, 62),
-	Position = UDim2.fromOffset(98, 32),
-	BackgroundColor3 = WHITE,
+	Size = UDim2.new(1, -52, 0, 62),
+	Position = UDim2.fromOffset(52, 32),
+	BackgroundColor3 = Color3.fromRGB(28, 28, 34),
+	BackgroundTransparency = 0.25,
 	Parent = customSpeedHud,
 }, {
-	corner(14),
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(45, 150, 60), Color3.fromRGB(20, 85, 35)) }),
-	new("UIStroke", { Color = BLACK, Thickness = 4, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	corner(6),
+	new("UIStroke", { Color = BLACK, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 })
 do -- faint stud outlines across the panel, like the menus
 	local grid = new("Frame", {
@@ -427,11 +427,10 @@ do -- faint stud outlines across the panel, like the menus
 		})
 	end
 end
--- The typed number, drawn with the big-number look: a black copy behind for the thick outline.
-local speedBack = outlined({ Size = UDim2.new(1, -104, 1, -10), Position = UDim2.fromOffset(52, 8), Text = "", TextColor3 = BLACK, ZIndex = 3, Parent = speedBox }, 6)
+-- The typed number: big white text with a black outline, centred in the part of the panel the bolt doesn't cover.
 local speedInput = new("TextBox", {
-	Size = UDim2.new(1, -104, 1, -10),
-	Position = UDim2.fromOffset(52, 5),
+	Size = UDim2.new(1, -60, 1, -8),
+	Position = UDim2.fromOffset(48, 4),
 	BackgroundTransparency = 1,
 	Font = Enum.Font.FredokaOne,
 	TextColor3 = WHITE,
@@ -441,20 +440,9 @@ local speedInput = new("TextBox", {
 	ZIndex = 4,
 	Parent = speedBox,
 }, {
-	new("UIStroke", { Color = PAINT.SpeedNumber[4], Thickness = 2.5, LineJoinMode = Enum.LineJoinMode.Round }),
-	new("UIGradient", {
-		Rotation = 90,
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, PAINT.SpeedNumber[1]),
-			ColorSequenceKeypoint.new(0.45, PAINT.SpeedNumber[2]),
-			ColorSequenceKeypoint.new(1, PAINT.SpeedNumber[3]),
-		}),
-	}),
+	new("UIStroke", { Color = BLACK, Thickness = 3, LineJoinMode = Enum.LineJoinMode.Round }),
 })
-speedInput:GetPropertyChangedSignal("Text"):Connect(function()
-	speedBack.Text = speedInput.Text
-end)
-local maxSpeedLabel = outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.new(1, -98, 0, 24), Position = UDim2.new(1, -6, 0, 98), Text = "Max: 0", TextColor3 = Color3.fromRGB(200, 255, 140), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3, Parent = customSpeedHud }, 2.5)
+local maxSpeedLabel = outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.new(1, -110, 0, 24), Position = UDim2.new(1, -6, 0, 98), Text = "Max: 0", TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3, Parent = customSpeedHud }, 2.5)
 
 local shownSpeed: number? = nil -- what the panel shows; nil until the first data arrives
 local sendSpeedAt = 0
@@ -476,20 +464,6 @@ local function pickSpeed(speed: number)
 	task.delay(0.35, function()
 		if sendSpeedAt == at and shownSpeed then
 			Remotes.Request:InvokeServer("SetCustomSpeed", shownSpeed)
-		end
-	end)
-end
-for _, step in { -1, 1 } do
-	chunkyButton({
-		AnchorPoint = Vector2.new(if step < 0 then 0 else 1, 0.5),
-		Size = UDim2.fromOffset(42, 42),
-		Position = UDim2.new(if step < 0 then 0 else 1, if step < 0 then 7 else -7, 0.5, 0),
-		Text = if step < 0 then "-" else "+",
-		ZIndex = 2,
-		Parent = speedBox,
-	}, if step < 0 then PAINT.Red else PAINT.Green, function()
-		if shownSpeed then
-			pickSpeed(if step > 0 then math.floor(shownSpeed) + 1 else math.ceil(shownSpeed) - 1)
 		end
 	end)
 end
@@ -1002,7 +976,7 @@ local function refreshIncubatorTimers()
 	local now = workspace:GetServerTimeNow()
 	for _, timer in incubatorTimers do
 		local left = timer.EndsAt - now
-		timer.Label.Text = if left > 0 then formatTime(left) else "Hatching!"
+		timer.Label.Text = if left > 0 then formatTime(left) else "READY — at pad"
 	end
 end
 
@@ -1014,7 +988,7 @@ function menus.Eggs(d)
 		local egg = Config.Eggs[entry.Egg]
 		if egg then
 			local _, timer = card(hatchGrid, n, Art.Egg(entry.Egg, entry.Pet), Config.Rarities[egg.Rarity].Color, "", nil, false, function()
-				toast(egg.Name .. " is hatching on your base", ORANGE)
+				toast(if entry.EndsAt <= workspace:GetServerTimeNow() then "Ready! Go to pad " .. n .. " on your base and hatch it." else egg.Name .. " is incubating on your base", ORANGE)
 			end)
 			table.insert(incubatorTimers, { Label = timer, EndsAt = entry.EndsAt })
 		end
@@ -1022,7 +996,7 @@ function menus.Eggs(d)
 	refreshIncubatorTimers()
 	for n = #d.Incubators + 1, slots do
 		blob(hatchGrid, n, "Empty", function()
-			toast("Tap an egg below to hatch it!", ORANGE)
+			toast("Tap an egg below to start its timer!", ORANGE)
 		end)
 	end
 
@@ -1059,10 +1033,10 @@ function menus.Eggs(d)
 		end
 	end
 
-	footerButton(1, "Hatch Best", PAINT.Orange, function()
+	footerButton(1, "Incubate Best", PAINT.Orange, function()
 		request("HatchBest")
 	end)
-	footerHint(2, "Tap an egg to hatch it. Hatching is free!")
+	footerHint(2, "Start timers here. Hatch ready eggs at your base!")
 end
 
 searchBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -1932,6 +1906,59 @@ end
 panel:GetPropertyChangedSignal("Visible"):Connect(checkPanels)
 invPanel:GetPropertyChangedSignal("Visible"):Connect(checkPanels)
 
+-- Gain pop-ups: the speed icon with "+XP" or the candy icon with "+Candy" pops up near the middle of the screen,
+-- floats up and fades. Gains that arrive close together are added into one pop-up so running doesn't spam them.
+local POPUP_ICONS = { Xp = "rbxassetid://70813922518734", Candy = CURRENCY_IMAGES.Candy } -- Xp: Viktor's speed bolt with the trails
+local POPUP_COLORS = { Xp = Color3.fromRGB(255, 225, 60), Candy = Color3.fromRGB(255, 150, 210) }
+local pendingGain: { [string]: number } = {}
+local function showGain(kind: string, amount: number)
+	local holder = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(220, 64),
+		Position = UDim2.new(0.5 + (math.random() - 0.5) * 0.3, 0, 0.55 + (math.random() - 0.5) * 0.15, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 20,
+		Parent = gui,
+	})
+	local scale = new("UIScale", { Scale = 0.3, Parent = holder })
+	local icon = new("ImageLabel", { Size = UDim2.fromOffset(64, 64), BackgroundTransparency = 1, Image = POPUP_ICONS[kind], ScaleType = Enum.ScaleType.Fit, ZIndex = 20, Parent = holder })
+	local label = outlined({
+		Size = UDim2.new(1, -70, 0, 44),
+		Position = UDim2.fromOffset(70, 10),
+		Text = "+" .. (if amount < 100 and amount % 1 ~= 0 then string.format("%.1f", amount) else formatNumber(amount)),
+		TextColor3 = POPUP_COLORS[kind],
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 20,
+		Parent = holder,
+	}, 3)
+	local stroke = label:FindFirstChildOfClass("UIStroke") :: UIStroke
+	TweenService:Create(scale, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	task.delay(0.5, function()
+		local fade = TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		TweenService:Create(holder, fade, { Position = holder.Position - UDim2.fromOffset(0, 70) }):Play()
+		TweenService:Create(icon, fade, { ImageTransparency = 1 }):Play()
+		TweenService:Create(label, fade, { TextTransparency = 1 }):Play()
+		TweenService:Create(stroke, fade, { Transparency = 1 }):Play()
+		task.wait(0.7)
+		holder:Destroy()
+	end)
+end
+local function queueGain(kind: string, amount: number)
+	if amount <= 0 then
+		return
+	end
+	if pendingGain[kind] then
+		pendingGain[kind] += amount
+		return
+	end
+	pendingGain[kind] = amount
+	task.delay(if kind == "Xp" then 1 else 0.3, function() -- XP ticks every second while running
+		local total = pendingGain[kind]
+		pendingGain[kind] = nil
+		showGain(kind, total)
+	end)
+end
+
 -- Things that change in the player's data: level-ups, rebirths, candy, eggs.
 local previousData: { [string]: any }? = nil
 local lastCandy = 0
@@ -1946,13 +1973,19 @@ Remotes.DataChanged.OnClientEvent:Connect(function(new)
 	elseif new.SpeedLevel > old.SpeedLevel then
 		sfx("LevelUp")
 	end
+	if new.Rebirths == old.Rebirths then
+		local xp = new.SpeedXp - old.SpeedXp
+		for level = old.SpeedLevel, new.SpeedLevel - 1 do -- levelling up spends the XP for each level passed
+			xp += Config.XpToNext(level)
+		end
+		queueGain("Xp", xp)
+	end
+	queueGain("Candy", new.Candy - old.Candy)
 	if new.Candy > old.Candy and os.clock() - lastCandy > 0.2 then
 		lastCandy = os.clock()
 		sfx("Candy")
 	end
-	if #new.Pets + #new.Storage > #old.Pets + #old.Storage then
-		sfx("EggHatch")
-	elseif #new.Incubators > #old.Incubators then
+	if #new.Incubators > #old.Incubators then
 		sfx("EggPlace")
 	elseif #new.Eggs > #old.Eggs then
 		sfx("Escape")
@@ -1983,4 +2016,9 @@ end)
 Remotes.Kick.OnClientEvent:Connect(function()
 	sfx("Caught")
 	setMusic("Chill", 2.5)
+end)
+
+-- Play the hatch sound as the reveal egg opens, respecting the existing sound toggle.
+Remotes.EggHatched.OnClientEvent:Connect(function()
+	task.delay(0.85, function() sfx("EggHatch") end)
 end)

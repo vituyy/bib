@@ -58,6 +58,9 @@ type HouseState = {
 	PathGen: number, -- bumped whenever navigation resets, so a late path result for an old goal is ignored
 	AlertUntil: number?, -- the owner is still noticing the thief until this time (os.clock)
 	Target: Player?, -- the thief being chased right now (read live every frame, not sampled)
+	Active: Player?, -- the thief the owner is dealing with; he finishes with them before the next one
+	Intercept: boolean, -- running round to get behind the thief instead of cutting them off
+	InterceptSince: number?,
 	DoorSetup: any?, -- set while the front door is held open for the chase
 }
 
@@ -68,6 +71,8 @@ type Carry = {
 	PetId: string?,
 	Started: number,
 	Chased: boolean,
+	ChaseFrom: number?, -- when the owner got within range of this thief (the give-up timer starts here)
+	ActivatedAt: number?, -- when this thief became the owner's target (he may still be far away)
 	Character: Model,
 }
 
@@ -201,6 +206,7 @@ local function resetOwner(state: HouseState)
 	owner.Parent = house
 	local root = rootOf(owner)
 	state.Goal, state.Waypoints, state.ReturnStart, state.AlertUntil, state.Target = nil, nil, nil, nil, nil
+	state.Active, state.Intercept, state.InterceptSince = nil, false, nil
 	state.PathGoal, state.PathFailed = nil, false
 	state.PathGen += 1
 	closeChaseDoor(state, true)
@@ -498,7 +504,7 @@ local function followGoal(state: HouseState, dt: number)
 	end
 	local thief = state.Target
 	local thiefRoot = thief and rootOf(thief.Character)
-	if thiefRoot then
+	if thiefRoot and not state.Intercept then
 		goal = thiefRoot.Position
 	end
 	local target = goal
@@ -552,6 +558,7 @@ local function arriveHome(state: HouseState)
 		end
 	end
 	state.Goal, state.Waypoints, state.ReturnStart, state.AlertUntil, state.Target = nil, nil, nil, nil, nil
+	state.Active, state.Intercept, state.InterceptSince = nil, false, nil
 	state.PathGoal, state.PathFailed = nil, false
 	state.PathGen += 1
 	state.OwnerHome = true
@@ -686,32 +693,73 @@ local function chaseStep()
 			end
 		end
 
-		-- Chase the nearest thief of this house.
-		local target: Player? = nil
-		local targetDistance = math.huge
+		-- Thieves still running with an egg from this house, in the order they stole. The owner deals with the first
+		-- one completely (catch, escape or give-up) and only then goes after the next.
+		local queue: { { Player: Player, Carry: any } } = {}
 		for player, carry in carrying do
 			if carry.House == state and carry.Chased then
 				local thiefRoot = rootOf(player.Character) :: BasePart
-				local distance = (ownerRoot.Position - thiefRoot.Position).Magnitude
 				if thiefRoot.Position.Z < chaseLimitZ then
 					-- Owners never follow you past the Level 1 line into the hub.
 					carry.Chased = false
 					Remotes.ChaseState:FireClient(player, false)
 					notify(player, "You made it off the street! " .. state.OwnerName .. " stopped chasing.", GREEN)
-				elseif os.clock() - carry.Started > Config.ChaseMaxDuration or distance > Config.ChaseGiveUpDistance then
-					carry.Chased = false
-					Remotes.ChaseState:FireClient(player, false)
-					notify(player, state.OwnerName .. " gave up! Get the egg back to your base.", ORANGE)
-				elseif distance < targetDistance then
-					target = player
-					targetDistance = distance
+				else
+					table.insert(queue, { Player = player, Carry = carry })
 				end
 			end
+		end
+		table.sort(queue, function(a, b)
+			return a.Carry.Started < b.Carry.Started
+		end)
+
+		local target: Player? = nil
+		local targetDistance = math.huge
+		for _, entry in queue do
+			local thiefRoot = rootOf(entry.Player.Character) :: BasePart
+			local distance = (ownerRoot.Position - thiefRoot.Position).Magnitude
+			-- The thief the owner is already after stays his target; otherwise the earliest thief in line.
+			if state.Active ~= entry.Player and state.Active ~= nil and carrying[state.Active] and carrying[state.Active].Chased then
+				continue
+			end
+			if state.Active ~= entry.Player then
+				state.Active = entry.Player
+				entry.Carry.ActivatedAt = os.clock()
+				entry.Carry.ChaseFrom = nil
+				state.Intercept, state.InterceptSince = false, nil
+			end
+			-- A thief who is still far away (the owner was busy with someone else) is run down first; the 30 s and
+			-- the give-up distance only count once the owner is within range of him.
+			if not entry.Carry.ChaseFrom and distance <= Config.ChaseGiveUpDistance then
+				entry.Carry.ChaseFrom = os.clock()
+			end
+			local gaveUp
+			if entry.Carry.ChaseFrom then
+				gaveUp = os.clock() - entry.Carry.ChaseFrom > Config.ChaseMaxDuration or distance > Config.ChaseGiveUpDistance
+			else
+				gaveUp = os.clock() - (entry.Carry.ActivatedAt or 0) > 60
+			end
+			if gaveUp then
+				entry.Carry.Chased = false
+				state.Active = nil
+				Remotes.ChaseState:FireClient(entry.Player, false)
+				notify(entry.Player, state.OwnerName .. " gave up! Get the egg back to your base.", ORANGE)
+				continue
+			end
+			target, targetDistance = entry.Player, distance
+			break
+		end
+		-- He gave up on the first thief just now: the next one in line starts next tick.
+		if not target and state.Active and not (carrying[state.Active] and carrying[state.Active].Chased) then
+			state.Active = nil
 		end
 
 		state.Target = nil
 		if target then
 			state.ReturnStart = nil
+			local thiefHumanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+			local thiefRoot = rootOf(target.Character) :: BasePart
+			local thiefOffset = if thiefHumanoid then thiefHumanoid.HipHeight + thiefRoot.Size.Y / 2 else 3
 			if os.clock() < (state.AlertUntil or 0) then
 				-- Still noticing the thief: he stands there for a moment (and can not catch anyone yet).
 				state.Goal, state.Waypoints = nil, nil
@@ -720,9 +768,35 @@ local function chaseStep()
 				finishTheft(target, "caught")
 			else
 				state.Target = target
-				local thiefHumanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
-				local thiefRoot = rootOf(target.Character) :: BasePart
-				navigate(state, thiefRoot.Position, if thiefHumanoid then thiefHumanoid.HipHeight + thiefRoot.Size.Y / 2 else 3)
+				-- Cut-off check: when the owner is nearer to the thief's base than the thief is, and not close
+				-- by, he runs to a spot behind and beside the thief first, then chases from behind.
+				local goal = thiefRoot.Position
+				local plot = PlotService.GetPlot(target)
+				local base = plot and plot:FindFirstChild("Base") :: BasePart?
+				local intercepting = false
+				if base and targetDistance > Config.InterceptMinDistance then
+					local toBase = Vector3.new(base.Position.X - thiefRoot.Position.X, 0, base.Position.Z - thiefRoot.Position.Z)
+					local rel = Vector3.new(ownerRoot.Position.X - thiefRoot.Position.X, 0, ownerRoot.Position.Z - thiefRoot.Position.Z)
+					if toBase.Magnitude > 1 then
+						local dir = toBase.Unit
+						local ahead = rel:Dot(dir)
+						if ahead > 3 then
+							if not state.Intercept then
+								state.Intercept, state.InterceptSince = true, os.clock()
+							end
+							if os.clock() - (state.InterceptSince or 0) <= Config.InterceptMaxSeconds then
+								local lateral = rel - dir * ahead
+								lateral = if lateral.Magnitude > 1 then lateral.Unit else Vector3.new(-dir.Z, 0, dir.X)
+								goal = thiefRoot.Position + lateral * Config.InterceptSide - dir * Config.InterceptBehind
+								intercepting = true
+							end
+						end
+					end
+				end
+				if not intercepting then
+					state.Intercept = false
+				end
+				navigate(state, goal, thiefOffset)
 			end
 		elseif not state.OwnerHome then
 			-- Nobody left to chase: walk back to his spot.
@@ -918,97 +992,19 @@ end
 
 -- Works out how a door is built, whatever its size or direction: which way it faces, how wide it is and
 -- which parts (handles, panels, bars...) are mounted on it, so they all swing together.
+local DoorMotion = require(script.Parent.DoorMotion)
+
 local function doorSetup(state: HouseState, door: BasePart)
-	local cf = door.CFrame
-	local size = door.Size
-	local axes = { cf.RightVector, cf.UpVector, -cf.LookVector } -- the door's own X, Y, Z
-	local sizes = { size.X, size.Y, size.Z }
-	local tall = 1
-	for i = 2, 3 do
-		if math.abs(axes[i].Y) > math.abs(axes[tall].Y) then
-			tall = i
-		end
-	end
-	local thin, wide
-	for i = 1, 3 do
-		if i ~= tall then
-			if not thin then
-				thin = i
-			elseif sizes[i] < sizes[thin] then
-				wide = thin
-				thin = i
-			else
-				wide = i
-			end
-		end
-	end
-	local up = if axes[tall].Y < 0 then -axes[tall] else axes[tall]
-	local inward = axes[thin]
-	local spawnPart = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
-	if spawnPart and inward:Dot(spawnPart.Position - cf.Position) < 0 then
-		inward = -inward
-	end
-	-- Frame: +Z points into the house, +Y is up, X runs along the door's width.
-	local frame = CFrame.fromMatrix(cf.Position, up:Cross(inward), up, inward)
-
-	-- Anything small that sits on the door's face (inside its width and height, within a stud or so of it).
-	local limit = { size.X / 2, size.Y / 2, size.Z / 2 }
-	limit[thin] += 1.1
-	limit[tall] -= 0.5
-	local skip = { Structure = true, Yard = true, EggSpots = true, Wall = true, Floor = true }
-	local parts = { { Part = door, Rel = CFrame.identity, Collide = door.CanCollide } }
-	for _, d in state.House:GetDescendants() do
-		if d:IsA("BasePart") and d ~= door and d.Anchored and not (state.Owner and d:IsDescendantOf(state.Owner)) then
-			local excluded = skip[d.Name] or false
-			local parent = d.Parent
-			while parent and parent ~= state.House and not excluded do
-				excluded = skip[parent.Name] or false
-				parent = parent.Parent
-			end
-			local lp = cf:PointToObjectSpace(d.Position)
-			local onDoor = d:IsDescendantOf(door)
-				or (math.abs(lp.X) <= limit[1] and math.abs(lp.Y) <= limit[2] and math.abs(lp.Z) <= limit[3])
-			if onDoor and not excluded then
-				table.insert(parts, { Part = d, Rel = cf:ToObjectSpace(d.CFrame), Collide = d.CanCollide })
-			end
-		end
-	end
-	return {
-		Closed = cf,
-		Frame = frame,
-		Width = sizes[wide],
-		Thick = sizes[thin],
-		Inward = inward,
-		Parts = parts,
-	}
-end
-
-local DOOR_OPEN_ANGLE = 105
-
--- The door (and everything on it) at a given openness: 0 = shut, 1 = fully open. Hinged on one edge, swinging inward.
-local function doorAt(setup, amount: number): CFrame
-	local hinge = setup.Frame * CFrame.new(-setup.Width / 2, 0, 0)
-	return hinge * CFrame.Angles(0, -math.rad(DOOR_OPEN_ANGLE) * amount, 0) * hinge:Inverse() * setup.Closed
+	return DoorMotion.Get(state.House, door, state.Owner)
 end
 
 local function placeDoor(setup, amount: number)
-	local doorCF = doorAt(setup, amount)
-	for _, d in setup.Parts do
-		d.Part.CFrame = doorCF * d.Rel
-	end
+	DoorMotion.Snap(setup, amount)
 end
 
--- Animate openness from -> to. Blocks until done.
 local function swingDoor(setup, from: number, to: number, duration: number, style: Enum.EasingStyle, direction: Enum.EasingDirection)
-	local t0 = os.clock()
-	while true do
-		local a = math.min((os.clock() - t0) / duration, 1)
-		placeDoor(setup, from + (to - from) * TweenService:GetValue(a, style, direction))
-		if a >= 1 then
-			return
-		end
-		task.wait()
-	end
+	-- Continue from the live pose rather than an assumed fully-open/closed pose.
+	return DoorMotion.Animate(setup, to, duration, style, direction)
 end
 
 -- The front door swings open when a chase starts (and stays open while the owner is out), then shuts after
@@ -1089,16 +1085,18 @@ local function playDoorScene(state: HouseState, player: Player, happy: boolean, 
 		d.Part.CanCollide = false
 	end
 
-	local opened = false
 	local ok, err = pcall(function()
 		-- Three knocks, then the door creaks open.
 		playSfx("Knock", door)
 		task.wait(0.65)
+		if not alive() then
+			return
+		end
 		playSfx("DoorCreak", door)
-		task.spawn(function()
-			pcall(swingDoor, setup, 0, 1, 0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-			opened = true
-		end)
+		swingDoor(setup, 0, 1, 0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		if not alive() then
+			return
+		end
 
 		-- The owner steps into the middle of the doorway, looking at the player.
 		local spot = setup.Closed.Position + setup.Inward * (setup.Thick / 2 + 3.5)
@@ -1152,8 +1150,17 @@ local function playDoorScene(state: HouseState, player: Player, happy: boolean, 
 	if root.Parent then
 		root.Anchored = false
 	end
-	while not opened do
-		task.wait()
+	-- Hand the already-open door to the chase instead of slamming it on the owner.
+	if not state.OwnerHome and state.Owner == owner and owner.Parent then
+		state.DoorSetup = setup
+		state.Busy = false
+		if state.Prompt then
+			state.Prompt.Enabled = true
+		end
+		task.spawn(function()
+			pcall(swingDoor, setup, setup.Amount, 1, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		end)
+		return
 	end
 	if happy then
 		swingDoor(setup, 1, 0, 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -1244,6 +1251,7 @@ local function setupHouse(house: Model, index: number)
 		GroundOffset = 3,
 		GoalOffset = 3,
 		WpIndex = 1,
+		Intercept = false,
 		PathGen = 0,
 		PathPending = false,
 		PathFailed = false,
@@ -1313,6 +1321,14 @@ end
 
 function HouseService.Start(map: Instance)
 	local street = map:WaitForChild("Street")
+	-- Keep every level's sign in sync with the same speed used by its owner.
+	for index, info in Config.Houses do
+		local marker = street:FindFirstChild("LevelLine" .. index)
+		local sign = marker and marker:FindFirstChildWhichIsA("TextLabel", true)
+		if sign then
+			sign.Text = string.format("LEVEL %d  |  Owner speed %d", index, info.OwnerSpeed)
+		end
+	end
 	local line = street:FindFirstChild("LevelLine1") :: BasePart?
 	chaseLimitZ = street:GetAttribute("StartZ") or (line and line.Position.Z) or -math.huge
 	-- A house is any Model with an Index attribute and an EggSpots folder, wherever it sits in Workspace,
@@ -1354,7 +1370,7 @@ function HouseService.Start(map: Instance)
 			local thief = state.Target
 			local thiefRoot = thief and rootOf(thief.Character)
 			local ownerRoot = rootOf(state.Owner)
-			if thief and thiefRoot and ownerRoot and carrying[thief] and os.clock() >= (state.AlertUntil or 0) then
+			if thief and thiefRoot and ownerRoot and not state.Intercept and carrying[thief] and os.clock() >= (state.AlertUntil or 0) then
 				-- Catch on the live positions every frame, not only ten times a second.
 				if (ownerRoot.Position - thiefRoot.Position).Magnitude <= Config.CatchDistance then
 					finishTheft(thief, "caught")

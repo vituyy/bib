@@ -6,6 +6,8 @@ local RunService = game:GetService("RunService")
 local FOLDER_NAME = "Remotes"
 
 local DEFINITIONS = {
+	EggHatched = "RemoteEvent", -- server -> owner: confirmed egg and pet reveal
+	UpgradeBase = "RemoteFunction", -- click an upgrade button at your own base
 	Notify = "RemoteEvent", -- server -> client: (text, color?)
 	DataChanged = "RemoteEvent", -- server -> client: (dataSnapshot)
 	ChaseState = "RemoteEvent", -- server -> client: (isChased, ownerName?)

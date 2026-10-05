@@ -1,5 +1,4 @@
--- Gives each player a base plot, shows their pets and incubating eggs on it, hatches eggs when their timer
--- runs out, and pays out pet income.
+-- Gives each player a base, pays pet income, and lets owners manually hatch ready eggs at their pads.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -258,6 +257,28 @@ end
 
 local incubatorLabels: { [Player]: { [number]: TextLabel } } = {}
 
+local incubatorPrompts = {}
+local hatchBusyUntil = {}
+local hatchEgg -- defined below; prompts capture their egg to reject stale interactions
+
+local function updateIncubators(player: Player, data)
+	local now = os.time()
+	local full = #data.Pets >= Config.PetSlotsFor(data.PetCapLevel) and #data.Storage >= Config.MaxPetsStored
+	for n, entry in data.Incubators do
+		local egg = Config.Eggs[entry.Egg]
+		local l = incubatorLabels[player] and incubatorLabels[player][n]
+		local prompt = incubatorPrompts[player] and incubatorPrompts[player][n]
+		local left = entry.EndsAt - now
+		if l and egg then
+			l.Text = egg.Name .. "\n" .. (if left > 0 then formatTime(left) elseif full then "READY — Pets full!" else "READY — Hatch!")
+			l.TextColor3 = if left > 0 then Color3.fromRGB(255, 220, 140) else Color3.fromRGB(140, 255, 165)
+		end
+		if prompt then
+			prompt.Enabled = left <= 0 and not full and os.clock() >= (hatchBusyUntil[player] or 0)
+		end
+	end
+end
+
 local function renderIncubators(player: Player, data)
 	local plot = playerPlots[player]
 	local pads = plot and plot:FindFirstChild("Incubators")
@@ -272,6 +293,7 @@ local function renderIncubators(player: Player, data)
 	visuals.Name = "IncubatorVisuals"
 	visuals.Parent = plot
 	incubatorLabels[player] = {}
+	incubatorPrompts[player] = {}
 
 	for n = 1, Config.IncubatorsFor(data.PadLevel) do
 		local pad = pads:FindFirstChild("Incubator" .. n) :: BasePart?
@@ -280,9 +302,39 @@ local function renderIncubators(player: Player, data)
 			if entry and Config.Eggs[entry.Egg] then
 				local egg = Config.Eggs[entry.Egg]
 				local eggModel = Art.Egg(entry.Egg, entry.Pet, true)
+				-- Keep even Gigantic display eggs inside the pedestal and below the pavilion roof.
+				-- This changes their base display only; their inventory variant and income stay intact.
+				local _, bounds = eggModel:GetBoundingBox()
+				local displayScale = math.min(1, 7.1 / math.max(bounds.X, bounds.Z), 8.3 / bounds.Y)
+				if displayScale < 1 then
+					eggModel:ScaleTo(eggModel:GetScale() * displayScale)
+					eggModel:SetAttribute("EggHeight", (eggModel:GetAttribute("EggHeight") or egg.Size) * displayScale)
+				end
 				eggModel.Name = "IncubatingEgg"
+				eggModel:SetAttribute("IncubatorIndex", n)
 				eggModel:PivotTo(pad.CFrame + Vector3.new(0, pad.Size.Y / 2, 0))
 				eggModel.Parent = visuals
+				local prompt = Instance.new("ProximityPrompt")
+				prompt.Name = "ManualHatch"
+				prompt.ActionText = "Hatch!"
+				prompt.ObjectText = egg.Name
+				prompt.HoldDuration = 0
+				prompt.MaxActivationDistance = 10
+				prompt.RequiresLineOfSight = false
+				prompt.ClickablePrompt = true
+				prompt.KeyboardKeyCode = Enum.KeyCode.E
+				prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+				prompt.Enabled = false
+				prompt:SetAttribute("OwnerUserId", player.UserId)
+				prompt:SetAttribute("IncubatorIndex", n)
+				prompt.Parent = eggModel.PrimaryPart
+				incubatorPrompts[player][n] = prompt
+				prompt.Triggered:Connect(function(actor)
+					local ok, message = hatchEgg(actor, plot, n, entry)
+					if not ok then
+						Remotes.Notify:FireClient(actor, message, Color3.fromRGB(255, 110, 110))
+					end
+				end)
 				local height = eggModel:GetAttribute("EggHeight") or egg.Size
 				incubatorLabels[player][n] = label(eggModel.PrimaryPart :: BasePart, "", Color3.fromRGB(255, 220, 140), height / 2 + 1.5)
 
@@ -300,6 +352,7 @@ local function renderIncubators(player: Player, data)
 			end
 		end
 	end
+	updateIncubators(player, data)
 end
 
 local function claimPlot(player: Player)
@@ -325,6 +378,8 @@ local function releasePlot(player: Player)
 	plotOwners[plot] = nil
 	playerPlots[player] = nil
 	incubatorLabels[player] = nil
+	incubatorPrompts[player] = nil
+	hatchBusyUntil[player] = nil
 	wanderers[player] = nil
 	for _, name in { "PetVisuals", "IncubatorVisuals", "Treadmill" } do
 		local visuals = plot:FindFirstChild(name)
@@ -428,49 +483,61 @@ function PlotService.TeleportHome(player: Player)
 	end
 end
 
-local function hatchReady(player: Player, data)
-	-- Hatched pets go on the base while it has room, then into the inventory; when both are full the egg waits.
-	local now = os.time()
-	local hatched = {}
-	local onBase, stored = #data.Pets, #data.Storage
-	for n = #data.Incubators, 1, -1 do
-		local entry = data.Incubators[n]
-		if entry.EndsAt <= now then
-			local toBase = onBase < Config.PetSlotsFor(data.PetCapLevel)
-			if toBase or stored < Config.MaxPetsStored then
-				table.insert(hatched, { Index = n, Pet = entry.Pet or PlotService.RollPet(entry.Egg), ToBase = toBase })
-				if toBase then
-					onBase += 1
-				else
-					stored += 1
-				end
-			end
-		end
+-- The server awards exactly one ready egg, only at the owner's pad. No yielding before the
+-- egg is removed: a repeated click or an old prompt cannot award the same pet twice.
+hatchEgg = function(player: Player, plot: Instance, index: number, expectedEntry)
+	if not plot or playerPlots[player] ~= plot then
+		return false, "You can only hatch eggs on your own base"
 	end
-	if #hatched == 0 then
-		return
+	local data = DataService.Get(player)
+	local entry = data and data.Incubators[index]
+	if not entry or (expectedEntry and entry ~= expectedEntry) then
+		return false, "That egg is no longer on this pad"
 	end
+	if entry.EndsAt > os.time() then
+		return false, "This egg is still incubating"
+	end
+	if os.clock() < (hatchBusyUntil[player] or 0) then
+		return false, "Wait for your pet reveal to finish"
+	end
+	local pads = plot:FindFirstChild("Incubators")
+	local pad = pads and pads:FindFirstChild("Incubator" .. index)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if not (pad and root and humanoid and humanoid.Health > 0 and (root.Position - pad.Position).Magnitude <= 12) then
+		return false, "Come to your hatching pad to hatch this egg"
+	end
+	local toBase = #data.Pets < Config.PetSlotsFor(data.PetCapLevel)
+	if not toBase and #data.Storage >= Config.MaxPetsStored then
+		return false, "Your base and pet inventory are full. Make room first."
+	end
+	if not Config.Eggs[entry.Egg] then
+		return false, "Unknown egg"
+	end
+	local petId = entry.Pet or PlotService.RollPet(entry.Egg)
+	local pet = Config.Pets[petId]
+	if not pet then
+		return false, "Unknown pet"
+	end
+	hatchBusyUntil[player] = os.clock() + 3.2
+	local padCFrame = pad.CFrame + Vector3.new(0, pad.Size.Y / 2, 0)
 	DataService.Update(player, function(d)
-		for _, h in hatched do
-			table.remove(d.Incubators, h.Index)
-			table.insert(if h.ToBase then d.Pets else d.Storage, h.Pet)
-			local baseId = Config.SplitPet(h.Pet) -- the Index counts plain pets, not their Big or Golden versions
-			if not table.find(d.Discovered, baseId) then
-				table.insert(d.Discovered, baseId)
-			end
+		table.remove(d.Incubators, index)
+		table.insert(if toBase then d.Pets else d.Storage, petId)
+		local baseId = Config.SplitPet(petId)
+		if not table.find(d.Discovered, baseId) then
+			table.insert(d.Discovered, baseId)
 		end
 	end)
-	for _, h in hatched do
-		local pet = Config.Pets[h.Pet]
-		local text = string.format("Your egg hatched into a %s %s!", pet.Rarity, pet.Name)
-		if pet.Size or pet.Material then
-			text = string.format("WOW! Your egg hatched into a %s %s! It earns $%s/s!", pet.Rarity, pet.Name, shortNumber(pet.MoneyPerSecond))
+	Remotes.EggHatched:FireClient(player, { Egg = entry.Egg, Pet = petId, PadCFrame = padCFrame, ToBase = toBase })
+	task.delay(3.1, function()
+		if player.Parent then
+			local text = string.format("You hatched %s %s! $%s/s", pet.Rarity, pet.Name, shortNumber(pet.MoneyPerSecond))
+			if not toBase then text ..= " (in your Pets inventory: base full)" end
+			Remotes.Notify:FireClient(player, text, Config.Rarities[pet.Rarity].Color)
 		end
-		if not h.ToBase then
-			text ..= " (base full: it's in your Pets inventory)"
-		end
-		Remotes.Notify:FireClient(player, text, Config.Rarities[pet.Rarity].Color)
-	end
+	end)
+	return true, petId
 end
 
 function PlotService.Start(map: Instance)
@@ -489,27 +556,49 @@ function PlotService.Start(map: Instance)
 			return buyUpgrade(player, playerPlots[player], kind or "Pets")
 		end
 		dev.Parent = game:GetService("ServerStorage")
+		local hatchTest = Instance.new("BindableFunction")
+		hatchTest.Name = "DevHatchEgg"
+		hatchTest.OnInvoke = function(player, index, targetPlot)
+			return hatchEgg(player, targetPlot or playerPlots[player], index)
+		end
+		hatchTest.Parent = game:GetService("ServerStorage")
+		local readTest = Instance.new("BindableFunction")
+		readTest.Name = "DevReadHatchData"
+		readTest.OnInvoke = function(player)
+			local data = DataService.Get(player)
+			return { Pets = table.clone(data.Pets), Storage = table.clone(data.Storage), Incubators = table.clone(data.Incubators), Discovered = table.clone(data.Discovered) }
+		end
+		readTest.Parent = game:GetService("ServerStorage")
 	end
 
-	game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt, player)
-		local kind = prompt:GetAttribute("UpgradeKind")
+	-- Buttons send only an upgrade kind. The server chooses the caller's own plot
+	-- and validates proximity, funds and the current level before charging anything.
+	local lastUpgradeClick = {}
+	Remotes.UpgradeBase.OnServerInvoke = function(player: Player, kind: any)
 		if kind ~= "Pets" and kind ~= "Pads" then
-			return
+			return false, "Unknown upgrade"
 		end
-		-- Players can fire prompts from anywhere with cheats, so check they are really standing at the sign.
-		local signPart = prompt.Parent
-		local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if not (signPart and signPart:IsA("BasePart") and playerRoot and (playerRoot.Position - signPart.Position).Magnitude <= prompt.MaxActivationDistance + 15) then
-			return
+		local now = os.clock()
+		if now - (lastUpgradeClick[player] or -math.huge) < 0.35 then
+			return false, "Please wait a moment"
 		end
-		local plot = prompt
-		while plot and plot.Parent ~= plotsFolder do
-			plot = plot.Parent
+		lastUpgradeClick[player] = now
+		local plot = playerPlots[player]
+		local board = plot and plot:FindFirstChild(kind .. "UpgradeBoard", true)
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if not (board and board:IsA("BasePart") and root and humanoid and humanoid.Health > 0
+			and (root.Position - board.Position).Magnitude <= 20) then
+			local message = "Move closer to your base's upgrade board"
+			Remotes.Notify:FireClient(player, message, Color3.fromRGB(255, 110, 110))
+			return false, message
 		end
-		if plot then
-			local ok, message = buyUpgrade(player, plot, kind)
-			Remotes.Notify:FireClient(player, message, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
-		end
+		local ok, message = buyUpgrade(player, plot, kind)
+		Remotes.Notify:FireClient(player, message, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
+		return ok, message
+	end
+	Players.PlayerRemoving:Connect(function(player)
+		lastUpgradeClick[player] = nil
 	end)
 
 	local function onPlayerAdded(player: Player)
@@ -557,7 +646,7 @@ function PlotService.Start(map: Instance)
 		end
 		local parts = {}
 		for _, entry in data.Incubators do
-			table.insert(parts, entry.Egg .. "@" .. entry.EndsAt)
+			table.insert(parts, entry.Egg .. "@" .. entry.EndsAt .. "#" .. (entry.Pet or ""))
 		end
 		local incubatorKey = table.concat(parts, ",")
 		if lastIncubatorKey[player] ~= incubatorKey then
@@ -573,7 +662,7 @@ function PlotService.Start(map: Instance)
 
 	game:GetService("RunService").Heartbeat:Connect(stepWanderers)
 
-	-- Every second: pay income, tick incubator countdowns, hatch finished eggs.
+	-- Every second: pay income, tick incubator countdowns and enable ready prompts.
 	task.spawn(function()
 		while true do
 			task.wait(Config.IncomeTickSeconds)
@@ -588,21 +677,7 @@ function PlotService.Start(map: Instance)
 							d.Money += income
 						end)
 					end
-					local labels = incubatorLabels[player]
-					if labels then
-						for n, entry in data.Incubators do
-							local l = labels[n]
-							local egg = Config.Eggs[entry.Egg]
-							if l and egg then
-								local left = entry.EndsAt - now
-								l.Text = if left > 0
-									then egg.Name .. "\n" .. formatTime(left)
-									elseif #data.Pets >= Config.PetSlotsFor(data.PetCapLevel) and #data.Storage >= Config.MaxPetsStored then egg.Name .. "\nPets full!"
-									else egg.Name .. "\nHatching!"
-							end
-						end
-					end
-					hatchReady(player, data)
+					updateIncubators(player, data)
 				end
 			end
 		end

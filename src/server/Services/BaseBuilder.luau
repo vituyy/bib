@@ -1,148 +1,20 @@
--- Builds a player base (fence, hatching stall, pedestals, two Upgrade signs) at a given Pet Capacity level and
--- Hatching Pad level. Pet Capacity makes the pet courtyard deeper; Hatching Pads add pedestals (and a second row).
--- Each Plot model in Workspace.Map.Plots has an "Origin" CFrame attribute: the middle of the base's front edge
--- (the entrance), on the floor, looking out toward the hub centre. The base grows backward (away from the
--- entrance) by Config.BaseDepthStep per upgrade, so the front, the Upgrade sign and the treadmill never move.
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerStorage = game:GetService("ServerStorage")
-
-local Config = require(ReplicatedStorage.Shared.Config)
-
+-- Classic studded Halloween courtyards. The entrance and treadmill stay fixed;
+-- capacity upgrades extend the courtyard backward and hatch upgrades extend the pavilion.
+local Config = require(game.ReplicatedStorage.Shared.Config)
 local BaseBuilder = {}
-
-local W = 44 -- width across the entrance
-local GAP = 10 -- entrance gap in the front fence
-local PLINTH_H = 1.2
-local POST_H = 5
-
-local STONE = Color3.fromRGB(93, 85, 108)
-local WOOD = Color3.fromRGB(60, 37, 32)
-local PLANK = Color3.fromRGB(125, 72, 42)
-local ORANGE = Color3.fromRGB(255, 140, 30)
-local PURPLE = Color3.fromRGB(150, 60, 220)
-
--- Every generated piece is removed before a rebuild; the player's pets, eggs and treadmill are kept.
-local BUILT = { "Structure", "Base", "PetArea", "Incubators", "PlayerSpawn", "TreadmillSpot", "PetSlots" }
-
-function BaseBuilder.Depth(petCapLevel: number): number
-	return Config.BaseDepth + Config.BaseDepthStep * petCapLevel
+local W = 44
+local BUILT = {"Structure","Base","PetArea","Incubators","PlayerSpawn","TreadmillSpot","PetSlots"}
+local C = {
+ Stone=Color3.fromRGB(84,72,103), Floor=Color3.fromRGB(148,137,164),
+ Edge=Color3.fromRGB(114,96,138), Wood=Color3.fromRGB(133,77,47),
+ Trim=Color3.fromRGB(214,117,56), Orange=Color3.fromRGB(234,125,41),
+ Purple=Color3.fromRGB(116,62,157), Roof=Color3.fromRGB(139,80,189),
+ Lavender=Color3.fromRGB(204,161,240), Warm=Color3.fromRGB(255,194,88),
+ Dark=Color3.fromRGB(51,36,68)
+}
+function BaseBuilder.Depth(level)
+ return Config.BaseDepth + Config.BaseDepthStep * level
 end
-
--- Where the hatching pads stand, measured back from the hatchery's rear wall. Up to 4 pads fit in one row;
--- from the 5th pad a second row opens up under a longer roof.
-local function padLayout(count: number): ({ Vector2 }, boolean)
-	local back, front = 7, 15.5 -- distance in front of the rear wall
-	local row = function(xs: { number }, d: number)
-		local out = {}
-		for _, x in xs do
-			table.insert(out, Vector2.new(x, d))
-		end
-		return out
-	end
-	local rows = {
-		[2] = { row({ -5, 5 }, back) },
-		[3] = { row({ -10, 0, 10 }, back) },
-		[4] = { row({ -15, -5, 5, 15 }, back) },
-		[5] = { row({ -15, -5, 5, 15 }, back), row({ 0 }, front) },
-		[6] = { row({ -10, 0, 10 }, back), row({ -10, 0, 10 }, front) },
-		[7] = { row({ -15, -5, 5, 15 }, back), row({ -10, 0, 10 }, front) },
-	}
-	local chosen = rows[math.clamp(count, 2, 7)]
-	local spots = {}
-	for _, r in chosen do
-		for _, v in r do
-			table.insert(spots, v)
-		end
-	end
-	return spots, count >= 5
-end
-
-local function part(props: { [string]: any }): BasePart
-	local p = Instance.new(props.ClassName or "Part")
-	props.ClassName = nil
-	p.Anchored = true
-	p.Material = Enum.Material.Plastic
-	p.TopSurface = Enum.SurfaceType.Studs
-	p.BottomSurface = Enum.SurfaceType.Inlet
-	for key, value in props do
-		if key ~= "Parent" then
-			(p :: any)[key] = value
-		end
-	end
-	p.Parent = props.Parent
-	return p
-end
-
-local function deco(props: { [string]: any }): BasePart
-	props.CanCollide = false
-	props.CanQuery = false
-	props.CanTouch = false
-	return part(props)
-end
-
-local function light(parent: Instance, color: Color3, range: number, brightness: number)
-	local l = Instance.new("PointLight")
-	l.Color = color
-	l.Range = range
-	l.Brightness = brightness
-	l.Shadows = false
-	l.Parent = parent
-	return l
-end
-
--- Clones a generated prop from ServerStorage.SpeedShopArt, scaled to `height`, standing on the floor at `cf`.
-local function art(name: string, cf: CFrame, height: number, parent: Instance): Model?
-	local folder = ServerStorage:FindFirstChild("SpeedShopArt")
-	local source = folder and folder:FindFirstChild(name)
-	if not source then
-		return nil
-	end
-	local model = source:Clone() :: Model
-	local _, size = model:GetBoundingBox()
-	model:ScaleTo(model:GetScale() * height / size.Y)
-	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") then
-			d.Anchored = true
-			d.CanCollide = false
-			d.CanQuery = false
-			d.CanTouch = false
-		end
-	end
-	model:PivotTo(cf)
-	local box, boxSize = model:GetBoundingBox()
-	model:PivotTo(model:GetPivot() + Vector3.new(cf.X - box.X, cf.Y + boxSize.Y / 2 - box.Y, cf.Z - box.Z))
-	model.Parent = parent
-	return model
-end
-
-local function surfaceText(board: BasePart, lines: { { Name: string, Text: string, Color: Color3, Height: number } })
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 40
-	gui.LightInfluence = 0
-	local list = Instance.new("UIListLayout")
-	list.SortOrder = Enum.SortOrder.LayoutOrder
-	list.VerticalAlignment = Enum.VerticalAlignment.Center
-	list.Parent = gui
-	for i, line in lines do
-		local l = Instance.new("TextLabel")
-		l.Name = line.Name
-		l.LayoutOrder = i
-		l.Size = UDim2.fromScale(1, line.Height)
-		l.BackgroundTransparency = 1
-		l.Font = Enum.Font.FredokaOne
-		l.TextScaled = true
-		l.TextColor3 = line.Color
-		l.TextStrokeTransparency = 0.2
-		l.Text = line.Text
-		l.Parent = gui
-	end
-	gui.Parent = board
-	return gui
-end
-
 local function fmt(n: number): string
 	local s = tostring(math.floor(n))
 	return (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
@@ -160,383 +32,330 @@ function BaseBuilder.UpgradeText(kind: string, level: number): string
 	return string.format("%d > %d  |  $%s", now, nextUpgrade.Capacity, fmt(nextUpgrade.Price))
 end
 
-function BaseBuilder.Build(plot: Model, petCapLevel: number, padLevel: number)
-	for _, name in BUILT do
-		local old = plot:FindFirstChild(name)
-		while old do
-			old:Destroy()
-			old = plot:FindFirstChild(name)
-		end
-	end
-	local origin: CFrame = plot:GetAttribute("Origin")
-	local D = BaseBuilder.Depth(petCapLevel)
-	local padCount = Config.IncubatorsFor(padLevel)
-	local padSpots, twoRows = padLayout(padCount)
-	plot:SetAttribute("PetCapLevel", petCapLevel)
-	plot:SetAttribute("PadLevel", padLevel)
-	-- Local frame: +X across the base, +Z backward into the base (away from the entrance).
-	local function at(x: number, y: number, z: number): CFrame
-		return origin * CFrame.new(x, y, z)
-	end
 
-	local structure = Instance.new("Model")
-	structure.Name = "Structure"
-	structure.Parent = plot
-
-	-- Logical ownership bounds stay separate from the decorative courtyard.
-	local base = deco({ Name = "Base", Size = Vector3.new(W, 1, D), CFrame = at(0, -0.4, D / 2), Transparency = 1, Parent = plot })
-	local ownerSign = Instance.new("BillboardGui")
-	ownerSign.Name = "OwnerSign"
-	ownerSign.Size = UDim2.fromOffset(300, 70)
-	ownerSign.StudsOffsetWorldSpace = Vector3.new(0, 20, 0)
-	ownerSign.MaxDistance = 150
-	local ownerLabel = Instance.new("TextLabel")
-	ownerLabel.Name = "Label"
-	ownerLabel.Size = UDim2.fromScale(1, 1)
-	ownerLabel.BackgroundTransparency = 1
-	ownerLabel.Font = Enum.Font.FredokaOne
-	ownerLabel.TextSize = 28
-	ownerLabel.TextColor3 = Color3.new(1, 1, 1)
-	ownerLabel.TextStrokeTransparency = 0
-	ownerLabel.Text = "Empty Plot"
-	ownerLabel.Parent = ownerSign
-	ownerSign.Parent = base
-	-- Pets roam the front part of the base, clear of the hatching stall.
-	local pavilionDepth = if twoRows then 21 else 12 -- the hatchery grows a second row with the 5th pad
-	local roamDepth = math.max(D - (pavilionDepth + 6), 12)
-	deco({ Name = "PetArea", Size = Vector3.new(W - 16, 1, roamDepth), CFrame = at(0, -0.2, 3 + roamDepth / 2), Transparency = 1, Parent = plot })
-
-	-- Studded courtyard and inset flagstone path grow from the fixed front edge.
-	local function box(name, x, y, z, sx, sy, sz, color, solid, frame)
-		return (if solid then part else deco)({
-			Name = name, Size = Vector3.new(sx, sy, sz), CFrame = at(x, y, z) * (frame or CFrame.identity),
-			Color = color, Parent = structure,
-		})
-	end
-	local dark = Color3.fromRGB(47, 35, 57)
-	local trim = Color3.fromRGB(83, 54, 42)
-	local gold = Color3.fromRGB(193, 121, 47)
-	local roofColors = { Color3.fromRGB(73, 42, 101), Color3.fromRGB(88, 49, 118), Color3.fromRGB(64, 36, 86) }
-	local stallFront = D - pavilionDepth
-	local stallZ = D - 2.5
-	-- Keep the floor flush enough for pets and character movement.
-	for ix = 0, 9 do
-		for iz = 0, D / 4 - 1 do
-			local x, z = -18 + ix * 4, 2 + iz * 4
-			box("CourtyardTile", x, 0.1, z, 3.96, 0.4, 3.96,
-				if (ix + iz) % 2 == 0 then Color3.fromRGB(65, 78, 55) else Color3.fromRGB(54, 65, 48), true)
-		end
-	end
-	for z = 2, stallFront - 2, 4 do
-		for _, x in { -2, 2 } do
-			box("PathStone", x, 0.33, z, 3.8, 0.16, 3.75,
-				if (math.floor(z / 4) + x) % 2 == 0 then Color3.fromRGB(126, 111, 128) else Color3.fromRGB(108, 95, 113), false)
-		end
-	end
-	for _, side in { -1, 1 } do
-		box("PathBorder", side * 4.2, 0.37, stallFront / 2, 0.32, 0.14, stallFront, gold, false)
-		box("CourtyardCoping", side * 20.4, 0.5, D / 2, 1, 0.4, D, dark, true)
-	end
-	-- A shallow timber deck marks the hatching area; upgrades extend its canopy.
-	box("HatchDeckFoundation", 0, 0.42, (stallFront + stallZ) / 2, 36, 0.64, stallZ - stallFront + 2, dark, true)
-	for z = stallFront, stallZ, 1.5 do
-		box("HatchDeckPlank", 0, 0.8, z, 35.4, 0.18, 1.43,
-			if math.floor(z / 1.5) % 2 == 0 then PLANK else Color3.fromRGB(112, 63, 40), false)
-	end
-	box("HatchDeckStep", 0, 0.42, stallFront - 1.4, 35.8, 0.28, 1.5, STONE, true)
-
-	-- Stone-brick plinth around the edge, with the entrance gap at the front
-	local function plinth(cx: number, cz: number, sx: number, sz: number)
-		part({ Name = "Plinth", Size = Vector3.new(sx, PLINTH_H, sz), CFrame = at(cx, PLINTH_H / 2, cz), Color = STONE, Material = Enum.Material.Plastic, Parent = structure })
-	end
-	plinth(0, D - 1, W, 2)
-	plinth(-W / 2 + 1, D / 2, 2, D - 4)
-	plinth(W / 2 - 1, D / 2, 2, D - 4)
-	local frontLen = (W - GAP) / 2
-	plinth(-GAP / 2 - frontLen / 2, 1, frontLen, 2)
-	plinth(GAP / 2 + frontLen / 2, 1, frontLen, 2)
-
-	-- Fence: brick posts with lanterns, two wooden rails between them
-	local posts = {}
-	local lit = 0
-	local function post(x: number, z: number, withLight: boolean)
-		local key = string.format("%.1f,%.1f", x, z)
-		if posts[key] then
-			return
-		end
-		posts[key] = true
-		part({ Name = "Post", Size = Vector3.new(2.2, POST_H, 2.2), CFrame = at(x, PLINTH_H + POST_H / 2, z), Color = STONE, Material = Enum.Material.Brick, Parent = structure })
-		part({ Name = "PostCap", Size = Vector3.new(2.8, 0.5, 2.8), CFrame = at(x, PLINTH_H + POST_H + 0.25, z), Color = Color3.fromRGB(80, 74, 82), Parent = structure })
-
-		box("PostFoot", x, 1.6, z, 2.7, 0.55, 2.7, dark, true)
-		box("PostCollar", x, 5.8, z, 2.5, 0.35, 2.5, gold, false)
-		box("PostInset", x, 3.65, z - 1.12, 1.2, 1.8, 0.09, Color3.fromRGB(56, 47, 67), false)
-		local lantern = art("GenLantern", at(x, PLINTH_H + POST_H + 0.5, z), 2.4, structure)
-		if lantern and (withLight or (z > 10 and z < D - 10 and math.floor(z / 10) % 2 == 0)) then
-			lit += 1
-			light(lantern:FindFirstChildWhichIsA("BasePart", true) :: BasePart, Color3.fromRGB(255, 174, 92), 18, if withLight then 1.1 else 0.7)
-		end
-	end
-	local function fence(x0: number, z0: number, x1: number, z1: number)
-		local a, b = Vector3.new(x0, 0, z0), Vector3.new(x1, 0, z1)
-		local len = (b - a).Magnitude
-		local n = math.max(1, math.ceil(len / 11))
-		for i = 0, n do
-			local p = a:Lerp(b, i / n)
-			post(p.X, p.Z, i == 0 or i == n)
-		end
-		-- Narrow iron pickets and spear tips make the low fence feel like a haunted garden.
-		for i = 1, math.floor(len / 2) - 1 do
-			local p = a:Lerp(b, i / math.floor(len / 2))
-			box("IronPicket", p.X, 3.2, p.Z, 0.18, 3.7, 0.18, dark, false)
-			box("PicketTip", p.X, 5.15, p.Z, 0.42, 0.42, 0.42, gold, false, CFrame.Angles(0, 0, math.pi / 4))
-		end
-
-		local mid = (a + b) / 2
-		local dir = CFrame.lookAt(Vector3.zero, b - a)
-		for _, y in { PLINTH_H + 1.5, PLINTH_H + 3.6 } do
-			part({
-				Name = "Rail",
-				Size = Vector3.new(0.5, 0.7, len),
-				CFrame = at(mid.X, y, mid.Z) * dir,
-				Color = WOOD,
-				Material = Enum.Material.Plastic,
-				Parent = structure,
-			})
-		end
-	end
-	local L, R = -W / 2 + 1, W / 2 - 1
-	fence(L, 1, L, D - 1)
-	fence(L, D - 1, R, D - 1)
-	fence(R, D - 1, R, 1)
-	fence(L, 1, -GAP / 2 - 1, 1)
-	fence(GAP / 2 + 1, 1, R, 1)
-
-	-- Wooden steps at the entrance
-	part({ Name = "Step", Size = Vector3.new(GAP, 0.4, 2.5), CFrame = at(0, 0.2, -1.5), Color = PLANK, Material = Enum.Material.Plastic, Parent = structure })
-	part({ Name = "Step", Size = Vector3.new(GAP, 0.8, 2), CFrame = at(0, 0.4, 1), Color = PLANK, Material = Enum.Material.Plastic, Parent = structure })
-
-
-	-- Layered entrance piers stay fixed as the courtyard lengthens.
-	for _, side in { -1, 1 } do
-		local x = side * 6
-		box("GatePier", x, 4.2, 1, 2.5, 6.4, 2.5, STONE, true)
-		box("GatePierCap", x, 7.6, 1, 3.3, 0.45, 3.3, dark, true)
-		box("GatePierBand", x, 6.8, 1, 2.7, 0.4, 2.7, gold, false)
-		box("GateInset", x, 4.3, -0.3, 1.3, 2.5, 0.1, dark, false)
-	end
-	-- Dead trees at the corners, jack-o'-lanterns by the entrance
-	for _, side in { -1, 1 } do
-		art("GenTree", at(side * (W / 2 + 3.5), 0, 3) * CFrame.Angles(0, side * 0.8, 0), 13, structure)
-		art("GenTree", at(side * (W / 2 + 3.5), 0, D - 4) * CFrame.Angles(0, side * 2.2, 0), 14, structure)
-		local pumpkin = art("GenPumpkin", at(side * (GAP / 2 + 2.2), 0, -2.5) * CFrame.Angles(0, math.pi, 0), 2.6, structure)
-		if pumpkin then
-			light(pumpkin:FindFirstChildWhichIsA("BasePart", true) :: BasePart, ORANGE, 12, 1.5)
-		end
-		art("GenPumpkin", at(side * (W / 2 - 4), 0, D - 4), 2.4, structure)
-	end
-
-	-- Crates with lit candles along the side fences
-	local function crate(x: number, z: number)
-		local box = art("GenCrate", at(x, 0, z), 2.6, structure)
-		if not box then
-			return
-		end
-		local _, size = box:GetBoundingBox()
-		for i, offset in { Vector3.new(-0.5, 0, -0.3), Vector3.new(0.4, 0, 0.2), Vector3.new(0, 0, 0.5) } do
-			local h = 0.6 + i * 0.25
-			local candle = deco({ Name = "Candle", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, 0.45, 0.45), CFrame = at(x + offset.X, size.Y + h / 2, z + offset.Z) * CFrame.Angles(0, 0, math.pi / 2), Color = Color3.fromRGB(245, 235, 210), Material = Enum.Material.SmoothPlastic, Parent = structure })
-			local flame = deco({ Name = "Flame", Size = Vector3.new(0.25, 0.4, 0.25), CFrame = at(x + offset.X, size.Y + h + 0.2, z + offset.Z), Color = Color3.fromRGB(255, 190, 60), Material = Enum.Material.Neon, Parent = structure })
-			if i == 1 then
-				light(flame, Color3.fromRGB(255, 170, 70), 10, 1.2)
-			end
-			local _ = candle
-		end
-	end
-	crate(L + 2.8, 5)
-	crate(R - 2.8, 5)
-	-- Side garden beds occupy the middle bays as the base grows.
-
-	-- Purple spiderwebs in the four corners of the fence
-	for _, c in { { L, 1, 1, 1 }, { R, 1, -1, 1 }, { L, D - 1, 1, -1 }, { R, D - 1, -1, -1 } } do
-		local x, z, sx, sz = c[1], c[2], c[3], c[4]
-		for k = 0, 3 do
-			local angle = k * math.pi / 6
-			local dir = Vector3.new(sx * math.cos(angle), 0, sz * math.sin(angle))
-			local from = Vector3.new(x, PLINTH_H + POST_H, z)
-			local to = from + dir * 3.2 - Vector3.new(0, 2.2, 0)
-			deco({ Name = "Web", Size = Vector3.new(0.12, 0.12, (to - from).Magnitude), CFrame = origin * CFrame.lookAt((from + to) / 2, to), Color = PURPLE, Material = Enum.Material.Neon, Transparency = 0.25, Parent = structure })
-		end
-		for _, r in { 1.4, 2.6 } do
-			local a = Vector3.new(x + sx * r, PLINTH_H + POST_H - r * 0.69, z)
-			local b = Vector3.new(x, PLINTH_H + POST_H - r * 0.69, z + sz * r)
-			deco({ Name = "Web", Size = Vector3.new(0.1, 0.1, (b - a).Magnitude), CFrame = origin * CFrame.lookAt((a + b) / 2, b), Color = PURPLE, Material = Enum.Material.Neon, Transparency = 0.35, Parent = structure })
-		end
-	end
-
-
-	-- Timber-framed haunted hatchery: open front, layered purple studded roof,
-	-- stained glass, warm lanterns and clearly numbered ritual pedestals.
-	local stallW = 36
-	box("StallWall", 0, 5.5, stallZ, stallW, 9.4, 0.8, dark, true)
-	for i = 0, 11 do
-		box("WallPanel", -16.5 + i * 3, 5.2, stallZ - 0.46, 2.88, 8.4, 0.22,
-			if i % 2 == 0 then PLANK else Color3.fromRGB(106, 58, 39), false)
-	end
-	box("WallStoneFoot", 0, 1.5, stallZ - 0.6, stallW, 1.3, 0.55, STONE, true)
-	for _, x in { -17, 17 } do
-		for _, z in { stallFront + 0.5, stallZ - 0.5 } do
-			box("PavilionPierFoot", x, 1.4, z, 2.6, 1.6, 2.6, STONE, true)
-			box("StallPost", x, 5.65, z, 1.25, 9.7, 1.25, WOOD, true)
-			box("PavilionCapital", x, 10.1, z, 2, 0.55, 2, gold, false)
-			box("PierInset", x, 5.4, z - 0.67, 0.55, 4, 0.1, PLANK, false)
-		end
-		box("SideSill", x, 2.25, (stallFront + stallZ) / 2, 0.7, 0.65, stallZ - stallFront, WOOD, true)
-		box("SideBeam", x, 10.3, (stallFront + stallZ) / 2, 1.3, 0.85, stallZ - stallFront + 1.5, WOOD, true)
-		for _, z in { stallFront + 2.2, stallZ - 2.2 } do
-			box("CornerBrace", x - math.sign(x) * 0.8, 8.9, z, 0.65, 3.3, 0.7, WOOD, false, CFrame.Angles(0, 0, math.sign(x) * math.pi / 5))
-		end
-	end
-	for _, y in { 2.6, 10.1 } do
-		box("RearCrossBeam", 0, y, stallZ - 0.8, stallW, 0.65, 0.55, WOOD, false)
-	end
-	for _, x in { -12, -6, 0, 6, 12 } do
-		box("RearTimber", x, 6.35, stallZ - 0.7, 0.5, 7.3, 0.5, WOOD, false)
-	end
-	-- Three jewel-like windows visible above the eggs, with stone mullions.
-	for _, x in { -10, 0, 10 } do
-		box("WindowFrame", x, 6.7, stallZ - 0.83, 4.1, 4.6, 0.36, gold, false)
-		box("StainedGlass", x, 6.7, stallZ - 1.04, 3.5, 4, 0.12, Color3.fromRGB(91, 164, 137), false)
-		box("WindowMullion", x, 6.7, stallZ - 1.13, 0.22, 4, 0.12, dark, false)
-		box("WindowMullion", x, 6.65, stallZ - 1.13, 3.5, 0.22, 0.12, dark, false)
-		box("WindowCrown", x, 9.12, stallZ - 0.9, 1.1, 1.1, 0.35, gold, false, CFrame.Angles(0, 0, math.pi / 4))
-	end
-	local roofD = stallZ - stallFront + 4
-	local roofC = (stallZ + stallFront) / 2
-	local rise, halfWidth, eaveY = 5.5, 19.5, 10.8
-	local slope = math.atan(rise / halfWidth)
-	local slopeLength = math.sqrt(halfWidth * halfWidth + rise * rise)
-	local zCount = math.ceil(roofD / 3.2)
-	for _, side in { -1, 1 } do
-		local rotation = CFrame.Angles(0, 0, -side * slope)
-		box("RoofUnderlay", side * halfWidth / 2, eaveY + rise / 2, roofC, slopeLength, 0.65, roofD, dark, true, rotation)
-		for row = 0, 4 do
-			local t = (row + 0.5) / 5
-			for col = 0, zCount - 1 do
-				local z = roofC - roofD / 2 + (col + 0.5) * roofD / zCount
-				box("RoofShingle", side * halfWidth * t, eaveY + rise * (1 - t) + 0.4, z,
-					slopeLength / 5 + 0.08, 0.23, roofD / zCount - 0.09, roofColors[(row + col) % #roofColors + 1], false, rotation)
-			end
-		end
-		box("EaveTrim", side * halfWidth, eaveY, roofC, 0.7, 0.8, roofD + 0.8, WOOD, false)
-		for _, z in { roofC - roofD / 2, roofC + roofD / 2 } do
-			box("GableFascia", side * halfWidth / 2, eaveY + rise / 2 + 0.24, z,
-				slopeLength + 0.5, 0.5, 0.7, gold, false, rotation)
-		end
-	end
-	box("RoofRidge", 0, eaveY + rise + 0.52, roofC, 1.2, 0.65, roofD + 1.2, WOOD, false)
-	box("StallBeam", 0, 10.05, stallFront + 0.5, stallW + 1, 0.8, 0.8, WOOD, true)
-	box("GableKingPost", 0, 13, stallFront - 1.5, 0.7, 5.7, 0.65, WOOD, false)
-	-- Roof finials and witch's hat repeat the houses' playful Halloween silhouette.
-	for _, z in { roofC - roofD / 2, roofC + roofD / 2 } do
-		box("RidgeFinial", 0, 17.35, z, 0.7, 2, 0.7, gold, false)
-	end
-	art("GenHat", at(0, 16.7, stallFront - 1.4) * CFrame.Angles(0, math.pi, 0), 4.5, structure)
-	local board = box("HatchSign", 0, 11.2, stallFront - 1.9, 18, 3.25, 0.6, dark, false)
-	surfaceText(board, {
-		{ Name = "Title", Text = "HATCH EGGS", Color = Color3.fromRGB(255, 203, 97), Height = 0.61 },
-		{ Name = "Capacity", Text = tostring(padCount) .. " HATCHING PADS", Color = Color3.fromRGB(212, 193, 231), Height = 0.25 },
-	})
-	for _, y in { 9.5, 12.9 } do box("SignFrame", 0, y, stallFront - 2.05, 18.8, 0.25, 0.3, gold, false) end
-	for _, x in { -9.25, 9.25 } do box("SignFrame", x, 11.2, stallFront - 2.05, 0.25, 3.6, 0.3, gold, false) end
-	for i = 0, 15 do
-		local x = -15 + i * 2
-		local sag = 0.8 * (1 - (x / 15) ^ 2)
-		box("BuntingCord", x, 9.55 - sag, stallFront - 0.4, 2.1, 0.08, 0.12, gold, false)
-		box("Bunting", x, 9.1 - sag, stallFront - 0.4, 0.75, 0.85, 0.16,
-			if i % 2 == 0 then ORANGE else PURPLE, false, CFrame.Angles(0, 0, math.pi / 4))
-	end
-	for _, x in { -14.5, 14.5 } do
-		local lantern = art("GenLantern", at(x, 6.2, stallFront + 1), 2.7, structure)
-		if lantern then light(lantern:FindFirstChildWhichIsA("BasePart", true), Color3.fromRGB(255, 166, 70), 15, 1.2) end
-		box("Chain", x, 9.2, stallFront + 1, 0.12, 1.4, 0.12, dark, false)
-	end
-	-- Border beds frame the pet courtyard, leaving its middle and entrance open.
-	for _, side in { -1, 1 } do
-		for z = 10, stallFront - 5, 12 do
-			box("GardenBed", side * 18.5, 0.85, z, 2.8, 0.7, 5, STONE, true)
-			box("GardenSoil", side * 18.5, 1.24, z, 2.35, 0.15, 4.5, Color3.fromRGB(43, 33, 36), false)
-			art("GenPumpkin", at(side * 18.5, 1.3, z - 0.8), 1.8, structure)
-			for i = 0, 2 do
-				box("SpookyGrass", side * 18.5 + (i - 1) * 0.55, 1.8, z + 1.2, 0.16, 1.1 + i * 0.25, 0.18,
-					Color3.fromRGB(104, 115, 69), false, CFrame.Angles(0, 0, (i - 1) * 0.3))
-			end
-		end
-	end
-
-	local pads = Instance.new("Folder")
-	pads.Name = "Incubators"
-	pads.Parent = plot
-	for n, rel in padSpots do
-		local s = Vector2.new(rel.X, D - rel.Y) -- rel.Y is the distance in front of the rear wall
-		local cylinderRotation = CFrame.Angles(0, 0, math.pi / 2)
-		deco({ Name = "PedestalFoot", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.45, 6.5, 6.5),
-			CFrame = at(s.X, 1.05, s.Y) * cylinderRotation, Color = dark, Parent = structure })
-		local pad = part({ Name = "Incubator" .. n, Size = Vector3.new(4.4, 1.05, 4.4), CFrame = at(s.X, 1.43, s.Y),
-			Color = STONE, Parent = pads })
-		deco({ Name = "PedestalRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 5.4, 5.4),
-			CFrame = at(s.X, 1.4, s.Y) * cylinderRotation, Color = gold, Parent = structure })
-		deco({ Name = "PedestalGlow", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 3.9, 3.9),
-			CFrame = at(s.X, 1.99, s.Y) * cylinderRotation, Color = Color3.fromRGB(191, 120, 247),
-			Material = Enum.Material.Neon, Parent = structure })
-		for i = 0, 3 do
-			local a = i * math.pi / 2
-			box("PedestalRune", s.X + math.cos(a) * 2.65, 1.32, s.Y + math.sin(a) * 2.65, 0.38, 0.13, 0.38, ORANGE, false,
-				CFrame.Angles(0, math.pi / 4, 0))
-		end
-		local plaque = box("PadPlaque", s.X, 1.13, s.Y - 2.7, 1.8, 0.8, 0.16, dark, false)
-		surfaceText(plaque, { { Name = "Number", Text = string.format("%02d", n), Color = Color3.fromRGB(255, 212, 120), Height = 0.9 } })
-	end
-	-- Two upgrade signs side by side on the left of the entrance, away from the treadmill on the right (the
-	-- prompts are wired by PlotService): PET CAPACITY nearest the entrance, HATCHING PADS beyond it. Each one upgrades only its own capacity.
-	local function upgradeSign(kind: string, level: number, signX: number, title: string, icons: string, color: Color3)
-		local signZ = -4
-		for _, dx in { -4.2, 4.2 } do
-			part({ Name = "SignPost", Size = Vector3.new(0.9, 9, 0.9), CFrame = at(signX + dx, 4.5, signZ + 0.4), Color = WOOD, Material = Enum.Material.Plastic, Parent = structure })
-		end
-		local board = part({ Name = "UpgradeBoard" .. kind, Size = Vector3.new(11, 6, 0.6), CFrame = at(signX, 6.5, signZ), Color = PLANK, Material = Enum.Material.Plastic, Parent = structure })
-		for _, y in { 3.4, 9.6 } do box("UpgradeFrame", signX, y, signZ - 0.38, 11.8, 0.3, 0.4, gold, false) end
-		for _, dx in { -5.75, 5.75 } do box("UpgradeFrame", signX + dx, 6.5, signZ - 0.38, 0.3, 6.5, 0.4, dark, false) end
-		board:SetAttribute("UpgradeKind", kind)
-		surfaceText(board, {
-			{ Name = "Title", Text = title, Color = color, Height = 0.34 },
-			{ Name = "Icons", Text = icons, Color = Color3.fromRGB(120, 255, 120), Height = 0.3 },
-			{ Name = "Info", Text = BaseBuilder.UpgradeText(kind, level), Color = Color3.new(1, 1, 1), Height = 0.26 },
-		})
-		local arrow = deco({ Name = "Arrow", ClassName = "WedgePart", Size = Vector3.new(0.4, 1.6, 2.4), CFrame = at(signX + 4.6, 10.4, signZ - 0.2) * CFrame.Angles(0, math.pi / 2, 0), Color = Color3.fromRGB(80, 230, 90), Material = Enum.Material.Neon, Parent = structure })
-		local _ = arrow
-		local upgrades = if kind == "Pets" then Config.PetCapacityUpgrades else Config.HatchPadUpgrades
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = "UpgradePrompt"
-		prompt.ActionText = if kind == "Pets" then "Upgrade Pet Capacity" else "Add Hatching Pad"
-		prompt.ObjectText = BaseBuilder.UpgradeText(kind, level)
-		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.HoldDuration = 0.4
-		prompt.MaxActivationDistance = 12
-		prompt.RequiresLineOfSight = false
-		prompt.Enabled = upgrades[level + 1] ~= nil
-		prompt:SetAttribute("UpgradeKind", kind)
-		prompt.Parent = board
-	end
-	upgradeSign("Pets", petCapLevel, -GAP / 2 - 9, "PET CAPACITY", "\u{1F43E} \u{2B06}\u{FE0F}", Color3.fromRGB(255, 160, 220))
-	upgradeSign("Pads", padLevel, -GAP / 2 - 22, "HATCHING PADS", "\u{1F95A} \u{2B06}\u{FE0F}", Color3.fromRGB(255, 220, 90))
-
-	part({ Name = "PlayerSpawn", Size = Vector3.new(1, 1, 1), CFrame = at(0, 4, 7), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false, Parent = plot })
-	-- Treadmill just outside the base, right of the entrance, running toward the hub centre.
-	part({ Name = "TreadmillSpot", Size = Vector3.new(1, 1, 1), CFrame = at(GAP / 2 + 9, 1, -14), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false, Parent = plot })
-
-	plot.PrimaryPart = base
-	return plot
+local function textFace(board, rows)
+ local gui=Instance.new("SurfaceGui")
+ gui.Name="SurfaceGui" gui.Face=Enum.NormalId.Front gui.LightInfluence=0
+ gui.SizingMode=Enum.SurfaceGuiSizingMode.PixelsPerStud gui.PixelsPerStud=50
+ local layout=Instance.new("UIListLayout") layout.SortOrder=Enum.SortOrder.LayoutOrder layout.VerticalAlignment=Enum.VerticalAlignment.Center layout.Parent=gui
+ for i,row in rows do
+  local t=Instance.new("TextLabel") t.Name=row[1] t.Text=row[2]
+  t.Size=UDim2.fromScale(1,row[4]) t.BackgroundTransparency=1
+  t.Font=Enum.Font.FredokaOne t.TextScaled=true t.TextColor3=row[3]
+  t.TextStrokeColor3=C.Dark t.TextStrokeTransparency=.1 t.LayoutOrder=i t.Parent=gui
+ end
+ gui.Parent=board return gui
 end
+local function padLayout(n)
+ local spots={}
+ local function row(xs,z) for _,x in xs do table.insert(spots,Vector2.new(x,z)) end end
+ if n==2 then row({-6.2,6.2},6.4)
+ elseif n==3 then row({-10.2,0,10.2},6.4)
+ elseif n==4 then row({-14.4,-4.8,4.8,14.4},6.4)
+ elseif n==5 then row({-14.4,-4.8,4.8,14.4},6.4) row({0},16)
+ elseif n==6 then row({-10.2,0,10.2},6.4) row({-10.2,0,10.2},16)
+ else row({-14.4,-4.8,4.8,14.4},6.4) row({-10.2,0,10.2},16) end
+ return spots,n>=5
+end
+function BaseBuilder.Build(plot,petCapLevel,padLevel)
+ for _,name in BUILT do
+  for _,old in plot:GetChildren() do if old.Name==name then old:Destroy() end end
+ end
+ local origin=assert(plot:GetAttribute("Origin"),"Plot needs Origin")
+ local D=BaseBuilder.Depth(petCapLevel)
+ local count=Config.IncubatorsFor(padLevel)
+ local spots,twoRows=padLayout(count)
+ local pavilionDepth=if twoRows then 22 else 12
+ local front=D-pavilionDepth
+ plot:SetAttribute("PetCapLevel",petCapLevel) plot:SetAttribute("PadLevel",padLevel)
+ plot:SetAttribute("BaseDesign","BalancedHalloweenStuds")
+ local structure=Instance.new("Model") structure.Name="Structure" structure.Parent=plot
+ local function group(name) local m=Instance.new("Model") m.Name=name m.Parent=structure return m end
+ local function p(parent,name,size,x,y,z,color,rotation,collide,shape)
+  local b=Instance.new("Part") b.Name=name b.Size=size
+  b.CFrame=origin*CFrame.new(x,y,z)*(rotation or CFrame.identity)
+  b.Color=color b.Material=Enum.Material.Plastic b.Anchored=true
+  b.TopSurface=Enum.SurfaceType.Studs b.BottomSurface=Enum.SurfaceType.Inlet
+  b.CanCollide=collide~=false b.CanTouch=false
+  if shape then b.Shape=shape b.TopSurface=Enum.SurfaceType.Smooth b.BottomSurface=Enum.SurfaceType.Smooth end
+  b.Parent=parent return b
+ end
+ local function block(parent,name,s,x,y,z,color,rot,collide)
+  return p(parent,name,Vector3.new(s[1],s[2],s[3]),x,y,z,color,rot,collide)
+ end
+ local function decor(parent,name,s,x,y,z,color,rot)
+  local b=block(parent,name,s,x,y,z,color,rot,false) b.CanQuery=false return b
+ end
+ local function beam(parent,name,a,b,width,color)
+  local mid=(a+b)/2
+  local q=decor(parent,name,{width,width,(b-a).Magnitude},mid.X,mid.Y,mid.Z,color)
+  q.CFrame=origin*CFrame.lookAt(mid,b) q.TopSurface=Enum.SurfaceType.Smooth
+  return q
+ end
+ local function marker(name,s,x,y,z)
+  local b=block(plot,name,s,x,y,z,C.Dark,nil,false)
+  b.Transparency=1 b.CanQuery=false return b
+ end
+ local base=marker("Base",{W,1,D},0,-.4,D/2)
+ local roam=math.max(front-5,12)
+ marker("PetArea",{W-12,1,roam},0,-.2,3+roam/2)
+ marker("PlayerSpawn",{1,1,1},0,4,7)
+ marker("TreadmillSpot",{1,1,1},14,1,-14)
+ plot.PrimaryPart=base
+ -- A soft local fill keeps the courtyard readable at night without extra decorative lamps.
+ local fill=marker("CourtyardFill",{W-4,.1,D-4},0,15,D/2)
+ fill.Parent=structure
+ local light=Instance.new("SurfaceLight") light.Name="SoftCourtyardLight"
+ light.Face=Enum.NormalId.Bottom light.Angle=120 light.Range=22 light.Brightness=.3
+ light.Color=Color3.fromRGB(223,210,244) light.Shadows=false light.Parent=fill
 
+ local floor=group("Courtyard")
+ block(floor,"Foundation",{W,1.4,D},0,-.4,D/2,C.Stone)
+ block(floor,"StuddedFloor",{W-2,.25,D-2},0,.18,D/2,C.Floor)
+ for _,x in {-21,21} do block(floor,"Border",{1,.4,D},x,.35,D/2,C.Edge) end
+ for _,z in {0,D} do block(floor,"Border",{W,.4,1},0,.35,z,C.Edge) end
+ -- A quiet central path keeps the pet area visually open.
+ block(floor,"EntryRunner",{9,.06,math.max(front-3,10)},0,.34,(front-3)/2,C.Floor:Lerp(C.Lavender,.12))
+ for i=1,3 do
+  block(floor,"EntranceStep"..i,{10+i*1.1,.3,1.45},0,.35-i*.22,-i*1.28,C.Edge:Lerp(C.Orange,.12))
+ end
+
+ local fence=group("GardenFence")
+ local function post(x,z)
+  block(fence,"StoneFoot",{2.5,.7,2.5},x,.65,z,C.Stone)
+  block(fence,"Pillar",{1.65,3.1,1.65},x,2.2,z,C.Edge)
+  block(fence,"PillarBand",{1.85,.35,1.85},x,3.4,z,C.Trim)
+  block(fence,"PillarCap",{2.15,.5,2.15},x,3.95,z,C.Stone)
+ end
+ local function rail(a,b)
+  local delta=b-a local len=delta.Magnitude
+  local mid=(a+b)/2 local rot=CFrame.lookAt(mid,b)
+  for _,yy in {1.4,2.9} do
+   local r=block(fence,"TimberRail",{.55,.65,len},mid.X,yy,mid.Z,C.Trim)
+   r.CFrame=origin*rot*CFrame.new(0,yy-mid.Y,0)
+  end
+  local number=math.max(1,math.floor(len/2.6))
+  for i=1,number do
+   local pos=a+delta*(i/(number+1))
+   local q=block(fence,"FenceBoard",{.65,2.15,1.3},pos.X,2.1,pos.Z,C.Wood)
+   q.CFrame=origin*CFrame.new(pos.X,2.1,pos.Z)*rot.Rotation
+  end
+ end
+ local sideSegments=math.ceil(D/10)
+ for _,x in {-21,21} do
+  for i=0,sideSegments do
+   local z=D*i/sideSegments post(x,z)
+   if i>0 then rail(Vector3.new(x,0,D*(i-1)/sideSegments),Vector3.new(x,0,z)) end
+  end
+ end
+ for _,side in {-1,1} do
+  post(side*6,0) post(side*13.5,0)
+  rail(Vector3.new(side*6,0,0),Vector3.new(side*13.5,0,0))
+  rail(Vector3.new(side*13.5,0,0),Vector3.new(side*21,0,0))
+ end
+ rail(Vector3.new(-21,0,D),Vector3.new(21,0,D))
+ local function lantern(parent,x,y,z)
+  decor(parent,"LanternFoot",{1.8,.4,1.8},x,y,z,C.Dark)
+  local glow=decor(parent,"WarmGlass",{1.1,1.5,1.1},x,y+1,z,C.Warm)
+  glow.Material=Enum.Material.Neon
+  local l=Instance.new("PointLight") l.Color=C.Warm l.Range=14 l.Brightness=1.05 l.Shadows=false l.Parent=glow
+  for _,dx in {-.65,.65} do for _,dz in {-.65,.65} do decor(parent,"LanternBar",{.16,1.7,.16},x+dx,y+1,z+dz,C.Dark) end end
+  decor(parent,"LanternRoof",{1.8,.4,1.8},x,y+1.95,z,C.Dark)
+  decor(parent,"LanternTop",{.7,.45,.7},x,y+2.3,z,C.Trim)
+ end
+ lantern(fence,-6,4.3,0) lantern(fence,6,4.3,0)
+
+ local hatch=group("HatchingPavilion")
+ block(hatch,"Platform",{38,.9,pavilionDepth},0,.85,D-pavilionDepth/2,C.Stone)
+ block(hatch,"Deck",{36.7,.22,pavilionDepth-.8},0,1.4,D-pavilionDepth/2,C.Wood)
+ block(hatch,"StageStep",{35,.55,1.5},0,.55,front-.7,C.Trim)
+ block(hatch,"StageStep",{35,.4,1.25},0,1,front-.1,C.Wood)
+ block(hatch,"BackWall",{36,10.4,.7},0,6.7,D-.7,C.Purple)
+ for x=-17,17,2 do
+  block(hatch,"WallUpright",{.2,10.4,.2},x,6.7,D-1.12,C.Roof)
+ end
+ block(hatch,"WallSkirting",{36,.65,1},0,1.85,D-.8,C.Trim)
+ block(hatch,"WallCrown",{37,.7,1.3},0,11.7,D-.7,C.Trim)
+ -- Three framed diamond-window panels give the rear wall a finished interior.
+ for _,x in {-12,0,12} do
+  block(hatch,"WindowFrame",{6.2,6,.45},x,7.15,D-1.2,C.Dark)
+  block(hatch,"WindowGlass",{5.4,5.25,.15},x,7.15,D-1.47,C.Roof:Lerp(C.Lavender,.38))
+  block(hatch,"WindowMullion",{.35,5.4,.2},x,7.15,D-1.6,C.Trim)
+  block(hatch,"WindowCrossbar",{5.5,.35,.2},x,7.15,D-1.6,C.Trim)
+  for _,s in {-1,1} do
+   decor(hatch,"DiamondPane",{1.2,1.2,.12},x+s*1.35,7.15,D-1.75,C.Lavender,CFrame.Angles(0,0,math.rad(45)))
+  end
+  block(hatch,"WindowSill",{6.7,.45,1},x,4.1,D-1.3,C.Trim)
+ end
+ for _,x in {-18,18} do
+  for _,z in {front+.8,D-1} do
+   block(hatch,"PostFoot",{2.1,.65,2.1},x,1.7,z,C.Stone)
+   block(hatch,"PorchPost",{1.15,10.1,1.15},x,6.5,z,C.Wood)
+   block(hatch,"PostBand",{1.6,.5,1.6},x,3.3,z,C.Trim)
+   block(hatch,"PostCapital",{1.75,.7,1.75},x,11.35,z,C.Trim)
+  end
+  block(hatch,"SideBeam",{1,1,pavilionDepth+.8},x,11.95,D-pavilionDepth/2,C.Trim)
+  beam(hatch,"PorchBrace",Vector3.new(x,9.4,front+.8),Vector3.new(x,11.7,front+3.2),.6,C.Trim)
+ end
+ block(hatch,"FrontHeader",{38,1.1,1.2},0,11.85,front+.4,C.Trim)
+ local roofDepth=pavilionDepth+4
+ local half=roofDepth/2 local rise=4.6
+ local slope=math.atan(rise/half) local length=math.sqrt(half*half+rise*rise)
+ local ridgeZ=D-pavilionDepth/2
+ for _,side in {-1,1} do
+  for col=1,8 do
+   local color=C.Roof:Lerp(C.Purple,(col%3)*.09)
+   block(hatch,"StuddedRoofPanel",{5,.65,length+.1},-20+(col-.5)*5,12.1+rise/2,ridgeZ+side*half/2,color,CFrame.Angles(side*slope,0,0),false)
+  end
+  block(hatch,"OrangeEave",{40.6,.65,.8},0,11.95,ridgeZ+side*half,C.Trim,nil,false)
+ end
+ block(hatch,"RidgeCap",{40.6,.65,.85},0,16.85,ridgeZ,C.Purple,nil,false)
+ for _,x in {-19.6,19.6} do
+  beam(hatch,"GableTrim",Vector3.new(x,11.9,ridgeZ-half),Vector3.new(x,16.8,ridgeZ),.65,C.Trim)
+  beam(hatch,"GableTrim",Vector3.new(x,16.8,ridgeZ),Vector3.new(x,11.9,ridgeZ+half),.65,C.Trim)
+ end
+ -- Wood plaque and a crooked, entirely native-part witch hat.
+ local signZ=front-3.1
+ block(hatch,"HatchSignFrame",{25.2,4.5,1},0,12.9,signZ,C.Wood,nil,false)
+ for _,x in {-10,10} do block(hatch,"SignBracket",{.5,.5,3.2},x,13,front-1.2,C.Wood,nil,false) end
+ local board=block(hatch,"HatchSign",{23.8,3.35,.3},0,13,signZ-.65,C.Purple,nil,false)
+ textFace(board,{{"Title","HATCH EGGS",C.Lavender,.78}})
+ for _,x in {-11.4,11.4} do for _,y in {11.5,14.4} do decor(hatch,"PlaqueBolt",{.23,.23,.15},x,y,signZ-.9,C.Trim) end end
+ local hat=group("WitchHat")
+ decor(hat,"Brim",{8,.55,4.4},0,15.45,signZ+.2,C.Dark)
+ decor(hat,"PurpleBrim",{7,.3,3.6},0,15.83,signZ+.2,C.Purple)
+ for i=0,5 do
+  local width=4.8-i*.65
+  decor(hat,"CrookedCrown",{width,.85,math.max(1,3.2-i*.4)},i*.22,16.3+i*.73,signZ+.2,C.Purple,CFrame.Angles(0,0,math.rad(-i*3)))
+ end
+ decor(hat,"HatBand",{4.6,.8,3.4},.05,16.55,signZ+.15,C.Orange)
+ decor(hat,"Buckle",{1,.65,.15},.05,16.6,signZ-1.65,C.Warm)
+ decor(hat,"BuckleInset",{.5,.35,.16},.05,16.6,signZ-1.74,C.Dark)
+ decor(hat,"BentTip",{1.8,.7,1},1.7,20.65,signZ+.2,C.Purple,CFrame.Angles(0,0,math.rad(-25)))
+ -- Short bunting only under the pavilion eaves.
+ for i=0,9 do
+  local x=-16+i*3.55
+  local q=Instance.new("WedgePart") q.Name="Bunting"
+  q.Size=Vector3.new(.16,1.6,1.7) q.CFrame=origin*CFrame.new(x,10.1,front-.3)*CFrame.Angles(0,math.rad(90),math.rad(180))
+  q.Color=if i%2==0 then C.Orange else C.Lavender q.Material=Enum.Material.Plastic
+  q.Anchored=true q.CanCollide=false q.CanQuery=false q.Parent=hatch
+ end
+ lantern(hatch,-18,8.4,front-.7) lantern(hatch,18,8.4,front-.7)
+
+ local pads=Instance.new("Folder") pads.Name="Incubators" pads.Parent=plot
+ for i,spot in spots do
+  local x,z=spot.X,D-spot.Y
+  local color=({C.Orange,C.Roof,C.Lavender})[(i-1)%3+1]
+  block(hatch,"PadPlinth",{7.5,.45,7.5},x,1.65,z,C.Dark)
+  block(hatch,"PadTrim",{6.8,.3,6.8},x,2.02,z,color)
+  local pad=block(pads,"Incubator"..i,{5.9,.42,5.9},x,2.36,z,C.Purple)
+  pad:SetAttribute("Index",i)
+  local number=block(hatch,"PadNumber",{2.1,.75,.15},x,1.8,z-3.85,C.Dark,nil,false)
+  textFace(number,{{"Number",string.format("%02d",i),C.Lavender,.9}})
+ end
+
+ local details=group("HalloweenVignettes")
+ local function pumpkin(x,z,scale)
+  local source=game.ServerStorage.BaseDecorAssets:FindFirstChild("WitchPumpkin")
+  assert(source,"Witch house pumpkin template missing")
+  local model=source:Clone() model.Name="WitchPumpkin"
+  local _,size=model:GetBoundingBox()
+  model:ScaleTo(model:GetScale() * (3.4*scale)/size.Y)
+  model:PivotTo(origin*CFrame.new(x,.35,z)*CFrame.Angles(0,.2*x,0))
+  model.Parent=details
+ end
+ pumpkin(-17,-2.6,1.2,true)
+ pumpkin(-18,front-3,1,true) pumpkin(-15.7,front-2.2,.65,false)
+ local function crate(x,z)
+  block(details,"Crate",{2.9,2.8,2.9},x,1.75,z,C.Wood,nil,false)
+  for _,dx in {-1.2,1.2} do decor(details,"CrateFrame",{.35,2.9,.2},x+dx,1.75,z-1.5,C.Trim) end
+  for _,y in {.5,3} do decor(details,"CrateFrame",{2.9,.35,.2},x,y,z-1.5,C.Trim) end
+  beam(details,"CrateX",Vector3.new(x-1.2,.5,z-1.62),Vector3.new(x+1.2,3,z-1.62),.3,C.Trim)
+  beam(details,"CrateX",Vector3.new(x+1.2,.5,z-1.63),Vector3.new(x-1.2,3,z-1.63),.3,C.Trim)
+  for i=1,3 do
+   local h=({1.5,2.1,1})[i] local dx=(i-2)*.65
+   decor(details,"Candle",{.45,h,.45},x+dx,3.2+h/2,z,C.Warm)
+   local flame=p(details,"Flame",Vector3.new(.25,.55,.25),x+dx,3.25+h,z,C.Orange,nil,false,Enum.PartType.Ball)
+   flame.Material=Enum.Material.Neon
+  end
+ end
+ crate(-19,front-5.8) crate(21.5,-3.1)
+ local function tree(x,z,mirror)
+  local stem=Vector3.new(x,.4,z) local top=Vector3.new(x+mirror*.5,9,z+.2)
+  beam(details,"BareTrunk",stem,top,.95,C.Wood)
+  for _,r in {{4.5,-2.8,7.2,-.7},{6,3,9,1},{7.5,-1.8,11,-.5}} do
+   local a=Vector3.new(x+mirror*.3,r[1],z)
+   local b=Vector3.new(x+mirror*r[2],r[3],z+r[4])
+   beam(details,"BareBranch",a,b,.55,C.Wood)
+   beam(details,"Twig",b,b+Vector3.new(mirror*.6,1.3,-.8),.3,C.Wood)
+  end
+  block(details,"TreeBed",{3.2,.45,4.6},x,.35,z,C.Stone,nil,false)
+ end
+ tree(-24,D-4,-1) tree(24,D-4,1)
+ local function web(x,y,z,r)
+  local center=Vector3.new(x,y,z)
+  for k=0,5 do
+   local angle=math.rad(k*60)
+   beam(details,"WebSpoke",center,center+Vector3.new(math.cos(angle)*r,math.sin(angle)*r,0),.045,C.Lavender)
+  end
+  for _,radius in {r*.35,r*.7,r} do for k=0,5 do
+   local a=math.rad(k*60) local b=math.rad((k+1)*60)
+   beam(details,"WebThread",center+Vector3.new(math.cos(a)*radius,math.sin(a)*radius,0),center+Vector3.new(math.cos(b)*radius,math.sin(b)*radius,0),.04,C.Lavender)
+  end end
+ end
+ web(-18,4.8,front-1.1,1.75) web(19,2.5,-.6,1.5)
+ -- Sparse violet shrubs, kept out of the pets' roaming rectangle.
+ for _,where in {{-19,9},{19,9},{-20,D-2},{20,D-2}} do
+  for i=1,3 do
+   decor(details,"VioletPlant",{.4,1.8,.65},where[1]+(i-2)*.6,1.1,where[2],C.Purple:Lerp(C.Lavender,i*.09),CFrame.Angles(0,0,(i-2)*.45))
+  end
+ end
+
+ local upgrades=group("EntranceUpgradeBoard")
+ for _,x in {8.8,17.2} do block(upgrades,"SignPost",{.75,6.4,.8},x,3.4,-1.1,C.Wood,nil,false) end
+ block(upgrades,"SignFrame",{13.3,7.3,.9},13,5.7,-1.3,C.Wood,nil,false)
+ local title=block(upgrades,"UpgradeTitle",{12.3,1.35,.22},13,8.5,-1.85,C.Purple,nil,false)
+ textFace(title,{{"Title","UPGRADE BASE",C.Warm,.86}})
+ for i,kind in {"Pets","Pads"} do
+  local level=if kind=="Pets" then petCapLevel else padLevel
+  local board=block(upgrades,kind.."UpgradeBoard",{12.3,2.25,.22},13,6.4-(i-1)*2.5,-1.87,C.Dark,nil,false)
+  board:SetAttribute("UpgradeKind",kind)
+  local list=if kind=="Pets" then Config.PetCapacityUpgrades else Config.HatchPadUpgrades
+  local nextUpgrade=list[level+1]
+  board:SetAttribute("CanUpgrade",nextUpgrade~=nil)
+  board.CanQuery=true
+  local gui=Instance.new("SurfaceGui") gui.Name="UpgradeSurface"
+  gui.Face=Enum.NormalId.Front gui.LightInfluence=0 gui.Active=true gui.ResetOnSpawn=false
+  gui.SizingMode=Enum.SurfaceGuiSizingMode.PixelsPerStud gui.PixelsPerStud=60 gui.MaxDistance=70
+  local function label(name,text,y,height,color)
+   local t=Instance.new("TextLabel") t.Name=name t.Text=text
+   t.Position=UDim2.fromScale(.025,y) t.Size=UDim2.fromScale(.63,height)
+   t.BackgroundTransparency=1 t.Font=Enum.Font.FredokaOne t.TextScaled=true
+   t.TextColor3=color t.TextStrokeTransparency=.15 t.TextStrokeColor3=C.Dark t.Parent=gui
+  end
+  label("Title",if kind=="Pets" then "PET CAPACITY" else "HATCHING PADS",.08,.35,C.Lavender)
+  local capacity=if kind=="Pets" then Config.PetSlotsFor(level) else Config.IncubatorsFor(level)
+  label("Info",if nextUpgrade then string.format("%d > %d",capacity,nextUpgrade.Capacity) else "MAX "..capacity,.49,.39,C.Warm)
+  local button=Instance.new("TextButton") button.Name="BuyButton"
+  button.Position=UDim2.fromScale(.69,.12) button.Size=UDim2.fromScale(.285,.76)
+  button.BackgroundColor3=if nextUpgrade then Color3.fromRGB(75,202,72) else Color3.fromRGB(101,108,118)
+  button.BorderSizePixel=0 button.Font=Enum.Font.FredokaOne button.TextScaled=true
+  button.TextColor3=Color3.new(1,1,1) button.TextStrokeColor3=Color3.fromRGB(25,70,28) button.TextStrokeTransparency=.1
+  button.Text=if nextUpgrade then "BUY\n$"..fmt(nextUpgrade.Price) else "MAXED"
+  button.Active=nextUpgrade~=nil button.AutoButtonColor=nextUpgrade~=nil
+  local corner=Instance.new("UICorner") corner.CornerRadius=UDim.new(.14,0) corner.Parent=button
+  local stroke=Instance.new("UIStroke") stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+  stroke.Color=Color3.fromRGB(28,90,36) stroke.Thickness=3 stroke.Parent=button
+  local padding=Instance.new("UIPadding") padding.PaddingLeft=UDim.new(.06,0) padding.PaddingRight=UDim.new(.06,0)
+  padding.PaddingTop=UDim.new(.06,0) padding.PaddingBottom=UDim.new(.06,0) padding.Parent=button
+  button.Parent=gui gui.Parent=board
+ end
+ local anchor=decor(hatch,"OwnerNameAnchor",{.2,.2,.2},0,22,front,C.Dark) anchor.Transparency=1
+ local owner=Instance.new("BillboardGui") owner.Name="OwnerSign" owner.Adornee=anchor
+ owner.Size=UDim2.fromOffset(280,50) owner.MaxDistance=110 owner.Parent=base
+ local label=Instance.new("TextLabel") label.Name="Label" label.Size=UDim2.fromScale(1,1)
+ label.BackgroundTransparency=1 label.Font=Enum.Font.FredokaOne label.TextSize=26
+ label.TextColor3=Color3.new(1,1,1) label.TextStrokeTransparency=0 label.Text="Empty Plot" label.Parent=owner
+ return plot
+end
 return BaseBuilder
