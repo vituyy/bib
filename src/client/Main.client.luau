@@ -2022,3 +2022,101 @@ end)
 Remotes.EggHatched.OnClientEvent:Connect(function()
 	task.delay(0.85, function() sfx("EggHatch") end)
 end)
+
+---------------------------------------------------------------------------
+-- Admin panel (playtest tools). Shown only to admins (the server sets IsAdmin; every command is checked again
+-- there). Open it with F2 or the small ADMIN button.
+---------------------------------------------------------------------------
+local function buildAdminPanel()
+	if gui:FindFirstChild("AdminPanel") then
+		return
+	end
+	local frame = box({ Name = "AdminPanel", Size = UDim2.fromOffset(310, 470), Position = UDim2.new(0, 12, 0.5, -235), Visible = false, ZIndex = 20, Parent = gui }, PAINT.Panel)
+	outlined({ Size = UDim2.new(1, -20, 0, 36), Position = UDim2.fromOffset(10, 6), Text = "ADMIN (playtest)", TextColor3 = ORANGE, ZIndex = 21, Parent = frame }, 2.5)
+	local scroll = new("ScrollingFrame", {
+		Size = UDim2.new(1, -16, 1, -52),
+		Position = UDim2.fromOffset(8, 44),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 6,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 21,
+		Parent = frame,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+	local output = outlined({ Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Text = "", TextWrapped = true, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 1000, ZIndex = 22, Parent = scroll }, 1.5)
+	output.TextScaled = false
+	output.TextSize = 15
+
+	local function run(cmd: string, n: number?)
+		local ok, success, message = pcall(function()
+			return Remotes.Request:InvokeServer("Admin", { Cmd = cmd, N = n })
+		end)
+		if not ok then
+			toast("Admin command failed", RED)
+		elseif cmd == "Timeline" then
+			output.Text = message
+		else
+			toast(message, if success then GREEN else RED)
+		end
+	end
+
+	local order = 0
+	local function button(text: string, paint: { Color3 }, cmd: string, n: number?)
+		order += 1
+		chunkyButton({ Size = UDim2.new(1, -8, 0, 38), Text = text, LayoutOrder = order, ZIndex = 22, Parent = scroll }, paint, function()
+			run(cmd, n)
+		end)
+	end
+	button("+$100,000", PAINT.Green, "Money")
+	button("+10,000 Candy", PAINT.Purple, "Candy")
+	button("+10 Speed Levels", PAINT.Orange, "Level")
+	button("Rebirth +1", PAINT.Orange, "Rebirth")
+	button("Unlock every shop item", PAINT.Cyan, "Unlock")
+	button("Add one of every egg", PAINT.Cyan, "Eggs")
+	button("Hatch everything now", PAINT.Cyan, "HatchNow")
+	button("Skip day / night phase", PAINT.Cyan, "Phase")
+	button("God mode on/off", PAINT.Red, "God")
+
+	order += 1
+	local tpHolder = new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 22, Parent = scroll }, {
+		new("UIGridLayout", { CellSize = UDim2.fromOffset(52, 34), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	for index, spot in { { "Hub", -1 }, { "Base", 0 }, { "H1", 1 }, { "H2", 2 }, { "H3", 3 }, { "H4", 4 }, { "H5", 5 }, { "H6", 6 }, { "H7", 7 }, { "H8", 8 }, { "H9", 9 } } do
+		chunkyButton({ Text = spot[1], LayoutOrder = index, ZIndex = 22, Parent = tpHolder }, PAINT.Grey, function()
+			run("Teleport", spot[2])
+		end)
+	end
+
+	button("Show my milestone times", PAINT.Orange, "Timeline")
+	local resetAt = 0
+	order += 1
+	chunkyButton({ Size = UDim2.new(1, -8, 0, 38), Text = "Reset my progress", LayoutOrder = order, ZIndex = 22, Parent = scroll }, PAINT.Red, function()
+		if os.clock() - resetAt < 3 then
+			resetAt = 0
+			run("Reset")
+		else
+			resetAt = os.clock()
+			toast("Press Reset again within 3 seconds to confirm", ORANGE)
+		end
+	end)
+
+	chunkyButton({ Size = UDim2.fromOffset(86, 34), Position = UDim2.new(1, -96, 1, -48), Text = "ADMIN", ZIndex = 30, Parent = gui }, PAINT.Purple, function()
+		frame.Visible = not frame.Visible
+	end)
+	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.F2 then
+			frame.Visible = not frame.Visible
+		end
+	end)
+end
+
+if player:GetAttribute("IsAdmin") then
+	buildAdminPanel()
+end
+player:GetAttributeChangedSignal("IsAdmin"):Connect(function()
+	if player:GetAttribute("IsAdmin") then
+		buildAdminPanel()
+	end
+end)

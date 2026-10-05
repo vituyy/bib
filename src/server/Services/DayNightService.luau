@@ -11,6 +11,23 @@ local PlotService = require(script.Parent.PlotService)
 
 local DayNightService = {}
 
+local skipPhase = false -- set by the Admin panel to end the current phase now
+
+-- Ends the current night or day right away (playtest tool).
+function DayNightService.Skip()
+	skipPhase = true
+end
+
+-- task.wait that the Admin panel's "skip phase" can cut short.
+local function waitPhase(seconds: number)
+	skipPhase = false
+	local deadline = os.clock() + seconds
+	while os.clock() < deadline and not skipPhase do
+		task.wait(0.2)
+	end
+	skipPhase = false
+end
+
 local nightCallbacks: { () -> () } = {}
 local dayCallbacks: { () -> () } = {}
 
@@ -59,7 +76,7 @@ function DayNightService.Start(map: Instance)
 				task.spawn(callback)
 			end
 			Remotes.Notify:FireAllClients("Night has fallen! Fresh eggs are in every house.", Color3.fromRGB(190, 120, 255))
-			task.wait(Config.NightSeconds)
+			waitPhase(Config.NightSeconds)
 
 			setPhase(false, Config.DaySeconds)
 			for _, callback in dayCallbacks do
@@ -74,7 +91,7 @@ function DayNightService.Start(map: Instance)
 				end
 			end
 			Remotes.Notify:FireAllClients("The sun is up! The street is closed until night.", Color3.fromRGB(255, 220, 120))
-			task.wait(Config.DaySeconds)
+			waitPhase(Config.DaySeconds)
 		end
 	end)
 end

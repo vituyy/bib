@@ -27,6 +27,7 @@ Config.StartingData = {
 	IndexClaimed = {}, -- Index milestone counts already claimed (5, 10, 15, 20)
 	RedeemedCodes = {}, -- codes this player has already used (see CODES in ShopService)
 	CustomSpeed = 0, -- speed the player chose with the Custom speed panel (0 = always run at their max speed)
+	EggsStolen = 0, -- eggs brought home in total (the Top Egg Thieves board)
 }
 
 ---------------------------------------------------------------------------
@@ -498,6 +499,15 @@ Config.OwnerReactionPerRarity = 0.2 -- extra seconds per egg rarity step (Common
 Config.CaughtStunTime = 1.5 -- seconds the thief is slowed after being caught
 Config.KickDistance = 100 -- studs a caught thief is kicked away from the owner
 Config.KickAngle = 35 -- degrees above the ground the kick launches the thief (a higher angle flies higher and lasts longer)
+
+---------------------------------------------------------------------------
+-- Playtest tools: these Roblox user ids (plus the game's creator, plus everyone inside Studio) see the Admin panel
+-- (F2 or the ADMIN button). Add a friend's UserId to let them test too.
+---------------------------------------------------------------------------
+Config.AdminUserIds = {} -- e.g. { 12345678, 87654321 }
+
+-- Global boards in the hub: how often scores are saved and the boards redrawn.
+Config.BoardRefreshSeconds = 90
 
 ---------------------------------------------------------------------------
 -- Audio. The files are made by tools/make_audio.py into audio/ (see audio/README.md). Upload them to Roblox

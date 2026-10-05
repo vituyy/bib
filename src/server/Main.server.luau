@@ -22,6 +22,12 @@ if gallery then
 end
 
 local map = MapBuilder.EnsureMap()
+task.spawn(function() -- stop flat surfaces in the houses and hub from flickering (in the background)
+	local ok, err = pcall(MapBuilder.FixFlicker, map)
+	if not ok then
+		warn("[SpookySteal] flicker fix failed:", err)
+	end
+end)
 
 ShopService.Start(map)
 DataService.Start()

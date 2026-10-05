@@ -409,6 +409,7 @@ local function finishTheft(player: Player, outcome: string)
 	if outcome == "escaped" then
 		DataService.Update(player, function(data)
 			table.insert(data.Eggs, Config.MakeEggEntry(carry.EggId, carry.PetId))
+			data.EggsStolen = (data.EggsStolen or 0) + 1
 		end)
 		notify(player, "You escaped with a " .. eggName .. "! Put it in an incubator from the Eggs menu.", GREEN)
 	elseif outcome == "caught" then
@@ -615,6 +616,7 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 	}
 	player:SetAttribute("CarryingEgg", eggId)
 	attachCarriedEgg(player, eggId, petId)
+	DataService.Milestone(player, "stole from house " .. state.Index)
 
 	-- The owner starts the chase right where they stand. They pass through props and furniture, and the
 	-- front door swings open so they can run out.
@@ -764,7 +766,7 @@ local function chaseStep()
 				-- Still noticing the thief: he stands there for a moment (and can not catch anyone yet).
 				state.Goal, state.Waypoints = nil, nil
 				ownerHumanoid:MoveTo(ownerRoot.Position)
-			elseif targetDistance <= Config.CatchDistance then
+			elseif targetDistance <= Config.CatchDistance and not target:GetAttribute("AdminGod") then
 				finishTheft(target, "caught")
 			else
 				state.Target = target
@@ -1372,7 +1374,7 @@ function HouseService.Start(map: Instance)
 			local ownerRoot = rootOf(state.Owner)
 			if thief and thiefRoot and ownerRoot and not state.Intercept and carrying[thief] and os.clock() >= (state.AlertUntil or 0) then
 				-- Catch on the live positions every frame, not only ten times a second.
-				if (ownerRoot.Position - thiefRoot.Position).Magnitude <= Config.CatchDistance then
+				if (ownerRoot.Position - thiefRoot.Position).Magnitude <= Config.CatchDistance and not thief:GetAttribute("AdminGod") then
 					finishTheft(thief, "caught")
 					continue
 				end

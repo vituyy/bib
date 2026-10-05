@@ -3,6 +3,7 @@
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -144,6 +145,173 @@ function actions.RedeemCode(player: Player, data, code: any)
 		table.insert(parts, fmt(reward.Candy) .. " Candy")
 	end
 	return true, "Code accepted! You got " .. table.concat(parts, " and ") .. "!"
+end
+
+---------------------------------------------------------------------------
+-- Playtest tools (Admin panel). Only admins can use them: everyone inside Studio, Config.AdminUserIds, and the
+-- game's creator (or a group owner). Every command re-checks this on the server.
+---------------------------------------------------------------------------
+local function isAdmin(player: Player): boolean
+	if RunService:IsStudio() or table.find(Config.AdminUserIds, player.UserId) then
+		return true
+	end
+	if game.CreatorType == Enum.CreatorType.User then
+		return game.CreatorId == player.UserId
+	end
+	local ok, rank = pcall(function()
+		return player:GetRankInGroup(game.CreatorId)
+	end)
+	return ok and rank >= 254
+end
+
+local function deepCopy(value: any): any
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in value do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+
+local adminCommands: { [string]: (player: Player, data: any, n: number?) -> (boolean, string) } = {}
+
+adminCommands.Money = function(player)
+	DataService.Update(player, function(d)
+		d.Money += 100000
+	end)
+	return true, "+$100,000"
+end
+
+adminCommands.Candy = function(player)
+	DataService.Update(player, function(d)
+		d.Candy += 10000
+	end)
+	return true, "+10,000 Candy"
+end
+
+adminCommands.Level = function(player, data)
+	DataService.Update(player, function(d)
+		d.SpeedLevel = math.min(d.SpeedLevel + 10, Config.MaxSpeedLevel)
+		d.SpeedXp = 0
+	end)
+	return true, "Speed Level " .. data.SpeedLevel
+end
+
+adminCommands.Rebirth = function(player, data)
+	if data.Rebirths >= Config.MaxRebirths then
+		return false, "Already at the last rebirth"
+	end
+	DataService.Update(player, function(d)
+		d.Rebirths += 1
+		d.SpeedLevel, d.SpeedXp = 0, 0
+	end)
+	return true, "Rebirth " .. data.Rebirths
+end
+
+adminCommands.Unlock = function(player)
+	DataService.Update(player, function(d)
+		for _, costume in Config.Costumes do
+			if not table.find(d.OwnedCostumes, costume.Id) then
+				table.insert(d.OwnedCostumes, costume.Id)
+			end
+		end
+		d.Treadmill = #Config.Treadmills
+		d.OwnedTrails = {}
+		for i = 1, #Config.Trails do
+			table.insert(d.OwnedTrails, i)
+		end
+		d.PetCapLevel, d.PadLevel = #Config.PetCapacityUpgrades, #Config.HatchPadUpgrades
+	end)
+	return true, "Everything in the shops unlocked (your costume stays as it was)"
+end
+
+adminCommands.Eggs = function(player)
+	local added = 0
+	DataService.Update(player, function(d)
+		for eggId in Config.Eggs do
+			if #d.Eggs < Config.MaxEggsHeld then
+				table.insert(d.Eggs, Config.MakeEggEntry(eggId, nil))
+				added += 1
+			end
+		end
+	end)
+	return true, "Added " .. added .. " eggs to your bag"
+end
+
+adminCommands.HatchNow = function(player)
+	DataService.Update(player, function(d)
+		for _, entry in d.Incubators do
+			entry.EndsAt = 0
+		end
+	end)
+	return true, "Every incubating egg is ready"
+end
+
+adminCommands.Phase = function()
+	require(script.Parent.DayNightService).Skip()
+	return true, "Phase skipped (skip the day too for a fresh night with new eggs)"
+end
+
+adminCommands.God = function(player)
+	local on = not player:GetAttribute("AdminGod")
+	player:SetAttribute("AdminGod", on or nil)
+	return true, if on then "God mode ON: owners can not catch you" else "God mode OFF"
+end
+
+adminCommands.Teleport = function(player, _data, n)
+	local character = player.Character
+	if not character then
+		return false, "No character"
+	end
+	if n == 0 then
+		require(script.Parent.PlotService).TeleportHome(player)
+		return true, "Teleported to your base"
+	elseif n == -1 then
+		local spawn = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("LobbySpawn") :: BasePart?
+		if spawn then
+			character:PivotTo(spawn.CFrame + Vector3.new(0, 4, 0))
+			return true, "Teleported to the hub"
+		end
+		return false, "No lobby spawn"
+	end
+	local houses = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Street") and workspace.Map.Street:FindFirstChild("Houses")
+	local house = houses and houses:FindFirstChild("House" .. tostring(n))
+	local exit = house and (house:FindFirstChild("OwnerExit", true) or house:FindFirstChild("OwnerSpawn", true)) :: BasePart?
+	if not exit then
+		return false, "House " .. tostring(n) .. " has no front-door marker"
+	end
+	character:PivotTo(CFrame.new(exit.Position + Vector3.new(0, 4, 0)))
+	return true, "Teleported to House " .. tostring(n)
+end
+
+adminCommands.Reset = function(player)
+	DataService.Update(player, function(d)
+		for key in d do
+			d[key] = nil
+		end
+		for key, value in Config.StartingData do
+			d[key] = deepCopy(value)
+		end
+	end)
+	return true, "Your progress was reset to a brand-new player"
+end
+
+adminCommands.Timeline = function(player)
+	return true, DataService.TimelineText(player)
+end
+
+function actions.Admin(player: Player, data, arg: any)
+	if not isAdmin(player) then
+		return false, "Admins only"
+	end
+	local command = type(arg) == "table" and adminCommands[arg.Cmd]
+	if not command then
+		return false, "Unknown command"
+	end
+	local n = if type(arg.N) == "number" then arg.N else nil
+	return command(player, data, n)
 end
 
 -- Put an egg from the bag into a free incubator. Hatching is free; rarer eggs take longer.
@@ -427,6 +595,15 @@ end
 
 function ShopService.Start(map: Instance)
 	Remotes.Request.OnServerInvoke = runAction
+	local function markAdmin(player: Player)
+		if isAdmin(player) then
+			player:SetAttribute("IsAdmin", true) -- the client shows the Admin panel
+		end
+	end
+	Players.PlayerAdded:Connect(markAdmin)
+	for _, player in Players:GetPlayers() do
+		task.spawn(markAdmin, player)
+	end
 	wireCostumeShop(map)
 	wireMenuCounters(map)
 	Players.PlayerRemoving:Connect(function(player)

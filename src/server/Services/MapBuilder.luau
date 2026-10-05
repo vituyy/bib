@@ -786,6 +786,218 @@ local function setNightLighting()
 	end
 end
 
+---------------------------------------------------------------------------
+-- Flicker fix. Two parts with a face in the same plane facing the same way (a trim flush with a wall, roof
+-- shingles stacked in one slope) make the graphics card flicker between them ("z-fighting"). This finds those
+-- pairs among the houses and the hub and nudges one part of each pair 0.03 studs outward, so one is always in
+-- front. Pairs that look the same (same colour and material) are left alone. It runs once when the server
+-- starts, in the background. If you fix the parts in Studio the pair is simply not found any more.
+---------------------------------------------------------------------------
+local FLUSH = 0.06 -- faces closer than this to one plane fight
+local NUDGE = 0.03 -- how far the front part is lifted
+local GRID = 12
+
+local function faceList(part: BasePart)
+	local cf, size = part.CFrame, part.Size
+	local axes = { cf.RightVector, cf.UpVector, cf.LookVector }
+	local half = { size.X / 2, size.Y / 2, size.Z / 2 }
+	local faces = {}
+	for a = 1, 3 do
+		local ui, vi = a % 3 + 1, (a + 1) % 3 + 1
+		for _, sign in { 1, -1 } do
+			local n = axes[a] * sign
+			table.insert(faces, { N = n, C = cf.Position + n * half[a], U = axes[ui], V = axes[vi], HU = half[ui], HV = half[vi] })
+		end
+	end
+	return faces
+end
+
+local function polygonArea(poly: { Vector2 }): number
+	local sum = 0
+	for i, p in poly do
+		local q = poly[i % #poly + 1]
+		sum += p.X * q.Y - q.X * p.Y
+	end
+	return sum / 2
+end
+
+-- Area where two coplanar face rectangles overlap (Sutherland-Hodgman clipping in the plane of `a`).
+local function overlapArea(a, b): number
+	local function project(f): { Vector2 }
+		local out = {}
+		for _, s in { { 1, 1 }, { 1, -1 }, { -1, -1 }, { -1, 1 } } do
+			local d = f.C + f.U * (f.HU * s[1]) + f.V * (f.HV * s[2]) - a.C
+			table.insert(out, Vector2.new(d:Dot(a.U), d:Dot(a.V)))
+		end
+		if polygonArea(out) < 0 then
+			local n = #out
+			for i = 1, n // 2 do
+				out[i], out[n + 1 - i] = out[n + 1 - i], out[i]
+			end
+		end
+		return out
+	end
+	local subject, clipper = project(a), project(b)
+	for i = 1, #clipper do
+		local p1, p2 = clipper[i], clipper[i % #clipper + 1]
+		local input = subject
+		subject = {}
+		if #input == 0 then
+			break
+		end
+		local function inside(p: Vector2): boolean
+			return (p2.X - p1.X) * (p.Y - p1.Y) - (p2.Y - p1.Y) * (p.X - p1.X) >= -1e-9
+		end
+		local function cross(p: Vector2, q: Vector2): Vector2
+			local d1, d2 = p - q, p1 - p2
+			local den = d1.X * d2.Y - d1.Y * d2.X
+			if math.abs(den) < 1e-12 then
+				return q
+			end
+			local t = ((p.X - p1.X) * (p1.Y - p2.Y) - (p.Y - p1.Y) * (p1.X - p2.X)) / den
+			return p + (q - p) * t
+		end
+		local prev = input[#input]
+		for _, cur in input do
+			if inside(cur) then
+				if not inside(prev) then
+					table.insert(subject, cross(prev, cur))
+				end
+				table.insert(subject, cur)
+			elseif inside(prev) then
+				table.insert(subject, cross(prev, cur))
+			end
+			prev = cur
+		end
+	end
+	if #subject < 3 then
+		return 0
+	end
+	return math.abs(polygonArea(subject))
+end
+
+function MapBuilder.FixFlicker(map: Instance)
+	local started = os.clock()
+	local parts: { BasePart } = {}
+	for _, name in { "Street", "Hub" } do
+		local container = map:FindFirstChild(name)
+		for _, d in if container then container:GetDescendants() else {} do
+			if d:IsA("Part") and d.Anchored and d.Shape == Enum.PartType.Block and d.Transparency < 0.9 and math.min(d.Size.X, d.Size.Y, d.Size.Z) > 0.02 then
+				table.insert(parts, d)
+			end
+		end
+	end
+
+	-- Which parts are near each other: a grid of boxes.
+	local cells: { [string]: { number } } = {}
+	local boxes = {}
+	for i, part in parts do
+		local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = part.CFrame:GetComponents()
+		local hx, hy, hz = part.Size.X / 2, part.Size.Y / 2, part.Size.Z / 2
+		local ex = math.abs(r00) * hx + math.abs(r01) * hy + math.abs(r02) * hz
+		local ey = math.abs(r10) * hx + math.abs(r11) * hy + math.abs(r12) * hz
+		local ez = math.abs(r20) * hx + math.abs(r21) * hy + math.abs(r22) * hz
+		boxes[i] = { x - ex, y - ey, z - ez, x + ex, y + ey, z + ez }
+		for cx = math.floor((x - ex) / GRID), math.floor((x + ex) / GRID) do
+			for cy = math.floor((y - ey) / GRID), math.floor((y + ey) / GRID) do
+				for cz = math.floor((z - ez) / GRID), math.floor((z + ez) / GRID) do
+					local key = cx .. "," .. cy .. "," .. cz
+					local list = cells[key]
+					if not list then
+						list = {}
+						cells[key] = list
+					end
+					table.insert(list, i)
+				end
+			end
+		end
+	end
+
+	-- Fighting pairs.
+	local faces: { [number]: any } = {}
+	local conflicts: { [number]: { { Other: number, Normal: Vector3 } } } = {}
+	local tested: { [number]: boolean } = {}
+	local pairCount, work = 0, 0
+	for _, list in cells do
+		for ai = 1, #list do
+			local a = list[ai]
+			for bi = ai + 1, #list do
+				local b = list[bi]
+				local key = math.min(a, b) * 1000000 + math.max(a, b)
+				if tested[key] then
+					continue
+				end
+				tested[key] = true
+				local ba, bb = boxes[a], boxes[b]
+				if ba[1] > bb[4] + 0.02 or bb[1] > ba[4] + 0.02 or ba[2] > bb[5] + 0.02 or bb[2] > ba[5] + 0.02 or ba[3] > bb[6] + 0.02 or bb[3] > ba[6] + 0.02 then
+					continue
+				end
+				local pa, pb = parts[a], parts[b]
+				if pa.Color == pb.Color and pa.Material == pb.Material then
+					continue -- looks the same, so nobody can see it fight
+				end
+				faces[a] = faces[a] or faceList(pa)
+				faces[b] = faces[b] or faceList(pb)
+				for _, fa in faces[a] do
+					for _, fb in faces[b] do
+						if fa.N:Dot(fb.N) > 0.999 and math.abs(fa.N:Dot(fa.C - fb.C)) < FLUSH and overlapArea(fa, fb) > 0.05 then
+							conflicts[a] = conflicts[a] or {}
+							conflicts[b] = conflicts[b] or {}
+							table.insert(conflicts[a], { Other = b, Normal = fa.N })
+							table.insert(conflicts[b], { Other = a, Normal = fa.N })
+							pairCount += 1
+						end
+					end
+				end
+			end
+			work += 1
+			if work % 400 == 0 then
+				task.wait() -- never hold up the server
+			end
+		end
+	end
+
+	-- Give every part a level so that two fighting parts never share one (greedy colouring), then lift each part
+	-- by NUDGE per level above the parts it fights with.
+	local order = {}
+	for i in conflicts do
+		table.insert(order, i)
+	end
+	table.sort(order)
+	local level: { [number]: number } = {}
+	for _, i in order do
+		local used = {}
+		for _, c in conflicts[i] do
+			if level[c.Other] then
+				used[level[c.Other]] = true
+			end
+		end
+		local k = 0
+		while used[k] do
+			k += 1
+		end
+		level[i] = k
+	end
+	local moved = 0
+	for _, i in order do
+		local shift = Vector3.zero
+		local done = {}
+		for _, c in conflicts[i] do
+			local gap = level[i] - level[c.Other]
+			local key = string.format("%.2f,%.2f,%.2f", c.Normal.X, c.Normal.Y, c.Normal.Z)
+			if gap > 0 and not done[key] then
+				done[key] = true
+				shift += c.Normal * (NUDGE * math.min(gap, 3))
+			end
+		end
+		if shift.Magnitude > 0 then
+			parts[i].CFrame += shift
+			moved += 1
+		end
+	end
+	print(string.format("[MapBuilder] flicker fix: %d overlapping surfaces, %d parts nudged (%.1f s)", pairCount, moved, os.clock() - started))
+end
+
 function MapBuilder.EnsureMap(): Instance
 	local existing = workspace:FindFirstChild("Map")
 	if existing then
