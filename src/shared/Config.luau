@@ -28,6 +28,9 @@ Config.StartingData = {
 	RedeemedCodes = {}, -- codes this player has already used (see CODES in ShopService)
 	CustomSpeed = 0, -- speed the player chose with the Custom speed panel (0 = always run at their max speed)
 	EggsStolen = 0, -- eggs brought home in total (the Top Egg Thieves board)
+	Stats = { Knocks = 0, Hatched = 0, Caught = 0 }, -- lifetime counters for the achievements (see Config.Quests)
+	Achieved = {}, -- achievement id -> how many of its steps were claimed
+	Quests = { Day = 0, Week = 0, Daily = {}, Weekly = {}, DailyChest = false, WeeklyChest = false, Streak = 0, LastStreakDay = 0 },
 }
 
 ---------------------------------------------------------------------------
@@ -604,5 +607,249 @@ end
 
 Config.IncomeTickSeconds = 1
 Config.PetSellSeconds = 30 -- selling a pet pays this many seconds of its income
+
+
+---------------------------------------------------------------------------
+-- Quests. Effort and reward are tied together: every quest has an estimated number of MINUTES of effort (its target
+-- times the seconds one unit usually takes), and its reward is worth that many minutes of what the player
+-- normally earns, times a multiplier (Daily 0.5, Weekly 0.6: a quest pays extra on top of what playing earns anyway).
+-- "What the player normally earns" comes from their own data (their pets' Money per minute, Candy per knock
+-- at their best house, Speed XP per minute), so a quest is always worth the same share of the player's progress
+-- whether they are on day 1 or on rebirth 5. Targets scale in the same way (a tier-1 player is asked for 3 knocks,
+-- a tier-6 player for the same effort in eggs from a faster house).
+---------------------------------------------------------------------------
+Config.Quests = {
+	DailyMult = 0.5,
+	WeeklyMult = 0.6,
+	ChestBonus = 0.5, -- opening a chest pays this share of everything the quests in it paid
+	StreakStep = 0.1, -- each extra day in a row adds this to the Daily Chest
+	StreakMax = 5, -- the streak stops growing at this many days
+	AchievementMinutes = { 6, 13, 29, 64, 140, 310 }, -- reward size of tier 1, 2, 3... of an achievement, in minutes of earning
+	Floors = { Money = 25, Candy = 20, Xp = 8 },
+	DailySlots = {
+		{ Slot = "Easy", Min = 3, Max = 6, Color = Color3.fromRGB(110, 220, 90) },
+		{ Slot = "Medium", Min = 8, Max = 13, Color = Color3.fromRGB(255, 180, 40) },
+		{ Slot = "Hard", Min = 16, Max = 26, Color = Color3.fromRGB(235, 70, 70) },
+	},
+	WeeklySlots = {
+		{ Slot = "Weekly", Min = 35, Max = 50, Color = Color3.fromRGB(180, 110, 255) },
+		{ Slot = "Weekly", Min = 35, Max = 50, Color = Color3.fromRGB(180, 110, 255) },
+	},
+	-- Kind: the game event that counts. SecPer: seconds one unit usually takes (Level is worked out per player).
+	-- Min/Max: smallest and largest target for a daily quest. Share: how the reward is split between currencies.
+	Templates = {
+		knock = { Kind = "Knock", Slots = { Easy = true, Medium = true, Weekly = true }, Text = "Trick-or-Treat %d times", SecPer = 14, Min = 3, Max = 45, WeeklyMax = 100, Share = { Candy = 0.7, Money = 0.3 }, Icon = "🚪" },
+		run = { Kind = "Run", Slots = { Easy = true, Medium = true, Weekly = true }, Text = "Run for %s", Unit = "time", SecPer = 1, Min = 90, Max = 900, WeeklyMax = 2400, Share = { Xp = 0.6, Money = 0.4 }, Icon = "👟" },
+		hatch = { Kind = "Hatch", Slots = { Easy = true, Medium = true, Weekly = true }, Text = "Hatch %d eggs", SecPer = 70, Min = 1, Max = 12, WeeklyMax = 40, Share = { Money = 0.8, Candy = 0.2 }, Icon = "🥚" },
+		deliver = { Kind = "Deliver", Slots = { Medium = true, Weekly = true }, Text = "Bring %d eggs home", SecPer = 60, Min = 2, Max = 12, WeeklyMax = 45, Share = { Money = 0.5, Candy = 0.2, Xp = 0.3 }, Icon = "🏃" },
+		levels = { Kind = "Level", Slots = { Medium = true, Weekly = true }, Text = "Gain %d Speed Levels", SecPer = 0, Min = 1, Max = 8, Share = { Money = 0.6, Candy = 0.4 }, Icon = "⚡" },
+		kicked = { Kind = "Caught", Slots = { Easy = true }, Text = "Get kicked by an owner (it hurts, it pays)", SecPer = 90, Fixed = 1, Share = { Candy = 1 }, Icon = "🦶" },
+		best = { Kind = "DeliverBest", Slots = { Hard = true }, Text = "Bring %d eggs home from House %d or higher", SecPer = 100, Min = 1, Max = 12, MinTier = 2, Share = { Money = 0.5, Candy = 0.25, Xp = 0.25 }, Icon = "🏚️" },
+		size = { Kind = "HatchSize", Slots = { Medium = true, Hard = true }, Text = "Hatch %d pet(s) of size Big or bigger", SecPer = 400, Min = 1, Max = 4, Share = { Money = 0.6, Candy = 0.2, Xp = 0.2 }, Icon = "🐘" },
+		material = { Kind = "HatchMaterial", Slots = { Hard = true }, Text = "Hatch %d Golden, Diamond or Rainbow pet(s)", SecPer = 700, Min = 1, Max = 2, Share = { Money = 0.6, Candy = 0.2, Xp = 0.2 }, Icon = "✨" },
+	},
+	-- Lifetime goals: the reward for each step is paid once. Stat names are read by Config.Quests.Stat.
+	Achievements = {
+		{ Id = "thief", Title = "Egg Thief", Icon = "🥷", Stat = "EggsStolen", Text = "Bring %d eggs home", Tiers = { 1, 5, 25, 100, 300, 1000 } },
+		{ Id = "knocker", Title = "Trick-or-Treater", Icon = "🚪", Stat = "Knocks", Text = "Trick-or-Treat %d times", Tiers = { 10, 50, 250, 1000 } },
+		{ Id = "hatcher", Title = "Hatchery", Icon = "🐣", Stat = "Hatched", Text = "Hatch %d pets", Tiers = { 5, 25, 100, 400 } },
+		{ Id = "collector", Title = "Collector", Icon = "📖", Stat = "Discovered", Text = "Discover %d different pets", Tiers = { 5, 10, 20, 30 } },
+		{ Id = "reborn", Title = "Reborn", Icon = "🔥", Stat = "Rebirths", Text = "Rebirth %d times", Tiers = { 1, 2, 4, 8 } },
+		{ Id = "kicked", Title = "Punching Bag", Icon = "🦶", Stat = "Caught", Text = "Get caught %d times", Tiers = { 1, 10, 50 } },
+	},
+}
+
+-- The value of a lifetime stat for an achievement.
+function Config.Quests.Stat(data: { [string]: any }, stat: string): number
+	if stat == "Discovered" then
+		return #(data.Discovered or {})
+	elseif stat == "EggsStolen" or stat == "Rebirths" then
+		return data[stat] or 0
+	end
+	return (data.Stats and data.Stats[stat]) or 0
+end
+
+-- The best house the player can rob: the highest one whose owner is no faster than the player with an egg.
+function Config.Quests.Tier(data: { [string]: any }): number
+	local speed = Config.WalkSpeedFor(data.SpeedLevel) * 0.9
+	local tier = 1
+	for index, house in Config.Houses do
+		if speed >= house.OwnerSpeed - 1 then
+			tier = index
+		end
+	end
+	return tier
+end
+
+-- Price of the cheapest Money purchase the player has not made yet (0 when they own everything).
+local function nextMoneyGoal(data: { [string]: any }): number
+	local best = math.huge
+	local treadmill = Config.Treadmills[data.Treadmill + 1]
+	if treadmill then
+		best = math.min(best, treadmill.Price)
+	end
+	for index, trail in Config.Trails do
+		if not table.find(data.OwnedTrails, index) then
+			best = math.min(best, trail.Price)
+			break
+		end
+	end
+	local pets, pads = Config.PetCapacityUpgrades[data.PetCapLevel + 1], Config.HatchPadUpgrades[data.PadLevel + 1]
+	if pets then
+		best = math.min(best, pets.Price)
+	end
+	if pads then
+		best = math.min(best, pads.Price)
+	end
+	return if best == math.huge then 0 else best
+end
+
+-- What this player normally earns per minute of playing: { Money, Candy, Xp }.
+function Config.Quests.Rates(data: { [string]: any }): { Money: number, Candy: number, Xp: number }
+	local petIncome = 0
+	for _, petId in data.Pets do
+		local pet = Config.Pets[petId]
+		petIncome += if pet then pet.MoneyPerSecond else 0
+	end
+	-- A player with no pets yet still earns something: a purchase usually takes about 8 minutes early on.
+	local money = math.max(petIncome * 60, nextMoneyGoal(data) / 8, 30)
+
+	local costume = Config.GetCostume(data.EquippedCostume)
+	local candyPerKnock = 5 * costume.CandyMultiplier
+	for _, house in Config.Houses do
+		if house.CostumeTier <= costume.Tier then
+			candyPerKnock = house.CandyPerKnock * costume.CandyMultiplier
+		end
+	end
+	local candy = math.max(candyPerKnock * 0.7 * 4, 15) -- about 4 knocks a minute, 70% of them paid
+
+	local xp = math.max(Config.XpRateFor(data, true) * 60 * 0.5, 6)
+	return { Money = money, Candy = candy, Xp = xp }
+end
+
+local function nice(x: number): number
+	if x < 100 then
+		return math.floor(x + 0.5)
+	end
+	local step = 10 ^ (math.floor(math.log10(x)) - 1) -- two significant digits
+	return math.floor(x / step + 0.5) * step
+end
+
+-- Reward for `minutes` of effort: each currency's share of (minutes x what the player earns per minute x mult).
+function Config.Quests.Reward(data: { [string]: any }, minutes: number, share: { [string]: number }, mult: number): { Money: number?, Candy: number?, Xp: number? }
+	local rates = Config.Quests.Rates(data)
+	local out = {}
+	for currency, part in share do
+		local floor = Config.Quests.Floors[currency]
+		out[currency] = nice(math.max(minutes * rates[currency] * mult * part, floor))
+	end
+	return out
+end
+
+-- Seconds one unit of a quest takes this player (the Speed Level quest depends on the XP they earn).
+function Config.Quests.SecondsPer(template: { [string]: any }, data: { [string]: any }): number
+	if template.Kind == "Level" then
+		local rate = math.max(Config.XpRateFor(data, true) * 0.6, 0.5)
+		return math.max(Config.XpToNext(data.SpeedLevel) / rate, 8)
+	end
+	return template.SecPer
+end
+
+-- Seconds to gain the next `count` Speed Levels (each level costs more XP than the one before).
+function Config.Quests.LevelSeconds(data: { [string]: any }, count: number): number
+	local rate = math.max(Config.XpRateFor(data, true) * 0.6, 0.5)
+	local xp = 0
+	for i = 0, count - 1 do
+		xp += Config.XpToNext(math.min(data.SpeedLevel + i, Config.MaxSpeedLevel))
+	end
+	return math.max(xp / rate, 8 * count)
+end
+
+function Config.Quests.DayKey(now: number): number
+	return math.floor(now / 86400)
+end
+
+function Config.Quests.WeekKey(now: number): number
+	return math.floor((math.floor(now / 86400) + 3) / 7) -- weeks start on Monday (day 0 was a Thursday)
+end
+
+-- Seconds until the daily / weekly quests change (the reset is at 00:00 UTC; the week turns on Monday).
+function Config.Quests.SecondsToDaily(now: number): number
+	return 86400 - now % 86400
+end
+
+function Config.Quests.SecondsToWeekly(now: number): number
+	local day = math.floor(now / 86400)
+	local nextMonday = (math.floor((day + 3) / 7) + 1) * 7 - 3
+	return nextMonday * 86400 - now
+end
+
+local function clock(seconds: number): string
+	if seconds >= 60 and seconds % 60 == 0 then
+		return string.format("%d min", seconds // 60)
+	elseif seconds >= 60 then
+		return string.format("%d:%02d min", seconds // 60, seconds % 60)
+	end
+	return string.format("%d s", seconds)
+end
+
+-- "Bring 5 eggs home", "Run for 3 min".
+function Config.Quests.Describe(quest: { [string]: any }): string
+	local template = Config.Quests.Templates[quest.Id]
+	if not template then
+		return "?"
+	end
+	if template.Unit == "time" then
+		return string.format(template.Text, clock(quest.Target))
+	elseif quest.Param then
+		return string.format(template.Text, quest.Target, quest.Param)
+	elseif template.Fixed then
+		return template.Text
+	end
+	return string.format(template.Text, quest.Target)
+end
+
+-- "2 / 5" (times are shown as "1:30 / 3 min").
+function Config.Quests.ProgressText(quest: { [string]: any }): string
+	local template = Config.Quests.Templates[quest.Id]
+	local progress = math.floor(quest.Progress)
+	if template and template.Unit == "time" then
+		return string.format("%d:%02d / %s", progress // 60, progress % 60, clock(quest.Target))
+	end
+	return string.format("%d / %d", progress, quest.Target)
+end
+
+-- The day streak after the Daily Chest is opened today (1 when the chain was broken).
+function Config.Quests.NextStreak(quests: { [string]: any }, day: number): number
+	if quests.LastStreakDay == day then
+		return quests.Streak
+	elseif quests.LastStreakDay == day - 1 then
+		return quests.Streak + 1
+	end
+	return 1
+end
+
+-- The chest reward for a list of quests (the Daily Chest also grows with the streak).
+function Config.Quests.ChestReward(list: { { [string]: any } }, streak: number?): { Money: number?, Candy: number?, Xp: number? }
+	local total = { Money = 0, Candy = 0, Xp = 0 }
+	for _, quest in list do
+		for currency, amount in quest.Reward do
+			total[currency] += amount
+		end
+	end
+	local factor = Config.Quests.ChestBonus * (1 + Config.Quests.StreakStep * (math.min(streak or 1, Config.Quests.StreakMax) - 1))
+	for currency, amount in total do
+		total[currency] = if amount > 0 then nice(amount * factor) else nil
+	end
+	return total
+end
+
+-- Which achievement step the player has reached and claimed: tier = how many steps are claimed.
+function Config.Quests.AchievementState(data: { [string]: any }, achievement: { [string]: any }): (number, number, number?, boolean)
+	local claimed = (data.Achieved and data.Achieved[achievement.Id]) or 0
+	local value = Config.Quests.Stat(data, achievement.Stat)
+	local target = achievement.Tiers[claimed + 1]
+	return claimed, value, target, target ~= nil and value >= target
+end
 
 return Config

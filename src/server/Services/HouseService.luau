@@ -411,8 +411,10 @@ local function finishTheft(player: Player, outcome: string)
 			table.insert(data.Eggs, Config.MakeEggEntry(carry.EggId, carry.PetId))
 			data.EggsStolen = (data.EggsStolen or 0) + 1
 		end)
+		DataService.QuestEvent(player, "Deliver", 1, { House = state.Index })
 		notify(player, "You escaped with a " .. eggName .. "! Put it in an incubator from the Eggs menu.", GREEN)
 	elseif outcome == "caught" then
+		DataService.QuestEvent(player, "Caught", 1)
 		notify(player, state.OwnerName .. " caught you and KICKED you away! The " .. eggName .. " went back in its nest.", RED)
 		CharacterService.Stun(player, Config.CaughtStunTime)
 		kickThief(state, player)
@@ -1216,6 +1218,7 @@ local function onKnock(state: HouseState, player: Player)
 	DataService.Update(player, function(d)
 		d.Candy += candy
 	end)
+	DataService.QuestEvent(player, "Knock", 1)
 	notify(player, string.format("%s gave you %d Candy!", state.OwnerName, candy), ORANGE)
 	if scene then
 		task.spawn(playDoorScene, state, player, true, Config.TreatGreetings[math.random(#Config.TreatGreetings)])

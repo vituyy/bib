@@ -254,6 +254,27 @@ adminCommands.Phase = function()
 	return true, "Phase skipped (skip the day too for a fresh night with new eggs)"
 end
 
+adminCommands.QuestsDone = function(player)
+	DataService.Update(player, function(d)
+		for _, list in { d.Quests.Daily, d.Quests.Weekly } do
+			for _, quest in list do
+				quest.Progress = quest.Target
+			end
+		end
+	end)
+	return true, "Every quest is finished: open Quests to claim"
+end
+
+adminCommands.QuestsNew = function(player)
+	DataService.Update(player, function(d)
+		d.Quests.Day, d.Quests.Week = 0, 0 -- a new set is generated at once
+		d.Quests.Salt = (d.Quests.Salt or 0) + 1
+		d.Quests.DailyChest, d.Quests.WeeklyChest = false, false
+	end)
+	DataService.RefreshQuests(player)
+	return true, "New daily and weekly quests"
+end
+
 adminCommands.God = function(player)
 	local on = not player:GetAttribute("AdminGod")
 	player:SetAttribute("AdminGod", on or nil)
@@ -312,6 +333,23 @@ function actions.Admin(player: Player, data, arg: any)
 	end
 	local n = if type(arg.N) == "number" then arg.N else nil
 	return command(player, data, n)
+end
+
+-- Quests (the rules live in DataService and Config.Quests).
+function actions.ClaimQuest(player: Player, _data, arg: any)
+	return DataService.ClaimQuest(player, arg)
+end
+
+function actions.ClaimChest(player: Player, _data, arg: any)
+	return DataService.ClaimChest(player, arg)
+end
+
+function actions.RerollQuest(player: Player, _data, arg: any)
+	return DataService.RerollQuest(player, arg)
+end
+
+function actions.ClaimAchievement(player: Player, _data, arg: any)
+	return DataService.ClaimAchievement(player, arg)
 end
 
 -- Put an egg from the bag into a free incubator. Hatching is free; rarer eggs take longer.

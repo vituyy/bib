@@ -105,6 +105,58 @@ local function sanitize(data: { [string]: any })
 	cleanNumber(data, "CustomSpeed", 0, Config.WalkSpeedFor(Config.MaxSpeedLevel))
 	cleanNumber(data, "EggsStolen", 0, nil, true)
 
+	-- Quests: keep only well-formed quests (a bad list is simply replaced with fresh quests).
+	local function cleanQuests(list: any): { any }
+		local out = {}
+		if type(list) == "table" then
+			for _, q in list do
+				if type(q) == "table" and Config.Quests.Templates[q.Id] and isNumber(q.Target) and isNumber(q.Progress) and type(q.Reward) == "table" then
+					local reward = {}
+					for _, currency in { "Money", "Candy", "Xp" } do
+						if isNumber(q.Reward[currency]) and q.Reward[currency] > 0 then
+							reward[currency] = q.Reward[currency]
+						end
+					end
+					table.insert(out, {
+						Id = q.Id,
+						Slot = if type(q.Slot) == "string" then q.Slot else "Easy",
+						Target = math.max(1, q.Target),
+						Progress = math.clamp(q.Progress, 0, math.max(1, q.Target)),
+						Claimed = q.Claimed == true,
+						Rerolled = q.Rerolled == true,
+						Minutes = if isNumber(q.Minutes) then q.Minutes else 0,
+						Param = if isNumber(q.Param) then q.Param else nil,
+						Reward = reward,
+					})
+				end
+			end
+		end
+		return out
+	end
+	local quests = if type(data.Quests) == "table" then data.Quests else {}
+	data.Quests = {
+		Day = if isNumber(quests.Day) then quests.Day else 0,
+		Week = if isNumber(quests.Week) then quests.Week else 0,
+		Daily = cleanQuests(quests.Daily),
+		Weekly = cleanQuests(quests.Weekly),
+		DailyChest = quests.DailyChest == true,
+		WeeklyChest = quests.WeeklyChest == true,
+		Streak = if isNumber(quests.Streak) then math.max(0, math.floor(quests.Streak)) else 0,
+		LastStreakDay = if isNumber(quests.LastStreakDay) then quests.LastStreakDay else 0,
+		Salt = if isNumber(quests.Salt) then quests.Salt else 0, -- the Admin panel changes it to get a different set
+	}
+	local stats = if type(data.Stats) == "table" then data.Stats else {}
+	data.Stats = {}
+	for _, key in { "Knocks", "Hatched", "Caught" } do
+		data.Stats[key] = if isNumber(stats[key]) then math.max(0, math.floor(stats[key])) else 0
+	end
+	local achieved = if type(data.Achieved) == "table" then data.Achieved else {}
+	data.Achieved = {}
+	for _, achievement in Config.Quests.Achievements do
+		local n = achieved[achievement.Id]
+		data.Achieved[achievement.Id] = if isNumber(n) then math.clamp(math.floor(n), 0, #achievement.Tiers) else 0
+	end
+
 	data.OwnedTrails = cleanList(data.OwnedTrails, function(i)
 		return if isNumber(i) and Config.Trails[i] then i else nil
 	end)
@@ -193,6 +245,8 @@ local milestoneSeen: { [Player]: { [string]: boolean } } = {}
 local lastSnapshot: { [Player]: { [string]: number } } = {}
 local lastWritten: { [Player]: { [string]: number } } = {} -- board scores already saved, so unchanged ones are skipped
 local saveScores: (Player) -> () -- defined with the boards below
+local refreshQuests: (Player, { [string]: any }) -> boolean -- defined with the quests below
+local checkAchievements: (Player, { [string]: any }) -> ()
 
 local function clock(seconds: number): string
 	return string.format("%d:%02d", seconds // 60, seconds % 60)
@@ -241,6 +295,10 @@ function DataService.TrackMilestones(player: Player, data: { [string]: any })
 		Index = #data.Discovered,
 	}
 	lastSnapshot[player] = now
+	checkAchievements(player, data)
+	if last and now.Level > last.Level and now.Rebirths == last.Rebirths then
+		task.defer(DataService.QuestEvent, player, "Level", now.Level - last.Level) -- after this publish has finished
+	end
 	if not last then
 		return
 	end
@@ -396,6 +454,7 @@ function DataService.Load(player: Player)
 
 	profiles[player] = reconcile(if type(data) == "table" then data else deepCopy(Config.StartingData))
 	sanitize(profiles[player])
+	refreshQuests(player, profiles[player])
 	-- Saves from before the Index: pets already on the base count as discovered.
 	for _, petId in profiles[player].Pets do
 		local baseId = Config.SplitPet(petId)
@@ -424,6 +483,7 @@ function DataService.Release(player: Player)
 	canSave[player] = nil
 	releasing[player] = nil
 	sessionStart[player], milestones[player], milestoneSeen[player], lastSnapshot[player], lastWritten[player] = nil, nil, nil, nil, nil
+	achSeen[player] = nil
 	if loadedSignals[player] then
 		loadedSignals[player]:Destroy()
 		loadedSignals[player] = nil
@@ -462,6 +522,352 @@ end
 -- Register a function called after every change to a player's data.
 function DataService.OnChanged(callback: (Player, { [string]: any }) -> ())
 	table.insert(changedCallbacks, callback)
+end
+
+---------------------------------------------------------------------------
+-- Quests (rules and numbers: Config.Quests). Three daily quests (easy, medium, hard), two weekly ones, a chest for
+-- finishing each set, and lifetime achievements. Quests are generated per player and per day from a seed, so
+-- leaving and rejoining gives the same quests. Progress comes from QuestEvent calls made by the other services.
+---------------------------------------------------------------------------
+local QuestCfg = Config.Quests
+local achSeen: { [Player]: { [string]: number } } = {}
+
+local function shortNumber(n: number): string
+	if n >= 1e9 then
+		return string.format("%.1fB", n / 1e9)
+	elseif n >= 1e6 then
+		return string.format("%.1fM", n / 1e6)
+	elseif n >= 1e3 then
+		return string.format("%.1fK", n / 1e3)
+	end
+	return tostring(math.floor(n))
+end
+
+local function rewardText(reward: { [string]: number }): string
+	local parts = {}
+	if reward.Money then
+		table.insert(parts, "$" .. shortNumber(reward.Money))
+	end
+	if reward.Candy then
+		table.insert(parts, shortNumber(reward.Candy) .. " Candy")
+	end
+	if reward.Xp then
+		table.insert(parts, shortNumber(reward.Xp) .. " Speed XP")
+	end
+	return table.concat(parts, ", ")
+end
+
+local function notify(player: Player, text: string, color: Color3)
+	Remotes.Notify:FireClient(player, text, color)
+end
+
+local QUEST_GREEN = Color3.fromRGB(120, 255, 120)
+
+-- Template ids that may fill a slot for this player, in a fixed order (so the seed gives the same pick every time).
+local function candidates(data: { [string]: any }, slot: string, taken: { [string]: boolean }, exclude: string?): { string }
+	local tier = QuestCfg.Tier(data)
+	local ids = {}
+	for id, template in QuestCfg.Templates do
+		if template.Slots[slot] and not taken[template.Kind] and id ~= exclude and tier >= (template.MinTier or 1) then
+			if template.Kind ~= "Level" or data.SpeedLevel < Config.MaxSpeedLevel then
+				table.insert(ids, id)
+			end
+		end
+	end
+	table.sort(ids)
+	return ids
+end
+
+local function makeQuest(data: { [string]: any }, id: string, slotConfig, rng: Random, mult: number)
+	local template = QuestCfg.Templates[id]
+	local secPer = QuestCfg.SecondsPer(template, data)
+	local isWeekly = slotConfig.Slot == "Weekly"
+	local target
+	local totalSeconds: number? = nil
+	if template.Fixed then
+		target = template.Fixed
+	elseif template.Kind == "Level" then
+		-- Each level costs more XP than the last, so add them up until the effort fits.
+		local seconds = rng:NextNumber(slotConfig.Min, slotConfig.Max) * 60
+		local most = math.min(if isWeekly then 25 else (template.Max or 8), Config.MaxSpeedLevel - data.SpeedLevel)
+		target = 1
+		while target < most and QuestCfg.LevelSeconds(data, target + 1) <= seconds do
+			target += 1
+		end
+		totalSeconds = QuestCfg.LevelSeconds(data, target)
+	else
+		local minutes = rng:NextNumber(slotConfig.Min, slotConfig.Max)
+		target = math.max(template.Min or 1, math.floor(minutes * 60 / secPer + 0.5))
+		local cap = if isWeekly then template.WeeklyMax else template.Max
+		if cap then
+			target = math.min(target, cap)
+		end
+		if template.Unit == "time" then
+			target = math.max(30, math.floor(target / 30 + 0.5) * 30) -- whole half-minutes
+		end
+	end
+	local minutes = (totalSeconds or target * secPer) / 60
+	return {
+		Id = id,
+		Slot = slotConfig.Slot,
+		Target = target,
+		Progress = 0,
+		Claimed = false,
+		Rerolled = false,
+		Minutes = math.floor(minutes * 10 + 0.5) / 10,
+		Param = if template.Kind == "DeliverBest" then QuestCfg.Tier(data) else nil,
+		Reward = QuestCfg.Reward(data, minutes, template.Share, mult),
+	}
+end
+
+local function generateQuests(player: Player, data: { [string]: any }, slots, mult: number, seed: number)
+	local rng = Random.new(player.UserId % 1000003 * 31 + seed)
+	local list, taken = {}, {}
+	for _, slotConfig in slots do
+		local ids = candidates(data, slotConfig.Slot, taken, nil)
+		if #ids == 0 then
+			ids = candidates(data, slotConfig.Slot, {}, nil)
+		end
+		local quest = makeQuest(data, ids[rng:NextInteger(1, #ids)], slotConfig, rng, mult)
+		taken[QuestCfg.Templates[quest.Id].Kind] = true
+		table.insert(list, quest)
+	end
+	return list
+end
+
+-- Starts a new day or week of quests when the clock has moved on (or the lists are missing). Returns true if
+-- anything changed.
+refreshQuests = function(player: Player, data: { [string]: any }): boolean
+	local quests = data.Quests
+	local now = os.time()
+	local day, week = QuestCfg.DayKey(now), QuestCfg.WeekKey(now)
+	local changed = false
+	if quests.Day ~= day or #quests.Daily ~= #QuestCfg.DailySlots then
+		quests.Day = day
+		quests.Daily = generateQuests(player, data, QuestCfg.DailySlots, QuestCfg.DailyMult, day * 7919 + (quests.Salt or 0) * 131)
+		quests.DailyChest = false
+		changed = true
+	end
+	if quests.Week ~= week or #quests.Weekly ~= #QuestCfg.WeeklySlots then
+		quests.Week = week
+		quests.Weekly = generateQuests(player, data, QuestCfg.WeeklySlots, QuestCfg.WeeklyMult, week * 104729 + (quests.Salt or 0) * 131)
+		quests.WeeklyChest = false
+		changed = true
+	end
+	return changed
+end
+
+-- Does this game event move that quest forward?
+local function countsFor(template, quest, kind: string, info): boolean
+	local tk = template.Kind
+	if tk == kind then
+		return true
+	end
+	if kind == "Deliver" then
+		return tk == "DeliverBest" and info ~= nil and (info.House or 0) >= (quest.Param or 1)
+	elseif kind == "Hatch" then
+		return info ~= nil and ((tk == "HatchSize" and info.Size ~= nil) or (tk == "HatchMaterial" and info.Material ~= nil))
+	end
+	return false
+end
+
+-- Called by the other services when something quest-worthy happens: "Knock", "Deliver" (info.House), "Hatch"
+-- (info.Size, info.Material), "Level", "Run" (seconds), "Caught".
+function DataService.QuestEvent(player: Player, kind: string, amount: number, info: { [string]: any }?)
+	local data = profiles[player]
+	if not data or not data.Quests then
+		return
+	end
+	local fresh = refreshQuests(player, data)
+	if kind == "Knock" then
+		data.Stats.Knocks += amount
+	elseif kind == "Hatch" then
+		data.Stats.Hatched += amount
+	elseif kind == "Caught" then
+		data.Stats.Caught += amount
+	end
+	local finished = 0
+	for _, list in { data.Quests.Daily, data.Quests.Weekly } do
+		for _, quest in list do
+			local template = QuestCfg.Templates[quest.Id]
+			if template and not quest.Claimed and quest.Progress < quest.Target and countsFor(template, quest, kind, info) then
+				quest.Progress = math.min(quest.Target, quest.Progress + amount)
+				if quest.Progress >= quest.Target then
+					finished += 1
+					notify(player, "Quest complete: " .. QuestCfg.Describe(quest) .. "! Claim it in Quests.", QUEST_GREEN)
+				end
+			end
+		end
+	end
+	if kind ~= "Run" or finished > 0 or fresh then
+		publish(player) -- running is published by the XP it earns anyway
+	end
+end
+
+-- Tell the player when a new achievement step becomes claimable (silent for the first look, so old progress
+-- does not spam them on every join).
+checkAchievements = function(player: Player, data: { [string]: any })
+	local seen = achSeen[player]
+	local first = seen == nil
+	if first then
+		seen = {}
+		achSeen[player] = seen
+	end
+	for _, achievement in QuestCfg.Achievements do
+		local claimed, _, _, ready = QuestCfg.AchievementState(data, achievement)
+		if ready and (seen[achievement.Id] or -1) < claimed + 1 then
+			seen[achievement.Id] = claimed + 1
+			if not first then
+				notify(player, "Achievement ready: " .. achievement.Title .. "! Claim it in Quests.", QUEST_GREEN)
+			end
+		end
+	end
+end
+
+local function grant(player: Player, reward: { [string]: number })
+	if reward.Xp then
+		require(script.Parent.SpeedService).GiveXp(player, reward.Xp)
+	end
+end
+
+local function questList(data: { [string]: any }, name: any)
+	if name == "Daily" then
+		return data.Quests.Daily
+	elseif name == "Weekly" then
+		return data.Quests.Weekly
+	end
+	return nil
+end
+
+-- Starts new quests if the day or week has changed (also used by the Admin panel).
+function DataService.RefreshQuests(player: Player)
+	local data = profiles[player]
+	if data and refreshQuests(player, data) then
+		publish(player)
+	end
+end
+
+function DataService.ClaimQuest(player: Player, arg: any): (boolean, string)
+	local data = profiles[player]
+	if not data or type(arg) ~= "table" then
+		return false, "Not ready yet"
+	end
+	refreshQuests(player, data)
+	local list = questList(data, arg.List)
+	local quest = list and list[arg.Index]
+	if not quest then
+		return false, "That quest is gone"
+	elseif quest.Claimed then
+		return false, "Already claimed"
+	elseif quest.Progress < quest.Target then
+		return false, "Not finished yet"
+	end
+	DataService.Update(player, function(d)
+		quest.Claimed = true
+		d.Money += quest.Reward.Money or 0
+		d.Candy += quest.Reward.Candy or 0
+	end)
+	grant(player, quest.Reward)
+	return true, "Quest reward: " .. rewardText(quest.Reward)
+end
+
+function DataService.ClaimChest(player: Player, which: any): (boolean, string)
+	local data = profiles[player]
+	if not data or (which ~= "Daily" and which ~= "Weekly") then
+		return false, "Not ready yet"
+	end
+	refreshQuests(player, data)
+	local quests = data.Quests
+	local list = questList(data, which)
+	if quests[which .. "Chest"] then
+		return false, "Chest already opened"
+	end
+	for _, quest in list do
+		if not quest.Claimed then
+			return false, "Claim every quest in the set first"
+		end
+	end
+	local streak = if which == "Daily" then QuestCfg.NextStreak(quests, quests.Day) else 1
+	local reward = QuestCfg.ChestReward(list, streak)
+	DataService.Update(player, function(d)
+		d.Quests[which .. "Chest"] = true
+		if which == "Daily" then
+			d.Quests.Streak = streak
+			d.Quests.LastStreakDay = d.Quests.Day
+		end
+		d.Money += reward.Money or 0
+		d.Candy += reward.Candy or 0
+	end)
+	grant(player, reward)
+	local text = which .. " Chest: " .. rewardText(reward)
+	if which == "Daily" and streak > 1 then
+		text ..= string.format(" (day %d in a row!)", streak)
+	end
+	return true, text
+end
+
+-- Swap an untouched daily quest for another one of the same difficulty (once per quest).
+function DataService.RerollQuest(player: Player, index: any): (boolean, string)
+	local data = profiles[player]
+	if not data or type(index) ~= "number" then
+		return false, "Not ready yet"
+	end
+	refreshQuests(player, data)
+	local quest = data.Quests.Daily[index]
+	if not quest then
+		return false, "That quest is gone"
+	elseif quest.Claimed or quest.Progress > 0 then
+		return false, "You already started this quest"
+	elseif quest.Rerolled then
+		return false, "Already rerolled once"
+	end
+	local slotConfig
+	for _, slot in QuestCfg.DailySlots do
+		if slot.Slot == quest.Slot then
+			slotConfig = slot
+		end
+	end
+	local taken = {}
+	for i, other in data.Quests.Daily do
+		if i ~= index then
+			taken[QuestCfg.Templates[other.Id].Kind] = true
+		end
+	end
+	local ids = candidates(data, quest.Slot, taken, quest.Id)
+	if not slotConfig or #ids == 0 then
+		return false, "No other quest fits right now"
+	end
+	local rng = Random.new(os.clock() * 1000 + player.UserId)
+	local fresh = makeQuest(data, ids[rng:NextInteger(1, #ids)], slotConfig, rng, QuestCfg.DailyMult)
+	fresh.Rerolled = true
+	DataService.Update(player, function(d)
+		d.Quests.Daily[index] = fresh
+	end)
+	return true, "New quest: " .. QuestCfg.Describe(fresh)
+end
+
+function DataService.ClaimAchievement(player: Player, id: any): (boolean, string)
+	local data = profiles[player]
+	if not data or type(id) ~= "string" then
+		return false, "Not ready yet"
+	end
+	for _, achievement in QuestCfg.Achievements do
+		if achievement.Id == id then
+			local claimed, _, _, ready = QuestCfg.AchievementState(data, achievement)
+			if not ready then
+				return false, "Not reached yet"
+			end
+			local reward = QuestCfg.Reward(data, QuestCfg.AchievementMinutes[claimed + 1], { Money = 0.5, Candy = 0.3, Xp = 0.2 }, 1)
+			DataService.Update(player, function(d)
+				d.Achieved[id] = claimed + 1
+				d.Money += reward.Money or 0
+				d.Candy += reward.Candy or 0
+			end)
+			grant(player, reward)
+			return true, achievement.Title .. " reward: " .. rewardText(reward)
+		end
+	end
+	return false, "Unknown achievement"
 end
 
 ---------------------------------------------------------------------------
@@ -701,6 +1107,18 @@ function DataService.Start()
 		end
 		dev.Parent = game:GetService("ServerStorage")
 	end
+
+	task.spawn(function() -- a new day or week of quests starts while the player is online
+		while true do
+			task.wait(30)
+			for player, data in profiles do
+				if refreshQuests(player, data) then
+					publish(player)
+					notify(player, "New quests are ready!", QUEST_GREEN)
+				end
+			end
+		end
+	end)
 
 	task.spawn(function()
 		while true do

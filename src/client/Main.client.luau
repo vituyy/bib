@@ -538,7 +538,7 @@ end
 ---------------------------------------------------------------------------
 -- Menus
 ---------------------------------------------------------------------------
-local TITLES = { Rebirth = "Rebirth", Index = "Pet Index", Pets = "Pets", Eggs = "Eggs", Store = "Store", Treadmills = "Speed Shop" }
+local TITLES = { Quests = "Quests", Rebirth = "Rebirth", Index = "Pet Index", Pets = "Pets", Eggs = "Eggs", Store = "Store", Treadmills = "Speed Shop" }
 local ICONS = {
 	Rebirth = "rbxassetid://134156079401542",
 	Index = "rbxassetid://120727874564424",
@@ -1165,6 +1165,232 @@ function menus.Store(_d)
 	end
 end
 
+---------------------------------------------------------------------------
+-- Quests menu: three daily quests, two weekly ones, a chest for finishing each set and lifetime achievements.
+-- Every card shows the effort (difficulty and an estimated number of minutes) next to the reward, so the player
+-- can choose. The rules, numbers and reward sizes are in Config.Quests; the server does the counting and paying.
+---------------------------------------------------------------------------
+local QUEST_PINK = Color3.fromRGB(255, 170, 225)
+local QUEST_GOLD = Color3.fromRGB(255, 230, 90)
+
+local function timeLeft(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local days, hours, minutes = seconds // 86400, seconds % 86400 // 3600, seconds % 3600 // 60
+	if days > 0 then
+		return string.format("%dd %dh", days, hours)
+	elseif hours > 0 then
+		return string.format("%dh %dm", hours, minutes)
+	end
+	return string.format("%dm %ds", minutes, seconds % 60)
+end
+
+-- A small dark pill with one emoji and an amount, e.g. "💰 12.4K".
+local function rewardChips(parent: GuiObject, reward: { [string]: number }, position: UDim2, width: number)
+	local holder = new("Frame", { Size = UDim2.fromOffset(width, 70), Position = position, BackgroundTransparency = 1, ZIndex = 2, Parent = parent }, {
+		new("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
+	})
+	local order = 0
+	for _, entry in { { "Money", "💰 $", "", Color3.fromRGB(255, 232, 90) }, { "Candy", "🍬 ", "", QUEST_PINK }, { "Xp", "⚡ ", " XP", CYAN } } do
+		local amount = reward[entry[1]]
+		if amount then
+			order += 1
+			local chip = new("Frame", { Size = UDim2.new(1, 0, 0, 21), BackgroundColor3 = Color3.fromRGB(35, 25, 55), BackgroundTransparency = 0.1, LayoutOrder = order, ZIndex = 2, Parent = holder }, { corner(9) })
+			outlined({ Size = UDim2.new(1, -10, 1, -3), Position = UDim2.fromOffset(5, 1), Text = entry[2] .. formatNumber(amount) .. entry[3], TextColor3 = entry[4], TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3, Parent = chip }, 1.5)
+		end
+	end
+end
+
+-- Right-hand button column of a card: a Claim button, a status text, or a Reroll button.
+local function cardStatus(card: GuiObject, text: string, color: Color3)
+	outlined({ Size = UDim2.fromOffset(92, 30), Position = UDim2.new(1, -104, 0, 14), Text = text, TextColor3 = color, ZIndex = 2, Parent = card }, 2)
+end
+
+local function slotColor(slot: string): Color3
+	for _, set in { Config.Quests.DailySlots, Config.Quests.WeeklySlots } do
+		for _, info in set do
+			if info.Slot == slot then
+				return info.Color
+			end
+		end
+	end
+	return CYAN
+end
+
+local function questCard(order: number, quest, listName: string, index: number)
+	local template = Config.Quests.Templates[quest.Id]
+	local ready = quest.Progress >= quest.Target
+	local paint = if quest.Claimed then PAINT.Grey elseif ready then PAINT.Green else PAINT.Cyan
+	local card = box({ Size = UDim2.new(1, -8, 0, 100), LayoutOrder = order, Parent = list }, paint)
+
+	-- Difficulty and effort: "EASY  ~4 min".
+	local pill = new("Frame", { Size = UDim2.fromOffset(160, 20), Position = UDim2.fromOffset(12, 8), BackgroundColor3 = slotColor(quest.Slot), ZIndex = 2, Parent = card }, { corner(10), border(2) })
+	local minutes = if quest.Minutes >= 10 then tostring(math.floor(quest.Minutes + 0.5)) else string.format("%.1f", quest.Minutes)
+	outlined({ Size = UDim2.new(1, -10, 1, -2), Position = UDim2.fromOffset(5, 1), Text = string.upper(quest.Slot) .. "   ~" .. minutes .. " min", ZIndex = 3, Parent = pill }, 1.5)
+
+	outlined({ Size = UDim2.new(1, -250, 0, 28), Position = UDim2.fromOffset(12, 32), Text = (template and template.Icon or "") .. " " .. Config.Quests.Describe(quest), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2)
+
+	local bar, fill = progressBar({ Size = UDim2.new(1, -250, 0, 20), Position = UDim2.fromOffset(12, 68), Parent = card }, PAINT.XpFill)
+	setBar(fill, quest.Progress / quest.Target)
+	outlined({ Size = UDim2.new(1, -12, 1, -4), Position = UDim2.fromOffset(6, 2), Text = Config.Quests.ProgressText(quest), ZIndex = 3, Parent = bar }, 1.5)
+
+	rewardChips(card, quest.Reward, UDim2.new(1, -222, 0, 12), 110)
+
+	if quest.Claimed then
+		cardStatus(card, "✓ Done", WHITE)
+	elseif ready then
+		chunkyButton({ Size = UDim2.fromOffset(92, 44), Position = UDim2.new(1, -104, 0, 10), Text = "Claim", ZIndex = 2, Parent = card }, PAINT.Orange, function()
+			request("ClaimQuest", { List = listName, Index = index })
+		end)
+	else
+		cardStatus(card, "Working", ORANGE)
+		if listName == "Daily" and quest.Progress <= 0 and not quest.Rerolled then
+			chunkyButton({ Size = UDim2.fromOffset(92, 30), Position = UDim2.new(1, -104, 0, 56), Text = "↻ Reroll", ZIndex = 2, Parent = card }, PAINT.Grey, function()
+				request("RerollQuest", index)
+			end)
+		end
+	end
+end
+
+local function chestCard(order: number, listName: string, quests, now: number)
+	local quest_list = if listName == "Daily" then quests.Daily else quests.Weekly
+	local opened = quests[listName .. "Chest"]
+	local claimed = 0
+	for _, quest in quest_list do
+		if quest.Claimed then
+			claimed += 1
+		end
+	end
+	local complete = claimed == #quest_list and #quest_list > 0
+	local day = Config.Quests.DayKey(now)
+	local streak = if listName == "Daily" then Config.Quests.NextStreak(quests, day) else 1
+	local reward = Config.Quests.ChestReward(quest_list, streak)
+	local paint = if opened then PAINT.Grey elseif complete then PAINT.Orange else PAINT.Purple
+	local card = box({ Size = UDim2.new(1, -8, 0, 88), LayoutOrder = order, Parent = list }, paint)
+	outlined({ Size = UDim2.new(1, -250, 0, 30), Position = UDim2.fromOffset(12, 8), Text = "🎁 " .. listName .. " Chest", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = QUEST_GOLD, ZIndex = 2, Parent = card }, 2.5)
+	local sub = string.format("%d / %d quests claimed", claimed, #quest_list)
+	if listName == "Daily" then
+		local shown = if quests.LastStreakDay >= day - 1 then quests.Streak else 0
+		sub ..= string.format("   🔥 %d day%s in a row", shown, if shown == 1 then "" else "s")
+		if streak > 1 and not opened then
+			sub ..= string.format(" (bonus +%d%%)", math.floor((streak - 1) * Config.Quests.StreakStep * 100 + 0.5))
+		end
+	end
+	outlined({ Size = UDim2.new(1, -250, 0, 22), Position = UDim2.fromOffset(12, 44), Text = sub, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 1.8)
+	local note = if listName == "Daily" then "Come back every day to grow the bonus" else "Finish both weekly quests"
+	outlined({ Size = UDim2.new(1, -250, 0, 16), Position = UDim2.fromOffset(12, 66), Text = note, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(230, 225, 255), ZIndex = 2, Parent = card }, 1.2)
+	rewardChips(card, reward, UDim2.new(1, -222, 0, 9), 110)
+	if opened then
+		cardStatus(card, "✓ Opened", WHITE)
+	elseif complete then
+		chunkyButton({ Size = UDim2.fromOffset(92, 44), Position = UDim2.new(1, -104, 0, 20), Text = "Open!", ZIndex = 2, Parent = card }, PAINT.Green, function()
+			request("ClaimChest", listName)
+			sfx("Fanfare")
+		end)
+	else
+		cardStatus(card, "Locked", Color3.fromRGB(235, 225, 255))
+	end
+end
+
+local function achievementCard(order: number, d, achievement)
+	local claimed, value, target, ready = Config.Quests.AchievementState(d, achievement)
+	local maxed = target == nil
+	local card = box({ Size = UDim2.new(1, -8, 0, 84), LayoutOrder = order }, if maxed then PAINT.Grey elseif ready then PAINT.Green else PAINT.Cyan)
+	card.Parent = list
+	outlined({ Size = UDim2.new(1, -250, 0, 26), Position = UDim2.fromOffset(12, 6), Text = achievement.Icon .. " " .. achievement.Title .. string.format("   (%d/%d)", claimed, #achievement.Tiers), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2)
+	if maxed then
+		outlined({ Size = UDim2.new(1, -250, 0, 22), Position = UDim2.fromOffset(12, 40), Text = "Every step claimed. Legend!", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = QUEST_GOLD, ZIndex = 2, Parent = card }, 1.8)
+		cardStatus(card, "MAX", QUEST_GOLD)
+		return
+	end
+	outlined({ Size = UDim2.new(1, -250, 0, 20), Position = UDim2.fromOffset(12, 34), Text = string.format(achievement.Text, target), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 1.6)
+	local bar, fill = progressBar({ Size = UDim2.new(1, -250, 0, 18), Position = UDim2.fromOffset(12, 58), Parent = card }, PAINT.XpFill)
+	setBar(fill, value / target)
+	outlined({ Size = UDim2.new(1, -12, 1, -4), Position = UDim2.fromOffset(6, 2), Text = string.format("%s / %s", formatNumber(math.min(value, target)), formatNumber(target)), ZIndex = 3, Parent = bar }, 1.5)
+	local reward = Config.Quests.Reward(d, Config.Quests.AchievementMinutes[claimed + 1], { Money = 0.5, Candy = 0.3, Xp = 0.2 }, 1)
+	rewardChips(card, reward, UDim2.new(1, -222, 0, 6), 110)
+	if ready then
+		chunkyButton({ Size = UDim2.fromOffset(92, 40), Position = UDim2.new(1, -104, 0, 36), Text = "Claim", ZIndex = 2, Parent = card }, PAINT.Orange, function()
+			request("ClaimAchievement", achievement.Id)
+		end)
+	end
+end
+
+function menus.Quests(d)
+	local now = workspace:GetServerTimeNow()
+	local quests = d.Quests
+	local order = 0
+	local function nextOrder(): number
+		order += 1
+		return order
+	end
+	header(nextOrder(), "Daily Quests   ⏰ new ones in " .. timeLeft(Config.Quests.SecondsToDaily(now)), ORANGE)
+	for index, quest in quests.Daily do
+		questCard(nextOrder(), quest, "Daily", index)
+	end
+	chestCard(nextOrder(), "Daily", quests, now)
+	header(nextOrder(), "Weekly Quests   ⏰ new ones in " .. timeLeft(Config.Quests.SecondsToWeekly(now)), Color3.fromRGB(200, 150, 255))
+	for index, quest in quests.Weekly do
+		questCard(nextOrder(), quest, "Weekly", index)
+	end
+	chestCard(nextOrder(), "Weekly", quests, now)
+	header(nextOrder(), "Achievements   (rewards grow with every step)", CYAN)
+	for _, achievement in Config.Quests.Achievements do
+		achievementCard(nextOrder(), d, achievement)
+	end
+end
+
+-- How many things are waiting to be claimed (shown on the Quests button).
+local function claimableCount(d): number
+	if not d.Quests then
+		return 0
+	end
+	local count = 0
+	for _, set in { d.Quests.Daily, d.Quests.Weekly } do
+		for _, quest in set do
+			if quest.Progress >= quest.Target and not quest.Claimed then
+				count += 1
+			end
+		end
+	end
+	for _, name in { "Daily", "Weekly" } do
+		local set = if name == "Daily" then d.Quests.Daily else d.Quests.Weekly
+		local all = #set > 0
+		for _, quest in set do
+			all = all and quest.Claimed
+		end
+		if all and not d.Quests[name .. "Chest"] then
+			count += 1
+		end
+	end
+	for _, achievement in Config.Quests.Achievements do
+		local _, _, _, ready = Config.Quests.AchievementState(d, achievement)
+		if ready then
+			count += 1
+		end
+	end
+	return count
+end
+
+-- Changes whenever the Quests menu needs a redraw (times are rounded so the menu is not redrawn every second).
+local function questSignature(d): string
+	local parts = {}
+	if d.Quests then
+		for _, set in { d.Quests.Daily, d.Quests.Weekly } do
+			for _, quest in set do
+				table.insert(parts, quest.Id .. ":" .. math.floor(quest.Progress / (if Config.Quests.Templates[quest.Id] and Config.Quests.Templates[quest.Id].Unit == "time" then 5 else 1)) .. (if quest.Claimed then "c" else "") .. (if quest.Rerolled then "r" else ""))
+			end
+		end
+		table.insert(parts, tostring(d.Quests.DailyChest) .. tostring(d.Quests.WeeklyChest) .. d.Quests.Streak .. ":" .. d.Quests.Day)
+	end
+	for id, tier in d.Achieved or {} do
+		table.insert(parts, id .. tier)
+	end
+	for _, key in { d.EggsStolen or 0, d.Stats and d.Stats.Knocks or 0, d.Stats and d.Stats.Hatched or 0, d.Stats and d.Stats.Caught or 0, #(d.Discovered or {}) } do
+		table.insert(parts, tostring(key))
+	end
+	return table.concat(parts, ",")
+end
+
 function menus.Index(d)
 	local found = d.Discovered or {}
 	local claimed = d.IndexClaimed or {}
@@ -1451,6 +1677,7 @@ local function menuKey(d)
 		player:GetAttribute("FriendBoost") or 0,
 		table.concat(d.Discovered or {}, ","), table.concat(d.IndexClaimed or {}, ","), d.PetCapLevel, d.PadLevel,
 		if openMenu == "Treadmills" then math.floor(d.Money / 1000) else 0,
+		if openMenu == "Quests" then questSignature(d) else "",
 	}, "|")
 end
 
@@ -1479,7 +1706,7 @@ toggleMenu = function(name: string, forceOpen: boolean?)
 end
 
 -- Studded menu buttons stacked on the left. They scale with screen height so they fit phones too.
-local MENU_ORDER = { "Rebirth", "Index", "Pets", "Eggs", "Store" }
+local MENU_ORDER = { "Quests", "Rebirth", "Index", "Pets", "Eggs", "Store" }
 local menuButtons = new("Frame", {
 	Name = "MenuButtons",
 	AnchorPoint = Vector2.new(0, 0.5),
@@ -1488,23 +1715,52 @@ local menuButtons = new("Frame", {
 	BackgroundTransparency = 1,
 	Parent = gui,
 }, { new("UIListLayout", { Padding = UDim.new(0.02, 0), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
+local questBadge: TextLabel? = nil
 for order, menu in MENU_ORDER do
 	local tile = new("ImageButton", {
 		Name = menu .. "Button",
-		Image = ICONS[menu],
+		Image = ICONS[menu] or "",
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
-		Size = UDim2.fromScale(1, 0.18),
+		Size = UDim2.fromScale(1, 0.15),
 		LayoutOrder = order,
 		Parent = menuButtons,
 	}, {
 		new("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Height }),
 		new("UISizeConstraint", { MaxSize = Vector2.new(92, 92), MinSize = Vector2.new(50, 50) }),
 	})
+	if not ICONS[menu] then
+		-- No uploaded picture for this button yet: a glossy orange tile with a scroll and the name.
+		tile.BackgroundTransparency = 0
+		tile.BackgroundColor3 = WHITE
+		corner(14).Parent = tile
+		gradient(PAINT.Orange).Parent = tile
+		border(3).Parent = tile
+		shine(tile)
+		outlined({ Size = UDim2.new(1, 0, 0.58, 0), Position = UDim2.fromScale(0, 0.04), Text = "📜", ZIndex = 2, Parent = tile }, 0)
+		outlined({ Size = UDim2.new(1, -8, 0.24, 0), Position = UDim2.new(0, 4, 0.68, 0), Text = string.upper(TITLES[menu] or menu), ZIndex = 2, Parent = tile }, 2)
+		if menu == "Quests" then
+			questBadge = outlined({ Size = UDim2.fromOffset(26, 26), Position = UDim2.new(1, -16, 0, -8), Text = "0", Visible = false, ZIndex = 4, Parent = tile }, 1.5)
+			questBadge.BackgroundTransparency = 0
+			questBadge.BackgroundColor3 = Color3.fromRGB(235, 40, 50)
+			corner(13).Parent = questBadge
+			border(2).Parent = questBadge
+		end
+	end
 	bounce(tile)
 	tile.Activated:Connect(function()
 		toggleMenu(menu)
 	end)
+end
+
+-- The red number on the Quests button: rewards waiting to be claimed.
+local function refreshQuestBadge(d)
+	if not questBadge then
+		return
+	end
+	local count = claimableCount(d)
+	questBadge.Visible = count > 0
+	questBadge.Text = tostring(count)
 end
 
 -- The Speed Shop counter opens the treadmill menu.
@@ -1674,6 +1930,7 @@ end
 Remotes.DataChanged.OnClientEvent:Connect(function(newData)
 	data = newData
 	refreshStats(newData)
+	refreshQuestBadge(newData)
 	updateTutorial(newData)
 	if openMenu then
 		local key = menuKey(newData)
@@ -2078,6 +2335,8 @@ local function buildAdminPanel()
 	button("Add one of every egg", PAINT.Cyan, "Eggs")
 	button("Hatch everything now", PAINT.Cyan, "HatchNow")
 	button("Skip day / night phase", PAINT.Cyan, "Phase")
+	button("Finish all quests", PAINT.Green, "QuestsDone")
+	button("New quests (reroll the set)", PAINT.Green, "QuestsNew")
 	button("God mode on/off", PAINT.Red, "God")
 
 	order += 1

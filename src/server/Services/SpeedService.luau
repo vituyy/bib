@@ -91,6 +91,9 @@ local function giveXp(player: Player, amount: number)
 	end
 end
 
+-- Other services (quest rewards) give XP through this.
+SpeedService.GiveXp = giveXp
+
 -- The equipped trail shows as a glowing streak behind the character.
 local function applyTrail(player: Player, trailIndex: number)
 	local character = player.Character
@@ -206,6 +209,7 @@ function SpeedService.Start()
 				local onTreadmill = belt ~= nil and running[player] == true and not player:GetAttribute("CarryingEgg") and isOnBelt(belt, root)
 				if onTreadmill or moved then
 					giveXp(player, Config.XpRateFor(data, onTreadmill) * Config.TreadmillTick)
+					DataService.QuestEvent(player, "Run", Config.TreadmillTick) -- seconds spent really running
 				end
 			end
 		end

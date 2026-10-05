@@ -529,6 +529,8 @@ hatchEgg = function(player: Player, plot: Instance, index: number, expectedEntry
 			table.insert(d.Discovered, baseId)
 		end
 	end)
+	local _, sizeName, materialName = Config.SplitPet(petId)
+	DataService.QuestEvent(player, "Hatch", 1, { Size = sizeName, Material = materialName })
 	Remotes.EggHatched:FireClient(player, { Egg = entry.Egg, Pet = petId, PadCFrame = padCFrame, ToBase = toBase })
 	task.delay(3.1, function()
 		if player.Parent then
