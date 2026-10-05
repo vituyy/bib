@@ -673,7 +673,7 @@ function PlotService.Start(map: Instance)
 				local data = DataService.Get(player)
 				if data then
 					local boost = 1 + (player:GetAttribute("FriendBoost") or 0) / 100
-					local income = petIncome(data) * boost * Config.IncomeTickSeconds
+					local income = petIncome(data) * boost * Config.BoostFactor(data, "Money") * Config.IncomeTickSeconds
 					if income > 0 then
 						DataService.Update(player, function(d)
 							d.Money += income

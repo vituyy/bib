@@ -21,6 +21,7 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Leaderboards, playtest tools, flicker fix (5.1) | Rebirth number in the Tab list, two global boards in the hub, an Admin panel with a milestone log, and an automatic fix for flickering overlapping surfaces. |
 | Quests (5.1) | A Quests window with daily and weekly quests, chests, a day streak, rerolls and achievements. Every quest shows its effort in minutes next to its reward, and the reward is computed from that effort and from how much the player normally earns. |
 | Phantom furniture (5.1) | Furniture inside the houses no longer blocks players. |
+| Playtime Rewards and potions (5.1) | Twelve daily gifts for playing time, and timed boost potions (Speed XP, Candy, Money, hatching). |
 | Kick (5.0) | A caught thief is kicked about 100 studs away from the owner with a kick sound. `Config.KickDistance`, `KickAngle` and `KickSounds` tune it; the movement anti-cheat ignores the flight. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
@@ -369,6 +370,30 @@ with the multiplier 0.5 for Daily, 0.6 for Weekly and 1.0 for achievements (achi
 Rewards from a full day (Easy + Medium + Hard + chest) are roughly one extra Treadmill or Costume in the first hour and 10 to 25% of the next big purchase later. Everything is tuned in `Config.Quests` (multipliers, bands, seconds per unit, shares).
 
 **Where it lives:** rules and numbers in `Config.Quests` (shared); the engine (generation, progress, claims, chests, rerolls, achievements, saving) in `DataService`; events from `HouseService` (knocks, eggs home, caught), `PlotService` (hatches) and `SpeedService` (running, levels); the window and the button badge in `Main.client`. Quests are saved with the player (`Quests`, `Stats`, `Achieved`). The Admin panel can finish all quests or deal a new set.
+
+### 2.17 Playtime Rewards and potions
+
+A **Rewards** button (gift icon, red number = gifts ready) opens a window with twelve gifts in a grid, like the reference screenshot: each tile shows the gift on top, a picture, and a countdown ("MM:SS") that turns into a green **CLAIM** button when today's play time is reached.
+
+| Gift | At (min played today) | What |
+|---|---|---|
+| 1 | 0 | Money, 4 minutes of your earnings |
+| 2 | 2 | Candy, 5 minutes |
+| 3 | 5 | Speed Potion |
+| 4 | 10 | Speed XP, 6 minutes |
+| 5 | 15 | 1 egg |
+| 6 | 20 | Candy Potion |
+| 7 | 30 | Money, 14 minutes |
+| 8 | 45 | Money Potion |
+| 9 | 60 | 2 eggs |
+| 10 | 80 | Candy, 25 minutes |
+| 11 | 100 | 2 Hatch Potions |
+| 12 | 120 | 3 eggs |
+
+- **Only real play counts.** The server adds a second for every second the player is moving or using menus; after 60 s of standing still the clock stops. Everything resets at 00:00 UTC (unclaimed gifts are lost), so players come back every day.
+- **Gifts scale with the player.** Currency gifts are worth minutes of what the player normally earns (the same rates as Quests: pet income, Candy per knock, Speed XP per minute). Eggs are the most common egg of the best house the player can rob. A full egg bag blocks an egg gift until there is room.
+- **Potions** (bottom of the window): Speed Potion (x2 Speed XP), Candy Potion (x2 Candy from knocks), Money Potion (x2 Money from pets), Hatch Potion (eggs hatch 2x faster, applied when the egg goes into an incubator). Each lasts 10 minutes. Drinking another of the same kind adds its time (a boost never runs longer than 2 hours from now). Boosts end at a clock time, so they run while the player is away. Active boosts show as small coloured pills under the night/day timer.
+- Settings are in `Config.Playtime` and `Config.Potions`; the counting and paying are in `DataService`; the window in `Main.client`. The Admin panel can add 30 minutes of play time or 3 of every potion.
 
 ## 3. Built so far
 

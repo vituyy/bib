@@ -150,6 +150,26 @@ local function sanitize(data: { [string]: any })
 	for _, key in { "Knocks", "Hatched", "Caught" } do
 		data.Stats[key] = if isNumber(stats[key]) then math.max(0, math.floor(stats[key])) else 0
 	end
+	local potions = if type(data.Potions) == "table" then data.Potions else {}
+	local boosts = if type(data.Boosts) == "table" then data.Boosts else {}
+	data.Potions, data.Boosts = {}, {}
+	for _, kind in Config.PotionOrder do
+		data.Potions[kind] = if isNumber(potions[kind]) then math.clamp(math.floor(potions[kind]), 0, 9999) else 0
+		data.Boosts[kind] = if isNumber(boosts[kind]) then math.max(0, math.floor(boosts[kind])) else 0
+	end
+	local playtime = if type(data.Playtime) == "table" then data.Playtime else {}
+	data.Playtime = {
+		Day = if isNumber(playtime.Day) then playtime.Day else 0,
+		Seconds = if isNumber(playtime.Seconds) then math.max(0, math.floor(playtime.Seconds)) else 0,
+		Claimed = {},
+	}
+	if type(playtime.Claimed) == "table" then
+		for key, value in playtime.Claimed do
+			if value == true and Config.Playtime.Rewards[tonumber(key) or 0] then
+				data.Playtime.Claimed[tostring(key)] = true
+			end
+		end
+	end
 	local achieved = if type(data.Achieved) == "table" then data.Achieved else {}
 	data.Achieved = {}
 	for _, achievement in Config.Quests.Achievements do
@@ -246,6 +266,10 @@ local lastSnapshot: { [Player]: { [string]: number } } = {}
 local lastWritten: { [Player]: { [string]: number } } = {} -- board scores already saved, so unchanged ones are skipped
 local saveScores: (Player) -> () -- defined with the boards below
 local refreshQuests: (Player, { [string]: any }) -> boolean -- defined with the quests below
+local achSeen: { [Player]: { [string]: number } } = {} -- highest achievement step already announced, per player
+local lastActive: { [Player]: number } = {} -- when each player last did something (for the playtime clock)
+local lastSample: { [Player]: Vector3 } = {}
+local playtimeNewDay: ({ [string]: any }) -> boolean
 local checkAchievements: (Player, { [string]: any }) -> ()
 
 local function clock(seconds: number): string
@@ -455,6 +479,8 @@ function DataService.Load(player: Player)
 	profiles[player] = reconcile(if type(data) == "table" then data else deepCopy(Config.StartingData))
 	sanitize(profiles[player])
 	refreshQuests(player, profiles[player])
+	playtimeNewDay(profiles[player])
+	lastActive[player] = os.clock()
 	-- Saves from before the Index: pets already on the base count as discovered.
 	for _, petId in profiles[player].Pets do
 		local baseId = Config.SplitPet(petId)
@@ -484,6 +510,7 @@ function DataService.Release(player: Player)
 	releasing[player] = nil
 	sessionStart[player], milestones[player], milestoneSeen[player], lastSnapshot[player], lastWritten[player] = nil, nil, nil, nil, nil
 	achSeen[player] = nil
+	lastActive[player], lastSample[player] = nil, nil
 	if loadedSignals[player] then
 		loadedSignals[player]:Destroy()
 		loadedSignals[player] = nil
@@ -530,7 +557,6 @@ end
 -- leaving and rejoining gives the same quests. Progress comes from QuestEvent calls made by the other services.
 ---------------------------------------------------------------------------
 local QuestCfg = Config.Quests
-local achSeen: { [Player]: { [string]: number } } = {}
 
 local function shortNumber(n: number): string
 	if n >= 1e9 then
@@ -871,6 +897,88 @@ function DataService.ClaimAchievement(player: Player, id: any): (boolean, string
 end
 
 ---------------------------------------------------------------------------
+-- Playtime Rewards and potions (rules and numbers: Config.Playtime, Config.Potions). The server counts today's
+-- active play time (it stops when the player stands still without using any menu for a minute). Gifts are claimed
+-- from the Rewards window; potions are drunk from there too.
+---------------------------------------------------------------------------
+
+-- Called when the player does something (opens a menu, buys): counts as being active.
+function DataService.Touch(player: Player)
+	lastActive[player] = os.clock()
+end
+
+-- Starts a new day of playtime rewards when the date has changed. Returns true if it did.
+playtimeNewDay = function(data: { [string]: any }): boolean
+	local playtime = data.Playtime
+	local day = Config.Quests.DayKey(os.time())
+	if playtime.Day ~= day then
+		playtime.Day, playtime.Seconds, playtime.Claimed = day, 0, {}
+		return true
+	end
+	return false
+end
+
+local function playtimeText(resolved: { [string]: any }): string
+	if resolved.EggId then
+		return string.format("%d x %s", resolved.Count, Config.Eggs[resolved.EggId].Name)
+	elseif resolved.Potion then
+		return string.format("%d x %s", resolved.Count, Config.Potions[resolved.Potion].Name)
+	end
+	return rewardText(resolved)
+end
+
+function DataService.ClaimPlaytime(player: Player, index: any): (boolean, string)
+	local data = profiles[player]
+	local reward = type(index) == "number" and Config.Playtime.Rewards[index]
+	if not data or not reward then
+		return false, "Not ready yet"
+	end
+	playtimeNewDay(data)
+	local playtime = data.Playtime
+	local key = tostring(index)
+	if playtime.Claimed[key] then
+		return false, "Already claimed"
+	elseif playtime.Seconds < reward.Minutes * 60 then
+		return false, "Keep playing: not ready yet"
+	end
+	local resolved = Config.Playtime.Resolve(data, reward)
+	if resolved.EggId and #data.Eggs + resolved.Count > Config.MaxEggsHeld then
+		return false, "Your egg bag is full. Hatch or free some eggs first!"
+	end
+	DataService.Update(player, function(d)
+		d.Playtime.Claimed[key] = true
+		d.Money += resolved.Money or 0
+		d.Candy += resolved.Candy or 0
+		if resolved.EggId then
+			for _ = 1, resolved.Count do
+				table.insert(d.Eggs, Config.MakeEggEntry(resolved.EggId, nil))
+			end
+		elseif resolved.Potion then
+			d.Potions[resolved.Potion] += resolved.Count
+		end
+	end)
+	grant(player, resolved)
+	return true, "Playtime reward: " .. playtimeText(resolved)
+end
+
+function DataService.DrinkPotion(player: Player, kind: any): (boolean, string)
+	local data = profiles[player]
+	local potion = type(kind) == "string" and Config.Potions[kind]
+	if not data or not potion then
+		return false, "Unknown potion"
+	elseif data.Potions[kind] < 1 then
+		return false, "You have no " .. potion.Name
+	end
+	local now = os.time()
+	local ends = math.min(math.max(now, data.Boosts[kind]) + potion.Seconds, now + Config.PotionMaxSeconds)
+	DataService.Update(player, function(d)
+		d.Potions[kind] -= 1
+		d.Boosts[kind] = ends
+	end)
+	return true, string.format("%s: %s for %d:%02d min", potion.Name, potion.Text, (ends - now) // 60, (ends - now) % 60)
+end
+
+---------------------------------------------------------------------------
 -- Global leaderboards: two boards in the hub (Top Runners, Top Egg Thieves). Scores are kept in OrderedDataStores
 -- (shared by every server) and written every Config.BoardRefreshSeconds. If DataStores are not available (Studio
 -- without API access) the boards show the players in this server.
@@ -1107,6 +1215,33 @@ function DataService.Start()
 		end
 		dev.Parent = game:GetService("ServerStorage")
 	end
+
+	task.spawn(function() -- today's play time: counts one second for every second the player is really playing
+		local tick = 0
+		while true do
+			task.wait(1)
+			tick += 1
+			for player, data in profiles do
+				local character = player.Character
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if humanoid and root then
+					local before = lastSample[player]
+					lastSample[player] = root.Position
+					if humanoid.MoveDirection.Magnitude > 0.1 or (before and (root.Position - before).Magnitude > 1) then
+						lastActive[player] = os.clock()
+					end
+				end
+				local newDay = playtimeNewDay(data)
+				if os.clock() - (lastActive[player] or 0) < Config.Playtime.AfkSeconds then
+					data.Playtime.Seconds += 1
+				end
+				if newDay or tick % 5 == 0 then
+					publish(player)
+				end
+			end
+		end
+	end)
 
 	task.spawn(function() -- a new day or week of quests starts while the player is online
 		while true do

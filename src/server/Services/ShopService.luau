@@ -275,6 +275,22 @@ adminCommands.QuestsNew = function(player)
 	return true, "New daily and weekly quests"
 end
 
+adminCommands.Potions = function(player)
+	DataService.Update(player, function(d)
+		for _, kind in Config.PotionOrder do
+			d.Potions[kind] += 3
+		end
+	end)
+	return true, "+3 of every potion"
+end
+
+adminCommands.Playtime = function(player)
+	DataService.Update(player, function(d)
+		d.Playtime.Seconds += 1800
+	end)
+	return true, "+30 minutes of play time today"
+end
+
 adminCommands.God = function(player)
 	local on = not player:GetAttribute("AdminGod")
 	player:SetAttribute("AdminGod", on or nil)
@@ -335,6 +351,15 @@ function actions.Admin(player: Player, data, arg: any)
 	return command(player, data, n)
 end
 
+-- Playtime Rewards and potions (DataService).
+function actions.ClaimPlaytime(player: Player, _data, arg: any)
+	return DataService.ClaimPlaytime(player, arg)
+end
+
+function actions.DrinkPotion(player: Player, _data, arg: any)
+	return DataService.DrinkPotion(player, arg)
+end
+
 -- Quests (the rules live in DataService and Config.Quests).
 function actions.ClaimQuest(player: Player, _data, arg: any)
 	return DataService.ClaimQuest(player, arg)
@@ -371,7 +396,7 @@ function actions.Hatch(player: Player, data, eggIndex: any)
 	end
 	DataService.Update(player, function(d)
 		table.remove(d.Eggs, eggIndex)
-		table.insert(d.Incubators, { Egg = eggId, Pet = petId, EndsAt = os.time() + egg.HatchSeconds })
+		table.insert(d.Incubators, { Egg = eggId, Pet = petId, EndsAt = os.time() + math.ceil(egg.HatchSeconds / Config.BoostFactor(d, "Hatch")) })
 	end)
 	return true, string.format("%s is incubating on your base", egg.Name)
 end
@@ -544,6 +569,7 @@ local function runAction(player: Player, action: any, arg: any)
 		return false, "Slow down!"
 	end
 	lastRequest[player] = now
+	DataService.Touch(player)
 
 	local handler = type(action) == "string" and actions[action]
 	local data = DataService.Get(player)

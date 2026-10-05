@@ -208,7 +208,7 @@ function SpeedService.Start()
 				-- On the treadmill the character is held in place, so running there counts without moving.
 				local onTreadmill = belt ~= nil and running[player] == true and not player:GetAttribute("CarryingEgg") and isOnBelt(belt, root)
 				if onTreadmill or moved then
-					giveXp(player, Config.XpRateFor(data, onTreadmill) * Config.TreadmillTick)
+					giveXp(player, Config.XpRateFor(data, onTreadmill) * Config.BoostFactor(data, "Xp") * Config.TreadmillTick)
 					DataService.QuestEvent(player, "Run", Config.TreadmillTick) -- seconds spent really running
 				end
 			end

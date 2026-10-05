@@ -31,6 +31,9 @@ Config.StartingData = {
 	Stats = { Knocks = 0, Hatched = 0, Caught = 0 }, -- lifetime counters for the achievements (see Config.Quests)
 	Achieved = {}, -- achievement id -> how many of its steps were claimed
 	Quests = { Day = 0, Week = 0, Daily = {}, Weekly = {}, DailyChest = false, WeeklyChest = false, Streak = 0, LastStreakDay = 0 },
+	Potions = { Xp = 0, Candy = 0, Money = 0, Hatch = 0 }, -- potions in the bag, by kind (see Config.Potions)
+	Boosts = { Xp = 0, Candy = 0, Money = 0, Hatch = 0 }, -- kind -> unix time the active boost ends (0 = none)
+	Playtime = { Day = 0, Seconds = 0, Claimed = {} }, -- today's active play time and the Playtime Rewards already claimed
 }
 
 ---------------------------------------------------------------------------
@@ -860,5 +863,72 @@ function Config.Quests.AchievementState(data: { [string]: any }, achievement: { 
 	local target = achievement.Tiers[claimed + 1]
 	return claimed, value, target, target ~= nil and value >= target
 end
+
+---------------------------------------------------------------------------
+-- Potions: drink one to boost something for a while. They come from the Playtime Rewards. Drinking a second
+-- one of the same kind adds its time to the boost (up to MaxSeconds). Boosts end at a real clock time, so they
+-- keep running while the player is away.
+---------------------------------------------------------------------------
+Config.Potions = {
+	Xp = { Name = "Speed Potion", Icon = "⚡", Multiplier = 2, Seconds = 600, Text = "x2 Speed XP", Color = Color3.fromRGB(90, 220, 255) },
+	Candy = { Name = "Candy Potion", Icon = "🍬", Multiplier = 2, Seconds = 600, Text = "x2 Candy from knocks", Color = Color3.fromRGB(255, 130, 210) },
+	Money = { Name = "Money Potion", Icon = "💰", Multiplier = 2, Seconds = 600, Text = "x2 Money from pets", Color = Color3.fromRGB(255, 220, 70) },
+	Hatch = { Name = "Hatch Potion", Icon = "🥚", Multiplier = 2, Seconds = 600, Text = "Eggs hatch 2x faster", Color = Color3.fromRGB(190, 140, 255) },
+}
+Config.PotionOrder = { "Xp", "Candy", "Money", "Hatch" }
+Config.PotionMaxSeconds = 7200 -- a boost never runs longer than this from now
+
+-- Multiplier for a kind of boost: its potion's Multiplier while active, else 1.
+function Config.BoostFactor(data: { [string]: any }, kind: string): number
+	local ends = data.Boosts and data.Boosts[kind] or 0
+	local potion = Config.Potions[kind]
+	return if potion and ends > os.time() then potion.Multiplier else 1
+end
+
+---------------------------------------------------------------------------
+-- Playtime Rewards: a gift for every stretch of time the player is really playing today (they only count while
+-- moving or using menus). Twelve gifts, the last one after 2 hours. Everything resets at 00:00 UTC. Currency gifts
+-- are worth `Amount` minutes of what the player normally earns (see Config.Quests.Rates), so they grow with the player.
+---------------------------------------------------------------------------
+Config.Playtime = {
+	AfkSeconds = 60, -- no movement or menu use for this long and the clock stops
+	Rewards = {
+		{ Minutes = 0, Kind = "Money", Amount = 4 },
+		{ Minutes = 2, Kind = "Candy", Amount = 5 },
+		{ Minutes = 5, Kind = "Potion", Potion = "Xp", Amount = 1 },
+		{ Minutes = 10, Kind = "Xp", Amount = 6 },
+		{ Minutes = 15, Kind = "Egg", Amount = 1 },
+		{ Minutes = 20, Kind = "Potion", Potion = "Candy", Amount = 1 },
+		{ Minutes = 30, Kind = "Money", Amount = 14 },
+		{ Minutes = 45, Kind = "Potion", Potion = "Money", Amount = 1 },
+		{ Minutes = 60, Kind = "Egg", Amount = 2 },
+		{ Minutes = 80, Kind = "Candy", Amount = 25 },
+		{ Minutes = 100, Kind = "Potion", Potion = "Hatch", Amount = 2 },
+		{ Minutes = 120, Kind = "Egg", Amount = 3 },
+	},
+}
+
+-- The egg given as a gift: the most common egg of the best house the player can rob.
+function Config.Playtime.EggFor(data: { [string]: any }): string
+	local house = Config.Houses[Config.Quests.Tier(data)]
+	local bestId, bestWeight = "CandyEgg", -1
+	for eggId, weight in house.EggWeights do
+		if weight > bestWeight then
+			bestId, bestWeight = eggId, weight
+		end
+	end
+	return bestId
+end
+
+-- What one gift pays this player right now: { Money, Candy, Xp } amounts, or { Egg = id, Count } or { Potion, Count }.
+function Config.Playtime.Resolve(data: { [string]: any }, reward: { [string]: any }): { [string]: any }
+	if reward.Kind == "Egg" then
+		return { EggId = Config.Playtime.EggFor(data), Count = reward.Amount }
+	elseif reward.Kind == "Potion" then
+		return { Potion = reward.Potion, Count = reward.Amount }
+	end
+	return Config.Quests.Reward(data, reward.Amount, { [reward.Kind] = 1 }, 1)
+end
+
 
 return Config
