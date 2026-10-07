@@ -23,7 +23,7 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Phantom furniture (5.1) | Furniture inside the houses no longer blocks players. |
 | Playtime Rewards and potions (5.1) | Twelve daily gifts for playing time, and timed boost potions (Speed XP, Candy, Money, hatching). |
 | V6 changes | Candy multipliers of the costumes now climb much faster (x2, x4, x7, x12, x20, x35, x60, x100, x170, x300) with costume prices raised to keep the same pace; Pet Capacity gives +2, +2, +1, +1 slots (8, 10, 11, 12); the green signs between levels show the Recommended Level (the Speed Level to bring) and hang over the road; the potion timers at the top of the screen are gone (active potions show in the Rewards window). |
-| Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big pets are drawn 2.5x to 4x bigger and pay x3.5 to x5, Huge 5x to 7x and x7 to x10, Gigantic 10x and x15 (before: fixed x3, x8 and x30). Eggs are drawn half as big as the pet. See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
+| Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big pets are drawn 2.5x to 3.5x bigger and pay the same (x2.5 to x3.5), Huge 4x to 6x and x4 to x6, Gigantic 8x and x16 (before: fixed x3, x8 and x30). Eggs are drawn half as big as the pet. See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
 | Kick (5.0) | A caught thief is kicked about 100 studs away from the owner with a kick sound. `Config.KickDistance`, `KickAngle` and `KickSounds` tune it; the movement anti-cheat ignores the flight. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
@@ -173,15 +173,15 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 | Size | Chance | Pet drawn at (random) | Egg drawn at (half of that) | Money/s multiplier |
 |---|---|---|---|---|
 | Normal | 75.5% | 1x | 1x (0.7 studs scale) | x1 |
-| Big | 20% | 2.5x to 4x (average 3.25x) | 1.25x to 2x | x3.5 to x5 |
-| Huge | 4% | 5x to 7x (average 6x) | 2.5x to 3.5x | x7 to x10 |
-| Gigantic | 0.5% | 10x | 5x | x15 |
+| Big | 20% | 2.5x to 3.5x (average 3x) | 1.25x to 1.75x | x2.5 to x3.5 (same as the size) |
+| Huge | 4% | 4x to 6x (average 5x) | 2x to 3x | x4 to x6 (same as the size) |
+| Gigantic | 0.5% | 8x | 4x | x16 (twice its size) |
 
-**Random sizes (6.1):** when an egg spawns it rolls its tier (Big, Huge, Gigantic or none) and then its own size inside the tier's range, rounded to 0.1 (a Big egg can be 2.5x, 2.6x ... 4x). The pet is drawn exactly that many times bigger than a normal pet, and the egg half as many times bigger than a normal egg (`Config.EggSizeFactor`). The money multiplier follows the size in a straight line between the tier's low and high end: a 2.5x Big pays x3.5, a 3.25x Big pays x4.25 and a 4x Big pays x5. Names show the size: "Big 3.2x Golden Bat". Eggs still carried in the thief's arms are capped at 1.4 (twice a normal egg), and eggs on the incubator pedestals are shrunk to fit under the roof; a 10x pet is about 25 studs tall on a base.
+**Random sizes (6.1):** when an egg spawns it rolls its tier (Big, Huge, Gigantic or none) and then its own size inside the tier's range, rounded to 0.1 (a Big egg can be 2.5x, 2.6x ... 4x). The pet is drawn exactly that many times bigger than a normal pet, and the egg half as many times bigger than a normal egg (`Config.EggSizeFactor`). The money multiplier equals the size for Big and Huge: a 2.5x Big pays x2.5, a 3.2x Big pays x3.2 and a 6x Huge pays x6. Gigantic is the exception: it is always 8x big and pays x16. (`MoneyMin` and `MoneyMax` in `Config.Sizes` set the multiplier at the low and high end of each range.) Names show the size: "Big 3.2x Golden Bat". Eggs still carried in the thief's arms are capped at 1.4 (twice a normal egg), and eggs on the incubator pedestals are shrunk to fit under the roof; an 8x pet is about 20 to 50 studs tall on a base.
 
-**Size platform (6.1):** a platform floats in the void to the right of the map (about 215 to 375 studs from the hub's right edge, at `Config.SizeStage.Center`). It shows the smallest pet (Bat) and the biggest pet (Pumpkin King) in four columns, Normal, Big, Huge, Gigantic, at the middle of each size's range, with labels on the floor that give the size range and the money multiplier, and a 5 stud marker for comparing with a player. It is built when the server starts (`MapBuilder.BuildSizeStage`), so it only shows in play mode and is not saved in the place. It is not connected to the map by a bridge; the Admin panel has a **Sizes** teleport button (next to Hub and Base) that puts you at its front, looking at the pets.
+**Size platform (6.1):** a platform floats in the void to the right of the map (about 40 to 210 studs from the hub's right edge, at `Config.SizeStage.Center`). It shows the smallest pet (Bat) and the biggest pet (Pumpkin King) in four columns, Normal, Big, Huge, Gigantic, at the middle of each size's range, with labels on the floor that give the size range and the money multiplier, and a 5 stud marker for comparing with a player. It is built when the server starts (`MapBuilder.BuildSizeStage`), so it only shows in play mode and is not saved in the place. It is not connected to the map by a bridge; the Admin panel has a **Sizes** teleport button (next to Hub and Base) that puts you at its front, looking at the pets.
 
-Before 6.1 the sizes were fixed (Big x3, Huge x8, Gigantic x30, drawn 1.6x, 2.1x, 2.8x). Old saved pets such as "Bat+Big" keep working with those fixed values. The average money multiplier went from 1.83 to 2.03 (+11%): Big and Huge pay more, Gigantic pays less (x30 became x15).
+Before 6.1 the sizes were fixed (Big x3, Huge x8, Gigantic x30, drawn 1.6x, 2.1x, 2.8x). Old saved pets such as "Bat+Big" keep working with those fixed values. The average money multiplier went from 1.83 to 1.64 (-10%): Big, Huge and Gigantic all pay a bit less than the old fixed x3, x8 and x30 (Gigantic x30 became x16). Prices were not changed, so progress is about 10% slower for an average-luck player.
 
 | Material | Chance | Look | Money/s |
 |---|---|---|---|
@@ -189,7 +189,7 @@ Before 6.1 the sizes were fixed (Big x3, Huge x8, Gigantic x30, drawn 1.6x, 2.1x
 | Diamond | 5% | ice-blue glow | x8 |
 | Rainbow | 1% | glow cycling through every colour | x25 |
 
-Multipliers stack: a Gigantic Rainbow pet earns x375 (a Gigantic Rainbow Pumpkin King would earn $5.6M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big3.2+Golden" (the size token carries the rolled size) and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
+Multipliers stack: a Gigantic Rainbow pet earns x400 (a Gigantic Rainbow Pumpkin King would earn $6M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big3.2+Golden" (the size token carries the rolled size) and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
 
 Because variants raise the average pet income by about 3.4x, every Money price (costumes, trails, base upgrades, Index rewards) was multiplied by 3 so the pacing in 2.11 stays the same for an average-luck player. Lucky players are faster, unlucky ones a little slower.
 
@@ -564,7 +564,7 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 5. **Reading eggs.** With no signs, a new player can't tell a Common egg from a Mythic one. Decide how much help to give: only size, a subtle glow for Legendary and up, or the pet index revealing designs as you discover them (recommended).
 
-6. **Egg design surprise.** *(Done: egg variants, see 2.8.)* Check in play that a Gigantic Rainbow jackpot (x375) feels exciting and does not break the economy, and whether big eggs should also be heavier to carry.
+6. **Egg design surprise.** *(Done: egg variants, see 2.8.)* Check in play that a Gigantic Rainbow jackpot (x400) feels exciting and does not break the economy, and whether big eggs should also be heavier to carry.
 
 7. **Candy after the last costume.** Candy now buys the 10 costumes (about 4 hours for an active player). After the Red Devil it has nothing to buy. Options: speed potions, egg-luck boosts (more variants), costume dyes, extra pet or hatching-pad levels paid in Candy.
 

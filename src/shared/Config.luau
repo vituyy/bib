@@ -274,12 +274,12 @@ Config.Pets = {
 --   Size:     Big, Huge or Gigantic. The egg and the pet grow, and each egg gets its OWN random size inside the
 --             tier's range (Min to Max). The pet is drawn exactly that many times bigger than a normal pet, and
 --             the money multiplier follows the size: Min pays MoneyMin and Max pays MoneyMax, in a straight line
---             between them (Big 2.5x pays x3.5, Big 4x pays x5).
+--             between them (Big 2.5x pays x2.5, Big 3.5x pays x3.5; Gigantic is the exception: 8x size pays x16).
 --   Material: Golden, Diamond or Rainbow. The egg and the pet glow.
 -- Chance is the share of all eggs that get that tier (the rest are normal: 1x). Multipliers stack: a pet's
 -- Money per second = its normal income x Size multiplier x Material multiplier.
 -- A variant pet is stored as "<PetId>+<Size>+<Material>" where the size token carries the rolled size rounded to
--- 0.1, for example "Bat+Big3.2+Golden", "Bat+Huge6+Rainbow" or "Bat+Gigantic10". Old saves use the plain tier
+-- 0.1, for example "Bat+Big3.2+Golden", "Bat+Huge5+Rainbow" or "Bat+Gigantic8". Old saves use the plain tier
 -- ("Bat+Big"), which still works as a fixed legacy size (LegacyMultiplier, Legacy scales).
 -- Config.Pets understands all of these ids, so scripts that look a pet up by id need no changes; use
 -- Config.SplitPet when you need the plain pet id (art, Index).
@@ -287,11 +287,11 @@ Config.Pets = {
 -- How big things are DRAWN. A pet is drawn at its size (a 4x Big pet is 4 times a normal pet). An egg is drawn
 -- at EggSizeFactor of that (half), relative to a normal egg, and a normal egg is drawn at DefaultEggScale.
 Config.DefaultEggScale = 0.7
-Config.EggSizeFactor = 0.5 -- Big 2.5x to 4x -> egg 1.25x to 2x; Huge 5x to 7x -> 2.5x to 3.5x; Gigantic 10x -> 5x
+Config.EggSizeFactor = 0.5 -- Big 2.5x to 3.5x -> egg 1.25x to 1.75x; Huge 4x to 6x -> 2x to 3x; Gigantic 8x -> 4x
 Config.Sizes = {
-	Big = { Name = "Big", Chance = 0.20, Min = 2.5, Max = 4, MoneyMin = 3.5, MoneyMax = 5, LegacyMultiplier = 3, LegacyEggScale = 1.56, LegacyPetScale = 1.6 },
-	Huge = { Name = "Huge", Chance = 0.04, Min = 5, Max = 7, MoneyMin = 7, MoneyMax = 10, LegacyMultiplier = 8, LegacyEggScale = 1.89, LegacyPetScale = 2.1 },
-	Gigantic = { Name = "Gigantic", Chance = 0.005, Min = 10, Max = 10, MoneyMin = 15, MoneyMax = 15, LegacyMultiplier = 30, LegacyEggScale = 2.34, LegacyPetScale = 2.8 },
+	Big = { Name = "Big", Chance = 0.20, Min = 2.5, Max = 3.5, MoneyMin = 2.5, MoneyMax = 3.5, LegacyMultiplier = 3, LegacyEggScale = 1.56, LegacyPetScale = 1.6 },
+	Huge = { Name = "Huge", Chance = 0.04, Min = 4, Max = 6, MoneyMin = 4, MoneyMax = 6, LegacyMultiplier = 8, LegacyEggScale = 1.89, LegacyPetScale = 2.1 },
+	Gigantic = { Name = "Gigantic", Chance = 0.005, Min = 8, Max = 8, MoneyMin = 16, MoneyMax = 16, LegacyMultiplier = 30, LegacyEggScale = 2.34, LegacyPetScale = 2.8 },
 }
 Config.Materials = {
 	Golden = { Name = "Golden", Chance = 0.15, Multiplier = 3, Color = Color3.fromRGB(255, 205, 50) },
