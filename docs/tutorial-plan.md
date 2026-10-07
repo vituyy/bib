@@ -1,6 +1,6 @@
 # Spooky Steal: New Player Tutorial Plan
 
-Version 1, 3 October 2026, for place file **SpookySteal-V5.0**. This plan is written so that two different workers can pick it up:
+Version 1, 3 October 2026, for place file **SpookySteal-V6**. This plan is written so that two different workers can pick it up:
 
 - **Worker A: the code agent** (Claude Code in the repo, no Studio, cannot see the game). It does the logic, data, rules and text.
 - **Worker B: the Studio agent** (an AI or a person who can open the place in Studio, see the screen and playtest). It does everything that has to be looked at: layout, models, effects, sounds, camera feel.
@@ -194,7 +194,7 @@ Only one worker edits the place at a time.
 
 ## 7. Brief for Worker B (paste this)
 
-> You are working on the Roblox game **Spooky Steal** (place file `SpookySteal-V5.0.rbxl`). Read `docs/design-and-plan.md` first (sections 2.10 to 2.13), then `docs/tutorial-plan.md`. A teammate (Claude Code in the repo, who cannot see the game) built the tutorial logic. **Your job is the look and feel of the first-time tutorial and nothing else.**
+> You are working on the Roblox game **Spooky Steal** (place file `SpookySteal-V6.rbxl`). Read `docs/design-and-plan.md` first (sections 2.10 to 2.13), then `docs/tutorial-plan.md`. A teammate (Claude Code in the repo, who cannot see the game) built the tutorial logic. **Your job is the look and feel of the first-time tutorial and nothing else.**
 >
 > 1. Open the place and play as a brand-new player (delete your saved data or use a new test account). Walk through the tutorial and note everything that looks wrong or feels slow.
 > 2. Make the UI in `StarterPlayerScripts.Client.Main` (tracker card, guide bubble, reward popups, skip dialog, graduation screen) look good and readable on a phone, tablet and PC. Match the existing studded white panels with black outlines, cyan boxes and glossy gradient buttons.

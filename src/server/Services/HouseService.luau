@@ -1371,12 +1371,29 @@ end
 
 function HouseService.Start(map: Instance)
 	local street = map:WaitForChild("Street")
-	-- Keep every level's sign in sync with the same speed used by its owner.
-	for index, info in Config.Houses do
-		local marker = street:FindFirstChild("LevelLine" .. index)
+	-- The green signs between levels say which Speed Level to bring. They hang over the road (not over the middle of
+	-- the street, where the level line crosses), so players running along the road see them.
+	local road = street:FindFirstChild("Road")
+	local roadX = if road and road:IsA("Model") then road:GetBoundingBox().Position.X else nil
+	for index in Config.Houses do
+		local marker = street:FindFirstChild("LevelLine" .. index) :: BasePart?
+		local gui = marker and marker:FindFirstChildWhichIsA("BillboardGui")
 		local sign = marker and marker:FindFirstChildWhichIsA("TextLabel", true)
 		if sign then
-			sign.Text = string.format("LEVEL %d  |  Owner speed %d", index, info.OwnerSpeed)
+			sign.Text = "Recommended Level " .. Config.RecommendedLevel(index)
+		end
+		if marker and gui and roadX then
+			local anchor = marker:FindFirstChild("RoadSignAnchor") :: BasePart?
+			if not anchor then
+				anchor = Instance.new("Part")
+				anchor.Name = "RoadSignAnchor"
+				anchor.Size = Vector3.one
+				anchor.Transparency = 1
+				anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.CanTouch = true, false, false, false
+				anchor.Parent = marker
+			end
+			anchor.Position = Vector3.new(roadX, marker.Position.Y, marker.Position.Z)
+			gui.Adornee = anchor
 		end
 	end
 	local line = street:FindFirstChild("LevelLine1") :: BasePart?

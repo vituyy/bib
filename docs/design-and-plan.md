@@ -2,7 +2,7 @@
 
 > The Word version of this document is `docs/Spooky-Steal-Design-and-Plan.docx`. Both files have the same text; update them together.
 
-Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal-V5.0**, built on SpookySteal-House V4.2 / House 4), with the rework of Candy, costumes, treadmills, base upgrades and the first-time tutorial.
+Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal-V6**, built on SpookySteal-House V4.2 / House 4), with the rework of Candy, costumes, treadmills, base upgrades and the first-time tutorial.
 
 ## What changed in this version (since Version 4)
 
@@ -12,7 +12,7 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Costumes | Every costume has a Candy multiplier (the first one is x2, the best x50) and a base Speed XP per second. |
 | Treadmills | A treadmill no longer gives XP by itself. It multiplies the XP rate of the costume you wear (x1 to x21). |
 | Running XP | You earn Speed XP while running anywhere in the game, at your costume's rate. Standing still earns 0. On a treadmill, running in place counts and the treadmill's multiplier applies. |
-| Base upgrades | The one base upgrade is now two separate ones, each with its own sign: **Pet Capacity** (6 to 18 pets) and **Hatching Pads** (2 to 7). Both are bought with Money. |
+| Base upgrades | The one base upgrade is now two separate ones, each with its own sign: **Pet Capacity** (6 to 12 pets) and **Hatching Pads** (2 to 7). Both are bought with Money. |
 | Tutorial | New players spawn in front of the Costume Shop with exactly enough Candy for the cheapest costume. Arrows on the ground and a "Buy a Costume!" message lead them to it. |
 | From V4.2 (the owner's own changes) | Speed grows by the same amount every level (20 at level 0, 170 at level 100); a Custom speed panel lets you run slower; houses 1 to 3 drop only their own "level" eggs and pets; owner speeds were raised for the new speed scale; a DEV03 code. |
 | Speed balance (5.0) | Treadmills are x1, x2, x3, x5, x8, x13, x21; trails x1.5, x2, x3, x4, x5 (5 trails); costume Speed XP per second grows 1, 1.5, 2.5, 4, 7, 12, 20, 35, 60, 100, 170. Speed Levels cost much more XP (20% more per level up to level 30, then 8%, then 4%) so house 3 comes at about 20 min and house 4 at about 35 min. The Zombie Chef now runs at 72 and the Gravedigger at 84 so house 4 is not reachable right after house 3. |
@@ -23,6 +23,7 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Phantom furniture (5.1) | Furniture inside the houses no longer blocks players. |
 | Playtime Rewards and potions (5.1) | Twelve daily gifts for playing time, and timed boost potions (Speed XP, Candy, Money, hatching). |
 | Blood Moon event (5.1) | An hourly 5-minute night with a red sky, better eggs, a Blood variant, angrier owners, an event quest and a countdown on screen. |
+| V6 changes | Candy multipliers of the costumes now climb much faster (x2, x4, x7, x12, x20, x35, x60, x100, x170, x300) with costume prices raised to keep the same pace; Pet Capacity gives +2, +2, +1, +1 slots (8, 10, 11, 12); the green signs between levels show the Recommended Level (the Speed Level to bring) and hang over the road; the potion timers at the top of the screen are gone (active potions show in the Rewards window). |
 | Kick (5.0) | A caught thief is kicked about 100 studs away from the owner with a kick sound. `Config.KickDistance`, `KickAngle` and `KickSounds` tune it; the movement anti-cheat ignores the flight. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
@@ -208,7 +209,7 @@ Because variants raise the average pet income by about 3.4x, every Money price (
 
 **Wandering pets:** pets walk slowly around inside your base, stop now and then to idle, and never leave the base. Money pops up above each pet as it earns. Pets don't block players.
 
-**Equipped and inventory:** your base starts with 6 pet slots; Pet Capacity upgrades raise it to 9, 12, 15 and 18. Up to 60 more pets wait in the inventory. When the base is full, a hatched pet goes straight to the inventory. The Pets menu shows equipped pets on top and the inventory below, stacked by kind (x2, x3) with a search box. Tap a pet to equip, unequip or sell it; **Equip Best** puts your highest-earning pets on the base.
+**Equipped and inventory:** your base starts with 6 pet slots; Pet Capacity upgrades raise it to 8, 10, 11 and 12 (+2, +2, +1, +1). Up to 60 more pets wait in the inventory. When the base is full, a hatched pet goes straight to the inventory. The Pets menu shows equipped pets on top and the inventory below, stacked by kind (x2, x3) with a search box. Tap a pet to equip, unequip or sell it; **Equip Best** puts your highest-earning pets on the base.
 
 **Friend boost:** +10% pet Money for every friend playing in the same server (up to +40% with 4 friends), shown in the bottom-left corner.
 
@@ -216,7 +217,7 @@ Because variants raise the average pet income by about 3.4x, every Money price (
 
 | Upgrade | Starts at | Steps (price, new capacity) | What you see |
 |---|---|---|---|
-| Pet Capacity (pink sign nearest the entrance) | 6 pets | $2K to 9, $30K to 12, $500K to 15, $8M to 18 | The pet courtyard gets 10 studs deeper with every step |
+| Pet Capacity (pink sign nearest the entrance) | 6 pets | $2K to 8, $30K to 10, $500K to 11, $8M to 12 | The pet courtyard gets 10 studs deeper with every step |
 | Hatching Pads (yellow sign beyond it) | 2 pads | $5K to 3, $60K to 4, $700K to 5, $8M to 6, $90M to 7 | More hatching pedestals appear; from the 5th pad the hatchery gets a second row under a longer roof |
 
 Old saves keep what they had: the single base level of Version 4 is converted into the closest Pet Capacity and Hatching Pad levels that take nothing away.
@@ -269,15 +270,15 @@ A new player wears no costume (x1 Candy, 1 XP/s) and starts with 100 Candy, exac
 |---|---|---|---|---|
 | 0 | No Costume | free | x1 | 1 |
 | 1 | Bedsheet Ghost | 100 | x2 | 1.5 |
-| 2 | Pumpkin Head | 400 | x3 | 2.5 |
-| 3 | Witch | 1,500 | x4 | 4 |
-| 4 | Vampire | 6,000 | x6 | 7 |
-| 5 | Glowing Skeleton | 24,000 | x8 | 12 |
-| 6 | Werewolf | 90,000 | x12 | 20 |
-| 7 | Grim Reaper | 300,000 | x16 | 35 |
-| 8 | Mummy | 1,000,000 | x24 | 60 |
-| 9 | Frankenstein | 2,500,000 | x32 | 100 |
-| 10 | Red Devil | 5,000,000 | x50 | 170 |
+| 2 | Pumpkin Head | 400 | x4 | 2.5 |
+| 3 | Witch | 2,000 | x7 | 4 |
+| 4 | Vampire | 10,000 | x12 | 7 |
+| 5 | Glowing Skeleton | 50,000 | x20 | 12 |
+| 6 | Werewolf | 220,000 | x35 | 20 |
+| 7 | Grim Reaper | 880,000 | x60 | 35 |
+| 8 | Mummy | 3,700,000 | x100 | 60 |
+| 9 | Frankenstein | 10,000,000 | x170 | 100 |
+| 10 | Red Devil | 26,000,000 | x300 | 170 |
 
 The shop signs show each costume's Candy multiplier, XP rate and Candy price; the price changes to WEARING or OWNED once you have it.
 

@@ -171,6 +171,7 @@ local function sanitize(data: { [string]: any })
 	data.Playtime = {
 		Day = if isNumber(playtime.Day) then playtime.Day else 0,
 		Seconds = if isNumber(playtime.Seconds) then math.max(0, math.floor(playtime.Seconds)) else 0,
+		Round = if isNumber(playtime.Round) then math.max(1, math.floor(playtime.Round)) else 1, -- how many times today's gifts were all claimed, plus one
 		Claimed = {},
 	}
 	if type(playtime.Claimed) == "table" then
@@ -208,6 +209,11 @@ local function sanitize(data: { [string]: any })
 	end
 	data.Pets = cleanList(data.Pets, petOk)
 	data.Storage = cleanList(data.Storage, petOk)
+	-- The base holds fewer pets than before (+2, +2, +1, +1 per upgrade): the extra pets move to the inventory.
+	local slots = Config.PetSlotsFor(data.PetCapLevel)
+	while #data.Pets > slots and #data.Storage < Config.MaxPetsStored do
+		table.insert(data.Storage, table.remove(data.Pets))
+	end
 	data.Eggs = cleanList(data.Eggs, function(entry)
 		if type(entry) ~= "string" then
 			return nil
@@ -941,7 +947,7 @@ playtimeNewDay = function(data: { [string]: any }): boolean
 	local playtime = data.Playtime
 	local day = Config.Quests.DayKey(os.time())
 	if playtime.Day ~= day then
-		playtime.Day, playtime.Seconds, playtime.Claimed = day, 0, {}
+		playtime.Day, playtime.Seconds, playtime.Claimed, playtime.Round = day, 0, {}, 1
 		return true
 	end
 	return false
@@ -987,6 +993,22 @@ function DataService.ClaimPlaytime(player: Player, index: any): (boolean, string
 		end
 	end)
 	grant(player, resolved)
+	-- Every gift claimed: a new round starts with the clock back at zero and bigger Money, Candy and XP gifts.
+	local allClaimed = true
+	for i in Config.Playtime.Rewards do
+		if not data.Playtime.Claimed[tostring(i)] then
+			allClaimed = false
+			break
+		end
+	end
+	if allClaimed then
+		DataService.Update(player, function(d)
+			d.Playtime.Round = (d.Playtime.Round or 1) + 1
+			d.Playtime.Claimed = {}
+			d.Playtime.Seconds = 0
+		end)
+		return true, "Playtime reward: " .. playtimeText(resolved) .. "  Round " .. data.Playtime.Round .. " starts: bigger gifts!"
+	end
 	return true, "Playtime reward: " .. playtimeText(resolved)
 end
 
@@ -1367,4 +1389,34 @@ function DataService.Start()
 	end)
 end
 
+-- Robux purchases (Developer Products from Config.PotionProducts). Each receipt is granted once: its PurchaseId is
+-- remembered in the player's data, and PurchaseGranted is only returned after that data has been saved.
+function DataService.ProcessReceipt(receipt): Enum.ProductPurchaseDecision
+	local product
+	for _, entry in Config.PotionProducts do
+		if entry.ProductId ~= 0 and entry.ProductId == receipt.ProductId then
+			product = entry
+			break
+		end
+	end
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	local data = player and profiles[player]
+	if not (product and player and data) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	data.Receipts = if type(data.Receipts) == "table" then data.Receipts else {}
+	if not data.Receipts[receipt.PurchaseId] then
+		DataService.Update(player, function(d)
+			d.Potions[product.Potion] = (d.Potions[product.Potion] or 0) + product.Amount
+			d.Receipts[receipt.PurchaseId] = os.time()
+		end)
+		Remotes.Notify:FireClient(player, string.format("Thanks! +%d %s", product.Amount, Config.Potions[product.Potion].Name), "Good")
+	end
+	if store and canSave[player] then
+		if not writeSave(player, deepCopy(data), false) then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+	end
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
 return DataService

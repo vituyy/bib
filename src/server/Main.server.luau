@@ -31,6 +31,7 @@ end)
 
 ShopService.Start(map)
 DataService.Start()
+game:GetService("MarketplaceService").ProcessReceipt = DataService.ProcessReceipt
 CharacterService.Start()
 PlotService.Start(map)
 SpeedService.Start()

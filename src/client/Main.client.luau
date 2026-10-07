@@ -541,7 +541,7 @@ end
 ---------------------------------------------------------------------------
 -- Menus
 ---------------------------------------------------------------------------
-local TITLES = { Rewards = "Rewards", Quests = "Quests", Rebirth = "Rebirth", Index = "Pet Index", Pets = "Pets", Eggs = "Eggs", Store = "Store", Treadmills = "Speed Shop" }
+local TITLES = { Rewards = "Rewards", Potions = "Potions", Quests = "Quests", Rebirth = "Rebirth", Index = "Pet Index", Pets = "Pets", Eggs = "Eggs", Store = "Store", Treadmills = "Speed Shop" }
 local ICONS = {
 	Rebirth = "rbxassetid://134156079401542",
 	Index = "rbxassetid://120727874564424",
@@ -1466,24 +1466,111 @@ function QR.giftLabel(d, reward): (string, string)
 	return "+" .. formatNumber(resolved.Xp or 0) .. " XP", "⚡"
 end
 
+-- Glossy icons in the same style as the Money / Candy HUD, and a tile colour for each kind of gift.
+QR.GIFT_ICONS = { Money = "rbxassetid://75082286323919", Candy = "rbxassetid://87026500785235", Xp = "rbxassetid://73937136050455", Egg = "rbxassetid://126163045923521" }
+QR.POTION_ICONS = {
+	Xp = "rbxassetid://118551182065848",
+	Candy = "rbxassetid://139782645048834",
+	Money = "rbxassetid://124123062976561",
+	Hatch = "rbxassetid://115553653261371",
+}
+QR.LOCK = "rbxassetid://116171143100263"
+QR.CHECK = "rbxassetid://94577908904911"
+QR.CANDY_CORN = "rbxassetid://97700810998634"
+QR.GIFT_TINT = {
+	Money = Color3.fromRGB(255, 176, 30),
+	Candy = Color3.fromRGB(255, 95, 175),
+	Xp = Color3.fromRGB(70, 185, 255),
+	Egg = Color3.fromRGB(150, 90, 235),
+}
+
+-- One gift tile, in the style of the Halloween concept: a studded tile in the gift's colour, the name in white
+-- outlined letters, a big glossy prize floating over glowing light rays, and a dark pill at the bottom.
+-- Locked: padlock + live countdown (the pill fills up as the time gets closer). Ready: the tile turns gold,
+-- sparkles twinkle, a shine sweeps across, it pulses and shows CLAIM!. Claimed: a big green check.
+-- The last gift is the MEGA prize with a rainbow frame.
+QR.GLOW = "rbxassetid://86140178508751"
+QR.RAYS = "rbxassetid://96566829321081"
+QR.SPARK = "rbxassetid://125848556656404"
 function QR.giftCard(grid: Instance, index: number, d, reward)
 	local claimed = d.Playtime.Claimed[tostring(index)] == true
 	local need = reward.Minutes * 60
 	local ready = not claimed and QR.played() >= need
-	local card = box({ LayoutOrder = index, Parent = grid }, if claimed then PAINT.Grey elseif ready then PAINT.Green else PAINT.Orange)
-	studs(card, 18, 12, WHITE, 0.75)
-	local text, icon = QR.giftLabel(d, reward)
-	outlined({ Size = UDim2.new(1, -12, 0, 24), Position = UDim2.fromOffset(6, 5), Text = text, TextColor3 = QR.GOLD, ZIndex = 3, Parent = card }, 2)
-	outlined({ Size = UDim2.new(1, -20, 0, 54), Position = UDim2.fromOffset(10, 30), Text = icon, ZIndex = 3, Parent = card }, 0)
+	local resolved = Config.Playtime.Resolve(d, reward)
+	local tint = if ready then Color3.fromRGB(255, 190, 30) elseif resolved.Potion then Config.Potions[resolved.Potion].Color else QR.GIFT_TINT[reward.Kind] or QR.GIFT_TINT.Money
+	local mega = index == #Config.Playtime.Rewards
+	local card = box({ LayoutOrder = index, Parent = grid }, { tint:Lerp(WHITE, 0.2), tint:Lerp(BLACK, 0.35) })
+	local stroke = card:FindFirstChildOfClass("UIStroke") :: UIStroke
+	stroke.Thickness = 4
+	studs(card, 18, 12, WHITE, 0.8)
+
+	local text = QR.giftLabel(d, reward)
+	outlined({ Size = UDim2.new(1, -14, 0, 26), Position = UDim2.fromOffset(7, 6), Text = text, ZIndex = 6, Parent = card }, 3)
+
+	-- The prize over glowing rays.
+	local stage = new("Frame", { Size = UDim2.new(1, -8, 1, -82), Position = UDim2.fromOffset(4, 32), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 3, Parent = card })
+	local rays = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1.7, 1.7), BackgroundTransparency = 1, Image = QR.RAYS, ImageColor3 = tint:Lerp(WHITE, 0.55), ImageTransparency = if ready then 0.2 elseif claimed then 0.9 else 0.6, ZIndex = 3, Parent = stage }, { new("UIAspectRatioConstraint", {}) })
+	new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Size = UDim2.fromScale(1.15, 1.15), BackgroundTransparency = 1, Image = QR.GLOW, ImageColor3 = tint:Lerp(WHITE, 0.5), ImageTransparency = if claimed then 0.8 elseif ready then 0 else 0.25, ZIndex = 3, Parent = stage }, { new("UIAspectRatioConstraint", {}) })
+	TweenService:Create(rays, TweenInfo.new(if ready then 6 else 16, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 }):Play()
+	local image = if resolved.Potion then QR.POTION_ICONS[resolved.Potion] elseif resolved.EggId then QR.GIFT_ICONS.Egg else QR.GIFT_ICONS[reward.Kind]
+	local picture = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.92, 0.92), Position = UDim2.fromScale(0.5, 0.52), BackgroundTransparency = 1, Image = image or "", ScaleType = Enum.ScaleType.Fit, ImageTransparency = if claimed then 0.35 else 0, ZIndex = 4, Parent = stage })
+	if not claimed then -- the prize floats up and down
+		TweenService:Create(picture, TweenInfo.new(if ready then 0.55 else 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Position = UDim2.fromScale(0.5, 0.45) }):Play()
+	end
+	if resolved.Count and resolved.Count > 1 then
+		outlined({ AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(46, 28), Position = UDim2.new(1, -6, 1, -2), Text = "x" .. resolved.Count, TextColor3 = QR.GOLD, ZIndex = 6, Parent = stage }, 2.5)
+	end
+	if mega then
+		outlined({ AnchorPoint = Vector2.new(0, 1), Size = UDim2.fromOffset(40, 34), Position = UDim2.new(0, 2, 1, -2), Text = "👑", ZIndex = 6, Parent = stage }, 0)
+		task.spawn(function() -- rainbow frame
+			local hue = 0
+			while card.Parent do
+				hue = (hue + 0.02) % 1
+				stroke.Color = Color3.fromHSV(hue, 0.85, 1)
+				task.wait(0.05)
+			end
+		end)
+		stroke.Thickness = 5
+	end
+
+	-- The dark pill at the bottom.
+	local function pill(): Frame
+		return new("Frame", { Size = UDim2.new(1, -16, 0, 36), Position = UDim2.new(0, 8, 1, -44), BackgroundColor3 = Color3.fromRGB(28, 22, 38), BackgroundTransparency = 0.1, ClipsDescendants = true, ZIndex = 5, Parent = card }, {
+			new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+			new("UIStroke", { Color = BLACK, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+	end
 	if claimed then
-		outlined({ Size = UDim2.new(1, -20, 0, 28), Position = UDim2.new(0, 10, 1, -36), Text = "✓ Claimed", ZIndex = 3, Parent = card }, 2)
+		new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.62, 0.62), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1, Image = QR.CHECK, ScaleType = Enum.ScaleType.Fit, ZIndex = 7, Parent = stage })
+		local p = pill()
+		outlined({ Size = UDim2.new(1, -16, 1, -10), Position = UDim2.fromOffset(8, 5), Text = "Claimed", TextColor3 = Color3.fromRGB(190, 185, 200), ZIndex = 6, Parent = p }, 2)
 	elseif ready then
-		chunkyButton({ Size = UDim2.new(1, -20, 0, 32), Position = UDim2.new(0, 10, 1, -40), Text = "CLAIM", ZIndex = 3, Parent = card }, PAINT.Green, function()
+		chunkyButton({ Size = UDim2.new(1, -16, 0, 42), Position = UDim2.new(0, 8, 1, -48), Text = "CLAIM!", ZIndex = 6, Parent = card }, PAINT.Green, function()
 			request("ClaimPlaytime", index)
 			sfx("Fanfare")
 		end)
+		if not mega then
+			stroke.Color = Color3.fromRGB(255, 240, 120)
+			stroke.Thickness = 5
+			TweenService:Create(stroke, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Color = Color3.fromRGB(255, 140, 20) }):Play()
+		end
+		TweenService:Create(new("UIScale", { Parent = card }), TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.05 }):Play()
+		local shine = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.3, 2), Position = UDim2.fromScale(-0.4, 0.5), Rotation = 20, BackgroundColor3 = WHITE, ZIndex = 5, Parent = stage }, {
+			new("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.3), NumberSequenceKeypoint.new(1, 1) }) }),
+		})
+		TweenService:Create(shine, TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, false, 0.9), { Position = UDim2.fromScale(1.4, 0.5) }):Play()
+		for i, spot in { Vector2.new(0.15, 0.2), Vector2.new(0.85, 0.28), Vector2.new(0.8, 0.85), Vector2.new(0.2, 0.8) } do
+			local spark = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(spot.X, spot.Y), Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1, Image = QR.SPARK, ImageColor3 = Color3.fromRGB(255, 255, 220), ImageTransparency = 1, ZIndex = 6, Parent = stage })
+			TweenService:Create(spark, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, 0.15 * i), { ImageTransparency = 0, Size = UDim2.fromOffset(26, 26), Rotation = 90 }):Play()
+		end
 	else
-		local label = outlined({ Size = UDim2.new(1, -20, 0, 30), Position = UDim2.new(0, 10, 1, -38), Text = QR.mmss(need - QR.played()), ZIndex = 3, Parent = card }, 2.5)
+		local p = pill()
+		local fill = new("Frame", { Size = UDim2.fromScale(math.clamp(QR.played() / math.max(need, 1), 0, 1), 1), BackgroundColor3 = tint, BackgroundTransparency = 0.45, ZIndex = 5, Parent = p }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		new("ImageLabel", { Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(2, 1), BackgroundTransparency = 1, Image = QR.LOCK, ScaleType = Enum.ScaleType.Fit, ZIndex = 7, Parent = p })
+		local label = outlined({ Size = UDim2.new(1, -46, 1, -10), Position = UDim2.fromOffset(38, 5), Text = QR.mmss(need - QR.played()), ZIndex = 7, Parent = p }, 2.5)
+		label:GetPropertyChangedSignal("Text"):Connect(function()
+			fill.Size = UDim2.fromScale(math.clamp(QR.played() / math.max(need, 1), 0, 1), 1)
+		end)
 		table.insert(QR.Timers, { Label = label, Need = need })
 	end
 end
@@ -1513,19 +1600,174 @@ function menus.Rewards(d)
 	table.clear(QR.PotionTimers)
 	QR.Seconds, QR.At = d.Playtime.Seconds, os.clock()
 	local now = workspace:GetServerTimeNow()
-	header(0, "🎁 Playtime Rewards   ⏰ reset in " .. QR.timeLeft(Config.Quests.SecondsToDaily(now)), ORANGE)
-	local note = new("Frame", { Size = UDim2.new(1, -8, 0, 22), BackgroundTransparency = 1, LayoutOrder = 1, Parent = list })
-	outlined({ Size = UDim2.new(1, -8, 1, 0), Position = UDim2.fromOffset(4, 0), Text = string.format("Played today: %s   (counts while you move or use menus)", QR.mmss(QR.played())), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(70, 70, 100), Parent = note }, 0)
+	-- Top: the candy-corn progress bar toward the next gift (dots mark every gift of the day), with the countdown,
+	-- a CLAIM ALL button when several gifts are waiting, and a small line with today's time and the reset.
+	local rewards = Config.Playtime.Rewards
+	local readyList, nextNeed = {}, nil
+	for index, reward in rewards do
+		local done = d.Playtime.Claimed[tostring(index)] == true
+		if not done and QR.played() >= reward.Minutes * 60 then
+			table.insert(readyList, index)
+		elseif not done and not nextNeed then
+			nextNeed = reward.Minutes * 60
+		end
+	end
+	local top = new("Frame", { Size = UDim2.new(1, -8, 0, 56), BackgroundTransparency = 1, LayoutOrder = 0, Parent = list })
+	local lastMinutes = rewards[#rewards].Minutes * 60
+	local roundPill = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(104, 40), Position = UDim2.new(1, -218, 0, 7), BackgroundColor3 = Color3.fromRGB(28, 22, 38), ZIndex = 3, Parent = top }, {
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		border(3),
+	})
+	outlined({ Size = UDim2.new(1, -14, 1, -12), Position = UDim2.fromOffset(7, 6), Text = "Round " .. (d.Playtime.Round or 1), TextColor3 = Color3.fromRGB(255, 225, 60), ZIndex = 4, Parent = roundPill }, 2.5)
+	local bar = new("Frame", { Size = UDim2.new(1, -336, 0, 34), Position = UDim2.fromOffset(6, 10), BackgroundColor3 = Color3.fromRGB(28, 22, 38), ZIndex = 3, Parent = top }, {
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		border(3),
+	})
+	local fill = new("Frame", { Size = UDim2.fromScale(math.clamp(QR.played() / lastMinutes, 0.04, 1), 1), BackgroundColor3 = WHITE, ZIndex = 3, Parent = bar }, {
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 200, 60), Color3.fromRGB(255, 120, 20)) }),
+	})
+	shine(fill)
+	for index, reward in rewards do
+		local done = d.Playtime.Claimed[tostring(index)] == true
+		local isReady = not done and QR.played() >= reward.Minutes * 60
+		if reward.Minutes > 0 then
+			local dot = new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Size = UDim2.fromOffset(12, 12),
+				Position = UDim2.fromScale(reward.Minutes * 60 / lastMinutes, 0.5),
+				BackgroundColor3 = if done then Color3.fromRGB(110, 230, 110) elseif isReady then WHITE else Color3.fromRGB(90, 75, 120),
+				ZIndex = 4,
+				Parent = bar,
+			}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), border(2) })
+			if isReady then
+				TweenService:Create(new("UIScale", { Parent = dot }), TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.5 }):Play()
+			end
+		end
+	end
+	if #readyList >= 2 then
+		local claimAll = chunkyButton({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(200, 46), Position = UDim2.new(1, -4, 0, 4), Text = "CLAIM ALL (" .. #readyList .. ")", ZIndex = 3, Parent = top }, PAINT.Green, function()
+			for _, index in readyList do
+				request("ClaimPlaytime", index)
+			end
+			sfx("Fanfare")
+		end)
+		TweenService:Create(new("UIScale", { Parent = claimAll }), TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.07 }):Play()
+	else
+		local pillFrame = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(204, 40), Position = UDim2.new(1, -4, 0, 7), BackgroundColor3 = Color3.fromRGB(28, 22, 38), ZIndex = 3, Parent = top }, {
+			new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+			border(3),
+		})
+		if nextNeed then
+			outlined({ Size = UDim2.new(0.55, -8, 1, -14), Position = UDim2.fromOffset(12, 7), Text = "Next gift in", TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4, Parent = pillFrame }, 2)
+			local nextLabel = outlined({ Size = UDim2.new(0.45, -12, 1, -10), Position = UDim2.new(0.55, 0, 0, 5), Text = QR.mmss(nextNeed - QR.played()), TextColor3 = Color3.fromRGB(255, 225, 60), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = pillFrame }, 2.5)
+			table.insert(QR.Timers, { Label = nextLabel, Need = nextNeed })
+		else
+			outlined({ Size = UDim2.new(1, -20, 1, -14), Position = UDim2.fromOffset(10, 7), Text = "All gifts claimed! 🎉", TextColor3 = Color3.fromRGB(150, 255, 150), ZIndex = 4, Parent = pillFrame }, 2)
+		end
+	end
 	local grid = new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2, Parent = list }, {
-		new("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 124), CellPadding = UDim2.fromOffset(8, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
-		new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
+		new("UIGridLayout", { CellSize = UDim2.new(0.25, -14, 0, 190), CellPadding = UDim2.fromOffset(14, 16), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+		new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
 	})
 	for index, reward in Config.Playtime.Rewards do
 		QR.giftCard(grid, index, d, reward)
 	end
-	header(3, "🧪 Potions   (win them above, drink them here)", Color3.fromRGB(200, 150, 255))
+	local round = d.Playtime.Round or 1
+	local roundLabel = panel:FindFirstChild("RoundLabel", true)
+	if roundLabel then
+		roundLabel.Text = "ROUND " .. round
+	end
+end
+
+-- Potions you own, in their own window (opened with the Potions button). Drink one to start its boost.
+function QR.potionCount(d): number
+	local total = 0
+	for _, kind in Config.PotionOrder do
+		total += (d.Potions and d.Potions[kind]) or 0
+	end
+	return total
+end
+
+-- A centred section title with a faint line on each side, like "My Potions" / "Buy Potions".
+function QR.sectionHeading(order: number, text: string)
+	local f = new("Frame", { Size = UDim2.new(1, -8, 0, 40), BackgroundTransparency = 1, LayoutOrder = order, Parent = list })
+	for _, side in { 0, 1 } do
+		new("Frame", { AnchorPoint = Vector2.new(side, 0.5), Size = UDim2.new(0.3, 0, 0, 3), Position = UDim2.fromScale(side, 0.5), BackgroundColor3 = WHITE, BackgroundTransparency = 0.8, BorderSizePixel = 0, Parent = f }, {
+			new("UIGradient", { Transparency = NumberSequence.new(if side == 0 then 1 else 0, if side == 0 then 0 else 1) }),
+		})
+	end
+	outlined({ AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0.4, 0, 0, 32), Position = UDim2.fromScale(0.5, 0.5), Text = text, Parent = f }, 3)
+end
+
+-- Potions window: your potions as big icons with a count (click one to drink it), then the Robux shop.
+function menus.Potions(d)
+	table.clear(QR.PotionTimers)
+	QR.sectionHeading(0, "My Potions")
+	local grid = new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 1, Parent = list }, {
+		new("UIGridLayout", { CellSize = UDim2.new(0.25, -12, 0, 140), CellPadding = UDim2.fromOffset(12, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
 	for order, kind in Config.PotionOrder do
-		QR.potionRow(3 + order, d, kind)
+		local potion = Config.Potions[kind]
+		local owned = (d.Potions and d.Potions[kind]) or 0
+		local has = owned > 0
+		local tile = new("TextButton", { Text = "", BackgroundTransparency = 1, AutoButtonColor = false, LayoutOrder = order, Parent = grid })
+		local blue = if has then Color3.fromRGB(40, 150, 255) else Color3.fromRGB(110, 110, 125)
+		-- soft paint blob and a few dots behind the bottle
+		new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(1.05, 1.05), Position = UDim2.fromScale(0.5, 0.55), BackgroundTransparency = 1, Image = QR.GLOW, ImageColor3 = blue, ZIndex = 1, Parent = tile }, { new("UIAspectRatioConstraint", {}) })
+		new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.62, 0.62), Position = UDim2.fromScale(0.5, 0.56), BackgroundColor3 = blue, BackgroundTransparency = 0.15, ZIndex = 1, Parent = tile }, { new("UICorner", { CornerRadius = UDim.new(0.45, 0) }), new("UIAspectRatioConstraint", {}) })
+		for _, dot in { { 0.08, 0.6, 8 }, { 0.92, 0.5, 7 }, { 0.84, 0.86, 10 }, { 0.18, 0.88, 6 } } do
+			new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(dot[3], dot[3]), Position = UDim2.fromScale(dot[1], dot[2]), BackgroundColor3 = blue, ZIndex = 1, Parent = tile }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		end
+		local icon = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.86, 0.86), Position = UDim2.fromScale(0.5, 0.55), BackgroundTransparency = 1, Image = QR.POTION_ICONS[kind] or "", ScaleType = Enum.ScaleType.Fit, ImageColor3 = if has then WHITE else Color3.fromRGB(130, 130, 140), ImageTransparency = if has then 0 else 0.25, ZIndex = 2, Parent = tile }, { new("UIAspectRatioConstraint", {}) })
+		outlined({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(64, 40), Position = UDim2.new(1, 2, 0, 0), Text = "x" .. owned, TextColor3 = if has then WHITE else Color3.fromRGB(190, 190, 200), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = tile }, 3.5)
+		-- tooltip
+		local tip = new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.new(1.6, 0, 0, 44), Position = UDim2.new(0.5, 0, 0, 4), BackgroundColor3 = Color3.fromRGB(20, 18, 30), Visible = false, ZIndex = 20, Parent = tile }, {
+			corner(8),
+			new("UIStroke", { Color = BLACK, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+		outlined({ Size = UDim2.new(1, -12, 0, 20), Position = UDim2.fromOffset(6, 3), Text = potion.Name, TextColor3 = potion.Color, ZIndex = 21, Parent = tip }, 2)
+		outlined({ Size = UDim2.new(1, -12, 0, 16), Position = UDim2.fromOffset(6, 24), Text = potion.Text .. " for " .. math.floor(potion.Seconds / 60) .. " min" .. (if has then "  • click to drink" else ""), ZIndex = 21, Parent = tip }, 1.5)
+		tile.MouseEnter:Connect(function() tip.Visible = true end)
+		tile.MouseLeave:Connect(function() tip.Visible = false end)
+		bounce(tile)
+		tile.Activated:Connect(function()
+			if has then
+				request("DrinkPotion", kind)
+			else
+				tip.Visible = true
+				toast("You have no " .. potion.Name .. ". Win more or buy some below!", ORANGE)
+			end
+		end)
+		local _ = icon
+	end
+
+	QR.sectionHeading(2, "Buy Potions")
+	local shop = new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 3, Parent = list }, {
+		new("UIGridLayout", { CellSize = UDim2.new(0.25, -12, 0, 196), CellPadding = UDim2.fromOffset(12, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+		new("UIPadding", { PaddingBottom = UDim.new(0, 10) }),
+	})
+	local MarketplaceService = game:GetService("MarketplaceService")
+	for order, kind in Config.PotionOrder do
+		local potion = Config.Potions[kind]
+		local card = box({ LayoutOrder = order, Parent = shop }, { potion.Color:Lerp(Color3.fromRGB(40, 30, 70), 0.55), Color3.fromRGB(28, 22, 46) })
+		;(card:FindFirstChildOfClass("UIStroke") :: UIStroke).Thickness = 3.5
+		new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(74, 74), Position = UDim2.new(0.5, 0, 0, 6), BackgroundTransparency = 1, Image = QR.POTION_ICONS[kind] or "", ScaleType = Enum.ScaleType.Fit, ZIndex = 3, Parent = card })
+		outlined({ Size = UDim2.new(1, -12, 0, 22), Position = UDim2.fromOffset(6, 82), Text = potion.Name, ZIndex = 3, Parent = card }, 2)
+		local y = 110
+		for _, product in Config.PotionProducts do
+			if product.Potion == kind then
+				local soon = product.ProductId == 0
+				chunkyButton({ Size = UDim2.new(1, -16, 0, 36), Position = UDim2.fromOffset(8, y), Text = (if product.Amount > 1 then "x" .. product.Amount .. "  " else "x1  ") .. (if soon then "Soon" else "\u{E002}" .. product.Robux), ZIndex = 3, Parent = card }, if soon then PAINT.Grey else PAINT.Green, function()
+					if soon then
+						toast("Potion packs open soon!", ORANGE)
+					else
+						MarketplaceService:PromptProductPurchase(player, product.ProductId)
+					end
+				end)
+				y += 42
+			end
+		end
 	end
 end
 
@@ -1799,6 +2041,174 @@ function menus.Treadmills(d)
 	end
 end
 
+-- The Rewards and Potions windows get their own look: a dark panel with a glossy header bar across the top (cyan
+-- for Rewards, purple for Potions): faint studs, diagonal light streaks, a thick navy outline, a big icon hanging
+-- over its left edge, the title in white outlined letters, and a square red X. Every other menu keeps the white panel.
+local panelGradient = panel:FindFirstChildOfClass("UIGradient") :: UIGradient
+local panelSizeLimit = panel:FindFirstChildOfClass("UISizeConstraint") :: UISizeConstraint
+local panelStroke = panel:FindFirstChildOfClass("UIStroke") :: UIStroke
+local panelCorner = panel:FindFirstChildOfClass("UICorner") :: UICorner
+local listHome = { Size = list.Size, Position = list.Position }
+local closeHome = { Position = closeButton.Position, Size = closeButton.Size, ZIndex = closeButton.ZIndex }
+local NAVY = Color3.fromRGB(14, 22, 52)
+local HEADERS = {
+	Rewards = { Title = "Playtime Rewards", Icon = "rbxassetid://115753816614274", Top = Color3.fromRGB(111, 211, 255), Bottom = Color3.fromRGB(44, 159, 234), Rim = Color3.fromRGB(168, 236, 255) },
+	Potions = { Title = "Potions", Icon = "rbxassetid://75316663864314", Top = Color3.fromRGB(196, 140, 255), Bottom = Color3.fromRGB(128, 60, 222), Rim = Color3.fromRGB(228, 200, 255) },
+}
+local function themePanel(name: string)
+	local style = HEADERS[name]
+	local styled = style ~= nil
+	local big = name == "Rewards"
+	local BAR = 76
+	panelGradient.Color = if styled then ColorSequence.new(Color3.fromRGB(44, 40, 66), Color3.fromRGB(22, 20, 36)) else ColorSequence.new(PAINT.Panel[1], PAINT.Panel[2])
+	panelStroke.Color = if styled then Color3.fromRGB(10, 10, 14) else BLACK
+	panelStroke.Thickness = if styled then 5 else 4
+	panelCorner.CornerRadius = UDim.new(0, if styled then 8 else 22)
+	panelSizeLimit.MaxSize = if big then Vector2.new(920, 660) elseif styled then Vector2.new(760, 640) else Vector2.new(620, 470)
+	panel.Size = if big then UDim2.fromScale(0.8, 0.88) elseif styled then UDim2.fromScale(0.7, 0.88) else UDim2.fromScale(0.62, 0.76)
+	panelTitle.Visible = not styled
+	if styled then
+		panelIcon.Visible = false
+	end
+	local studLayer = panel:FindFirstChild("Studs")
+	if studLayer and studLayer:IsA("GuiObject") then
+		studLayer.Visible = not styled
+	end
+	list.Size = if styled then UDim2.new(1, -28, 1, -(BAR + 24)) else listHome.Size
+	list.Position = if styled then UDim2.fromOffset(14, BAR + 12) else listHome.Position
+	-- Square magenta X: ~72% of the bar, 12px in from the right, centred.
+	local xSize = math.floor(BAR * 0.72)
+	closeButton.AnchorPoint = if styled then Vector2.new(1, 0.5) else Vector2.new(0.5, 0.5)
+	closeButton.Position = if styled then UDim2.new(1, -12, 0, BAR / 2) else closeHome.Position
+	closeButton.Size = if styled then UDim2.fromOffset(xSize, xSize) else closeHome.Size
+	closeButton.ZIndex = if styled then 9 else closeHome.ZIndex
+	closeButton.TextTransparency = if styled then 1 else 0
+	local closeStroke = closeButton:FindFirstChildOfClass("UIStroke")
+	if closeStroke then
+		closeStroke.Enabled = not styled
+	end
+	local roundArt = closeButton:FindFirstChild("SpookyClose")
+	if roundArt then
+		roundArt.Visible = false
+	end
+	local old = closeButton:FindFirstChild("SquareClose")
+	if old and not old:GetAttribute("V2") then
+		old:Destroy()
+		old = nil
+	end
+	local square = old
+	if not square then
+		square = new("Frame", { Name = "SquareClose", Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, ZIndex = 9, Parent = closeButton }, {
+			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(240, 30, 92), Color3.fromRGB(196, 8, 60)) }),
+			new("UIStroke", { Color = Color3.fromRGB(10, 10, 14), Thickness = 4, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+		square:SetAttribute("V2", true)
+		new("Frame", { Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3), BackgroundTransparency = 1, ZIndex = 9, Parent = square }, {
+			new("UICorner", { CornerRadius = UDim.new(0, 3) }),
+			new("UIStroke", { Color = Color3.fromRGB(255, 140, 180), Thickness = 2 }),
+		})
+		outlined({ Size = UDim2.new(1, -14, 1, -14), Position = UDim2.fromOffset(7, 6), Text = "X", ZIndex = 10, Parent = square }, 3.5)
+	end
+	square.Visible = styled
+	closeButton.AnchorPoint = if styled then Vector2.new(1, 0.5) else closeButton.AnchorPoint
+	local oldDeco = panel:FindFirstChild("SpookyDeco")
+	if oldDeco then
+		if oldDeco:GetAttribute("Menu") == name and oldDeco:GetAttribute("V2") then
+			return
+		end
+		oldDeco:Destroy()
+	end
+	if not styled then
+		closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
+		return
+	end
+	local deco = new("Folder", { Name = "SpookyDeco", Parent = panel })
+	deco:SetAttribute("Menu", name)
+	deco:SetAttribute("V2", true)
+	-- Bar: black outline, thin light inner rim, sky-to-azure gradient, lighter glossy top band.
+	local bar = new("Frame", { Name = "Header", Size = UDim2.new(1, 0, 0, BAR), BackgroundColor3 = WHITE, ClipsDescendants = true, ZIndex = 5, Parent = deco }, {
+		new("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(style.Top, style.Bottom) }),
+		new("UIStroke", { Color = Color3.fromRGB(10, 10, 14), Thickness = 6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	})
+	new("Frame", { Size = UDim2.new(1, -4, 1, -4), Position = UDim2.fromOffset(2, 2), BackgroundTransparency = 1, ZIndex = 7, Parent = bar }, {
+		new("UICorner", { CornerRadius = UDim.new(0, 6) }),
+		new("UIStroke", { Color = style.Rim, Thickness = 2 }),
+	})
+	new("Frame", { Size = UDim2.new(1, 0, 0.36, 0), BackgroundColor3 = WHITE, BackgroundTransparency = 0.82, BorderSizePixel = 0, ZIndex = 5, Parent = bar })
+	-- Studs: faint rounded squares that fade in from left to right (invisible on the left third).
+	for col = 0, 41 do
+		local x = (col + 0.5) / 42
+		local fade = math.clamp((x - 0.33) / 0.67, 0, 1)
+		if fade > 0 then
+			for row = 0, 2 do
+				new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(x, 0, 0, 15 + row * 23), Size = UDim2.fromOffset(15, 15), BackgroundTransparency = 1, ZIndex = 5, Parent = bar }, {
+					new("UICorner", { CornerRadius = UDim.new(0, 4) }),
+					new("UIStroke", { Color = style.Rim, Transparency = 1 - 0.45 * fade, Thickness = 1.5 }),
+				})
+			end
+		end
+	end
+	-- Two wide, very faint diagonal light bands across the middle-right.
+	for _, s in { { 0.56, 90 }, { 0.7, 40 } } do
+		new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(s[2], 260), Position = UDim2.fromScale(s[1], 0.5), Rotation = 45, BackgroundColor3 = WHITE, BackgroundTransparency = 0.86, BorderSizePixel = 0, ZIndex = 6, Parent = bar })
+	end
+	-- Icon ~1.2x the bar, poking out left and above; title next to it.
+	local icon = math.floor(BAR * 1.3)
+	new("ImageLabel", { Size = UDim2.fromOffset(icon, icon), Position = UDim2.fromOffset(-10, BAR - icon + 4), BackgroundTransparency = 1, Image = style.Icon, ScaleType = Enum.ScaleType.Fit, ZIndex = 8, Parent = deco })
+	local titleX = icon - 10 + math.floor(icon * 0.3)
+	outlined({ AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.new(1, -(titleX + xSize + 40), 0, math.floor(BAR * 0.62)), Position = UDim2.new(0, titleX, 0, BAR / 2), Text = style.Title, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 8, Parent = deco }, 4)
+end
+
+-- Active potions on the HUD: each running boost shows its potion with a big countdown under it (h:mm:ss over an
+-- hour), in a row in the bottom-right corner of the screen. A potion disappears when its boost runs out.
+local boostRow = new("Frame", {
+	Name = "BoostTimers",
+	AnchorPoint = Vector2.new(1, 1),
+	Size = UDim2.fromOffset(400, 78),
+	Position = UDim2.new(1, -16, 1, -54), -- just above the (admin-only) ADMIN button
+	BackgroundTransparency = 1,
+	Parent = gui,
+}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Bottom, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
+local boostSlots = {}
+local function boostClock(seconds: number): string
+	seconds = math.max(0, math.ceil(seconds))
+	if seconds >= 3600 then
+		return string.format("%d:%02d:%02d", seconds // 3600, (seconds // 60) % 60, seconds % 60)
+	end
+	return string.format("%d:%02d", seconds // 60, seconds % 60)
+end
+task.spawn(function()
+	while true do
+		local d = data
+		for order, kind in Config.PotionOrder do
+			local left = if d and d.Boosts then math.max(0, (d.Boosts[kind] or 0) - workspace:GetServerTimeNow()) else 0
+			local slot = boostSlots[kind]
+			if left > 0 and not slot then
+				local holder = new("Frame", { Size = UDim2.fromOffset(if left >= 3600 then 92 else 70, 76), BackgroundTransparency = 1, LayoutOrder = order, Parent = boostRow })
+				new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(60, 60), Position = UDim2.fromScale(0.5, 0), BackgroundTransparency = 1, Image = QR.POTION_ICONS[kind] or "", ScaleType = Enum.ScaleType.Fit, Parent = holder })
+				local label = outlined({ AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.new(1, 8, 0, 30), Position = UDim2.new(0.5, 0, 1, 0), Text = "", ZIndex = 2, Parent = holder }, 3)
+				local scale = new("UIScale", { Scale = 0.5, Parent = holder })
+				TweenService:Create(scale, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+				slot = { Holder = holder, Label = label }
+				boostSlots[kind] = slot
+			end
+			if slot then
+				if left <= 0 then
+					slot.Holder:Destroy()
+					boostSlots[kind] = nil
+				else
+					slot.Label.Text = boostClock(left)
+					slot.Holder.Size = UDim2.fromOffset(if left >= 3600 then 92 else 70, 76)
+					slot.Label.TextColor3 = if left <= 30 then Color3.fromRGB(255, 120, 120) else WHITE
+				end
+			end
+		end
+		task.wait(0.25)
+	end
+end)
+
 renderMenu = function()
 	if not (openMenu and data) then
 		return
@@ -1823,6 +2233,7 @@ renderMenu = function()
 		panelIcon.Visible = icon ~= nil
 		panelTitle.Position = UDim2.fromOffset(if icon then 58 else 16, -30)
 		panelTitle.Text = TITLES[openMenu] or openMenu
+		themePanel(openMenu)
 	end
 	menus[openMenu](data)
 	target.CanvasPosition = scroll
@@ -1842,7 +2253,7 @@ local function menuKey(d)
 		table.concat(d.Discovered or {}, ","), table.concat(d.IndexClaimed or {}, ","), d.PetCapLevel, d.PadLevel,
 		if openMenu == "Treadmills" then math.floor(d.Money / 1000) else 0,
 		if openMenu == "Quests" then QR.questSignature(d) else "",
-		if openMenu == "Rewards" then QR.signature(d) else "",
+		if openMenu == "Rewards" or openMenu == "Potions" then QR.signature(d) else "",
 	}, "|")
 end
 
@@ -1871,50 +2282,93 @@ toggleMenu = function(name: string, forceOpen: boolean?)
 end
 
 -- Studded menu buttons stacked on the left. They scale with screen height so they fit phones too.
-local MENU_ORDER = { "Rewards", "Quests", "Rebirth", "Index", "Pets", "Eggs", "Store" }
+-- Menu buttons on the left: the wide Store bar on top, then 2 columns x 3 rows of picture tiles. The art has its own
+-- rounded outline and label. The grid is exactly as wide as the "Friend Boost +0" text under it.
+local MENU_ORDER = { "Store", "Potions", "Rebirth", "Quests", "Index", "Pets", "Eggs" }
+local MENU_ART = {
+	Store = "rbxassetid://117374357472528",
+	Potions = "rbxassetid://89646841913140",
+	Rebirth = "rbxassetid://138255608149504",
+	Quests = "rbxassetid://87756224833071",
+	Index = "rbxassetid://138837646984433",
+	Pets = "rbxassetid://136173759397561",
+	Eggs = "rbxassetid://75866548565434",
+}
+local GRID_W, GAP = 200, 8
+local TILE = (GRID_W - GAP) / 2
+local STORE_H = math.floor(GRID_W * 383 / 1023)
 local menuButtons = new("Frame", {
 	Name = "MenuButtons",
 	AnchorPoint = Vector2.new(0, 0.5),
-	Size = UDim2.new(0, 100, 0.66, 0),
-	Position = UDim2.new(0, 10, 0.5, 0),
+	Size = UDim2.fromOffset(GRID_W, STORE_H + GAP + 3 * (TILE + GAP)),
+	Position = UDim2.new(0, 16, 0.5, 0),
 	BackgroundTransparency = 1,
 	Parent = gui,
-}, { new("UIListLayout", { Padding = UDim.new(0.02, 0), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
--- Buttons without an uploaded picture are drawn: a glossy tile with an emoji and the name.
-local TILE_STYLE = { Quests = { Emoji = "📜", Paint = PAINT.Orange }, Rewards = { Emoji = "🎁", Paint = PAINT.Purple } }
+})
+do
+	local fit = new("UIScale", { Parent = menuButtons })
+	local function refit()
+		local camera = workspace.CurrentCamera
+		local height = if camera then camera.ViewportSize.Y else 800
+		fit.Scale = math.clamp((height - 220) / (STORE_H + GAP + 3 * (TILE + GAP)), 0.55, 1)
+	end
+	refit()
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(refit)
+	end
+end
+local TILE_STYLE = { Quests = { Emoji = "📜", Paint = PAINT.Orange }, Rewards = { Emoji = "🎁", Paint = PAINT.Purple }, Potions = { Image = "rbxassetid://118551182065848", Paint = PAINT.Cyan } }
+local function badgeFor(menu: string, parent: GuiObject, position: UDim2)
+	local badge = outlined({ Size = UDim2.fromOffset(30, 30), Position = position, Text = "0", Visible = false, ZIndex = 6, Parent = parent }, 1.5)
+	badge.BackgroundTransparency = 0
+	badge.BackgroundColor3 = Color3.fromRGB(235, 40, 50)
+	corner(8).Parent = badge
+	border(2.5).Parent = badge
+	QR.badges[menu] = badge
+end
 for order, menu in MENU_ORDER do
+	local isStore = menu == "Store"
+	local slot = order - 2
 	local tile = new("ImageButton", {
 		Name = menu .. "Button",
-		Image = ICONS[menu] or "",
+		Image = MENU_ART[menu] or ICONS[menu] or "",
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
-		Size = UDim2.fromScale(1, 0.13),
-		LayoutOrder = order,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = if isStore then UDim2.fromOffset(GRID_W, STORE_H) else UDim2.fromOffset(TILE, TILE),
+		Position = if isStore then UDim2.new() else UDim2.fromOffset((slot % 2) * (TILE + GAP), STORE_H + GAP + (slot // 2) * (TILE + GAP)),
 		Parent = menuButtons,
-	}, {
-		new("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Height }),
-		new("UISizeConstraint", { MaxSize = Vector2.new(92, 92), MinSize = Vector2.new(50, 50) }),
 	})
-	local style = TILE_STYLE[menu]
-	if not ICONS[menu] and style then
-		tile.BackgroundTransparency = 0
-		tile.BackgroundColor3 = WHITE
-		corner(14).Parent = tile
-		gradient(style.Paint).Parent = tile
-		border(3).Parent = tile
-		shine(tile)
-		outlined({ Size = UDim2.new(1, 0, 0.58, 0), Position = UDim2.fromScale(0, 0.04), Text = style.Emoji, ZIndex = 2, Parent = tile }, 0)
-		outlined({ Size = UDim2.new(1, -8, 0.24, 0), Position = UDim2.new(0, 4, 0.68, 0), Text = string.upper(TITLES[menu] or menu), ZIndex = 2, Parent = tile }, 2)
-		local badge = outlined({ Size = UDim2.fromOffset(26, 26), Position = UDim2.new(1, -16, 0, -8), Text = "0", Visible = false, ZIndex = 4, Parent = tile }, 1.5)
-		badge.BackgroundTransparency = 0
-		badge.BackgroundColor3 = Color3.fromRGB(235, 40, 50)
-		corner(13).Parent = badge
-		border(2).Parent = badge
-		QR.badges[menu] = badge
+	if TILE_STYLE[menu] then
+		badgeFor(menu, tile, UDim2.new(1, -22, 0, -8))
 	end
 	bounce(tile)
 	tile.Activated:Connect(function()
 		toggleMenu(menu)
+	end)
+end
+
+-- Rewards on the top bar, between the night timer and the top-right corner: the gift glows over slowly turning light
+-- rays and gives a little wiggle every couple of seconds. A red "!" shows when a gift is ready.
+do
+	local holder = new("Frame", { Name = "RewardsTop", AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(96, 96), Position = UDim2.new(0.5, 280, 0, 4), BackgroundTransparency = 1, Parent = gui })
+	local rays = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(1.6, 1.6), Position = UDim2.fromScale(0.5, 0.45), BackgroundTransparency = 1, Image = "rbxassetid://96566829321081", ImageColor3 = Color3.fromRGB(255, 230, 140), ImageTransparency = 0.35, Parent = holder })
+	new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(1.25, 1.25), Position = UDim2.fromScale(0.5, 0.45), BackgroundTransparency = 1, Image = "rbxassetid://86140178508751", ImageColor3 = Color3.fromRGB(255, 220, 120), ImageTransparency = 0.25, Parent = holder })
+	TweenService:Create(rays, TweenInfo.new(10, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 }):Play()
+	local button = new("ImageButton", { Name = "RewardsButton", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, AutoButtonColor = false, Image = "rbxassetid://81102409387682", ScaleType = Enum.ScaleType.Fit, ZIndex = 2, Parent = holder })
+	badgeFor("Rewards", button, UDim2.new(1, -18, 0, -6))
+	bounce(button)
+	button.Activated:Connect(function()
+		toggleMenu("Rewards")
+	end)
+	task.spawn(function()
+		while holder.Parent do
+			for _, angle in { -10, 10, -8, 8, -4, 0 } do
+				TweenService:Create(button, TweenInfo.new(0.08, Enum.EasingStyle.Sine), { Rotation = angle }):Play()
+				task.wait(0.085)
+			end
+			task.wait(2)
+		end
 	end)
 end
 
@@ -1923,14 +2377,14 @@ function QR.setBadge(menu: string, count: number)
 	local badge = QR.badges[menu]
 	if badge then
 		badge.Visible = count > 0
-		badge.Text = tostring(count)
+		badge.Text = if menu == "Rewards" then "!" else tostring(count)
 	end
 end
 
 function QR.refreshBadge(d)
 	QR.setBadge("Quests", QR.claimableCount(d))
 	if d.Playtime then
-		QR.setBadge("Rewards", QR.claimable(d))
+		QR.setBadge("Rewards", QR.claimable(d)); QR.setBadge("Potions", QR.potionCount(d))
 	end
 end
 
@@ -2559,39 +3013,14 @@ player:GetAttributeChangedSignal("IsAdmin"):Connect(function()
 end)
 
 ---------------------------------------------------------------------------
--- Rewards: countdowns, the badge, and the row of active potion boosts under the night/day timer.
+-- Rewards: countdowns and the badge (active potions are shown only inside the Rewards window).
 ---------------------------------------------------------------------------
 do
-local boostBar = new("Frame", {
-	Name = "BoostBar",
-	AnchorPoint = Vector2.new(0.5, 0),
-	Size = UDim2.new(0, 460, 0, 30),
-	Position = UDim2.new(0.5, 0, 0, 92),
-	BackgroundTransparency = 1,
-	Parent = gui,
-}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
-local boostChips: { [string]: { Frame: Frame, Label: TextLabel } } = {}
-for order, kind in Config.PotionOrder do
-	local potion = Config.Potions[kind]
-	local chip = new("Frame", { Size = UDim2.fromOffset(104, 28), BackgroundColor3 = potion.Color, LayoutOrder = order, Visible = false, Parent = boostBar }, { corner(14), border(2.5) })
-	local label = outlined({ Size = UDim2.new(1, -10, 1, -4), Position = UDim2.fromOffset(5, 2), Text = "", TextSize = 16, Parent = chip }, 1.8)
-	boostChips[kind] = { Frame = chip, Label = label }
-end
-
 local wasReady = -1
 task.spawn(function()
 	while true do
 		task.wait(0.5)
 		local d = data
-		if d and d.Boosts then
-			for kind, chip in boostChips do
-				local left = QR.boostLeft(d, kind)
-				chip.Frame.Visible = left > 0
-				if left > 0 then
-					chip.Label.Text = Config.Potions[kind].Icon .. " x" .. Config.Potions[kind].Multiplier .. " " .. QR.mmss(left)
-				end
-			end
-		end
 		if d and d.Playtime then
 			local ready = QR.claimable(d)
 			if ready ~= wasReady then

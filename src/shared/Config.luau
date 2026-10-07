@@ -133,22 +133,22 @@ end
 
 ---------------------------------------------------------------------------
 -- Costumes: bought with Candy. Better houses only give Candy to good enough costumes (Tier).
---   CandyMultiplier: multiplies the Candy you get from every Trick-or-Treat knock (the first costume is x2).
+--   CandyMultiplier: multiplies the Candy you get from every Trick-or-Treat knock (x2 for the first costume, up to x300).
 --   XpPerSecond: the Speed XP per second you earn while running (anywhere; a treadmill multiplies it).
 -- "None" is what a brand-new player wears: x1 Candy and the lowest XP rate.
 ---------------------------------------------------------------------------
 Config.Costumes = {
 	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyMultiplier = 1, XpPerSecond = 1, Color = Color3.fromRGB(200, 200, 200) },
 	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 100, CandyMultiplier = 2, XpPerSecond = 1.5, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
-	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 400, CandyMultiplier = 3, XpPerSecond = 2.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
-	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1500, CandyMultiplier = 4, XpPerSecond = 4, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
-	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 6000, CandyMultiplier = 6, XpPerSecond = 7, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
-	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 24000, CandyMultiplier = 8, XpPerSecond = 12, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
-	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 90000, CandyMultiplier = 12, XpPerSecond = 20, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
-	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 300000, CandyMultiplier = 16, XpPerSecond = 35, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
-	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 1000000, CandyMultiplier = 24, XpPerSecond = 60, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
-	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 2500000, CandyMultiplier = 32, XpPerSecond = 100, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
-	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 5000000, CandyMultiplier = 50, XpPerSecond = 170, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
+	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 400, CandyMultiplier = 4, XpPerSecond = 2.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
+	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 2000, CandyMultiplier = 7, XpPerSecond = 4, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
+	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 10000, CandyMultiplier = 12, XpPerSecond = 7, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
+	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 50000, CandyMultiplier = 20, XpPerSecond = 12, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
+	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 220000, CandyMultiplier = 35, XpPerSecond = 20, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
+	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 880000, CandyMultiplier = 60, XpPerSecond = 35, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
+	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 3700000, CandyMultiplier = 100, XpPerSecond = 60, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
+	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 10000000, CandyMultiplier = 170, XpPerSecond = 100, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
+	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 26000000, CandyMultiplier = 300, XpPerSecond = 170, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
 }
 
 -- A brand-new player starts with exactly enough Candy for the cheapest costume (the tutorial sends them to buy it).
@@ -621,10 +621,10 @@ Config.FriendBoostPercent = 10 -- extra pet Money for every friend playing in th
 Config.BaseDepth = 40 -- depth of a new base (studs, front to back)
 Config.BaseDepthStep = 10
 Config.PetCapacityUpgrades = {
-	{ Price = 2000, Capacity = 9 },
-	{ Price = 30000, Capacity = 12 },
-	{ Price = 500000, Capacity = 15 },
-	{ Price = 8000000, Capacity = 18 },
+	{ Price = 2000, Capacity = 8 }, -- +2
+	{ Price = 30000, Capacity = 10 }, -- +2
+	{ Price = 500000, Capacity = 11 }, -- +1 from here on
+	{ Price = 8000000, Capacity = 12 },
 }
 Config.HatchPadUpgrades = {
 	{ Price = 5000, Capacity = 3 },
@@ -633,6 +633,21 @@ Config.HatchPadUpgrades = {
 	{ Price = 8000000, Capacity = 6 },
 	{ Price = 90000000, Capacity = 7 },
 }
+
+-- The Speed Level a player should have to rob this house (level 1 to 9 of the street): the lowest level whose speed,
+-- with the egg's carrying slowdown (about 10%), still keeps up with the owner. It is shown on the signs between levels.
+function Config.RecommendedLevel(houseIndex: number): number
+	local house = Config.Houses[houseIndex]
+	if not house then
+		return 0
+	end
+	for level = 0, Config.MaxSpeedLevel do
+		if Config.WalkSpeedFor(level) * 0.9 >= house.OwnerSpeed - 1 then
+			return level
+		end
+	end
+	return Config.MaxSpeedLevel
+end
 
 -- Eggs that can hatch at once, with this many Hatching Pad upgrades.
 function Config.IncubatorsFor(padLevel: number?): number
@@ -904,12 +919,24 @@ end
 -- keep running while the player is away.
 ---------------------------------------------------------------------------
 Config.Potions = {
-	Xp = { Name = "Speed Potion", Icon = "⚡", Multiplier = 2, Seconds = 600, Text = "x2 Speed XP", Color = Color3.fromRGB(90, 220, 255) },
-	Candy = { Name = "Candy Potion", Icon = "🍬", Multiplier = 2, Seconds = 600, Text = "x2 Candy from knocks", Color = Color3.fromRGB(255, 130, 210) },
-	Money = { Name = "Money Potion", Icon = "💰", Multiplier = 2, Seconds = 600, Text = "x2 Money from pets", Color = Color3.fromRGB(255, 220, 70) },
-	Hatch = { Name = "Hatch Potion", Icon = "🥚", Multiplier = 2, Seconds = 600, Text = "Eggs hatch 2x faster", Color = Color3.fromRGB(190, 140, 255) },
+	Xp = { Name = "Speed Potion", Icon = "⚡", Multiplier = 2, Seconds = 300, Text = "x2 Speed XP", Color = Color3.fromRGB(90, 220, 255) },
+	Candy = { Name = "Candy Potion", Icon = "🍬", Multiplier = 2, Seconds = 300, Text = "x2 Candy from knocks", Color = Color3.fromRGB(255, 130, 210) },
+	Money = { Name = "Money Potion", Icon = "💰", Multiplier = 2, Seconds = 300, Text = "x2 Money from pets", Color = Color3.fromRGB(255, 220, 70) },
+	Hatch = { Name = "Hatch Potion", Icon = "🥚", Multiplier = 2, Seconds = 300, Text = "Eggs hatch 2x faster", Color = Color3.fromRGB(190, 140, 255) },
 }
 Config.PotionOrder = { "Xp", "Candy", "Money", "Hatch" }
+-- Potions sold for Robux in the Potions window. Create each as a Developer Product on the Creator Dashboard and put
+-- its ID here; a product with ProductId 0 shows "Soon" instead of a price.
+Config.PotionProducts = {
+	{ Potion = "Xp", Amount = 1, Robux = 25, ProductId = 0 },
+	{ Potion = "Xp", Amount = 5, Robux = 99, ProductId = 0 },
+	{ Potion = "Candy", Amount = 1, Robux = 25, ProductId = 0 },
+	{ Potion = "Candy", Amount = 5, Robux = 99, ProductId = 0 },
+	{ Potion = "Money", Amount = 1, Robux = 25, ProductId = 0 },
+	{ Potion = "Money", Amount = 5, Robux = 99, ProductId = 0 },
+	{ Potion = "Hatch", Amount = 1, Robux = 25, ProductId = 0 },
+	{ Potion = "Hatch", Amount = 5, Robux = 99, ProductId = 0 },
+}
 Config.PotionMaxSeconds = 7200 -- a boost never runs longer than this from now
 
 -- Multiplier for a kind of boost: its potion's Multiplier while active, else 1.
@@ -925,6 +952,7 @@ end
 -- are worth `Amount` minutes of what the player normally earns (see Config.Quests.Rates), so they grow with the player.
 ---------------------------------------------------------------------------
 Config.Playtime = {
+	RoundGrowth = 1.5, -- Money, Candy and XP gifts grow this much every new round after all twelve are claimed
 	AfkSeconds = 60, -- no movement or menu use for this long and the clock stops
 	Rewards = {
 		{ Minutes = 0, Kind = "Money", Amount = 4 },
@@ -961,7 +989,18 @@ function Config.Playtime.Resolve(data: { [string]: any }, reward: { [string]: an
 	elseif reward.Kind == "Potion" then
 		return { Potion = reward.Potion, Count = reward.Amount }
 	end
-	return Config.Quests.Reward(data, reward.Amount, { [reward.Kind] = 1 }, 1)
+	local result = Config.Quests.Reward(data, reward.Amount, { [reward.Kind] = 1 }, 1)
+	-- Each new round of the day pays more (eggs and potions stay the same).
+	local round = (data.Playtime and data.Playtime.Round) or 1
+	if round > 1 then
+		local factor = Config.Playtime.RoundGrowth ^ (round - 1)
+		for _, currency in { "Money", "Candy", "Xp" } do
+			if result[currency] then
+				result[currency] = nice(result[currency] * factor)
+			end
+		end
+	end
+	return result
 end
 
 

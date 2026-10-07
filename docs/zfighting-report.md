@@ -1,6 +1,6 @@
 # Overlapping surfaces report (flickering textures)
 
-Scanned file: `SpookySteal-V5.0 (1).rbxl` (now the main place, `place/SpookySteal-V5.0.rbxl`), 4 October 2026.
+Scanned file: `SpookySteal-V6 (1).rbxl` (now the main place, `place/SpookySteal-V6.rbxl`), 4 October 2026.
 
 > **Update (5.1):** the server now fixes these automatically when it starts (`MapBuilder.FixFlicker`, lifting one part of each pair by 0.03 studs). A new scan of the V5.3 place shows that House 4 and the bases were already rebuilt without them; about 960 remain in House 3, the Costume Shop, House 1, House 5, House 4 and the Speed Shop, and those are the ones the fix handles. In Studio edit mode you will still see them flicker until you move the parts yourself.
 

@@ -1,6 +1,6 @@
 """Copy the scripts in src/ into the place file, so the place always has the latest code.
 
-Usage: python3 tools/sync_place.py [place/SpookySteal-V5.0.rbxl]
+Usage: python3 tools/sync_place.py [place/SpookySteal-V6.rbxl]
 Needs: pip install lz4 zstandard
 
 Only the Source of the scripts that src/ covers is replaced; every other byte of the place is kept.
@@ -55,7 +55,7 @@ def string(body, pos):
 
 
 def main():
-    path = os.path.join(ROOT, sys.argv[1] if len(sys.argv) > 1 else "place/SpookySteal-V5.0.rbxl")
+    path = os.path.join(ROOT, sys.argv[1] if len(sys.argv) > 1 else "place/SpookySteal-V6.rbxl")
     header, chunks = read_chunks(open(path, "rb").read())
 
     classes, inst = {}, {}
