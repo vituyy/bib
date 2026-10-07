@@ -286,7 +286,7 @@ Config.Pets = {
 ---------------------------------------------------------------------------
 -- How big things are DRAWN. A pet is drawn at its size (a 4x Big pet is 4 times a normal pet). An egg is drawn
 -- at EggSizeFactor of that (half), relative to a normal egg, and a normal egg is drawn at DefaultEggScale.
-Config.DefaultEggScale = 0.7
+Config.DefaultEggScale = 0.8
 Config.EggSizeFactor = 0.5 -- Big 2.5x to 3.5x -> egg 1.25x to 1.75x; Huge 4x to 6x -> 2x to 3x; Gigantic 8x -> 4x
 Config.Sizes = {
 	Big = { Name = "Big", Chance = 0.20, Min = 2.5, Max = 3.5, MoneyMin = 2.5, MoneyMax = 3.5, LegacyMultiplier = 3, LegacyEggScale = 1.56, LegacyPetScale = 1.6 },

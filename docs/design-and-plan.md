@@ -172,7 +172,7 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 | Size | Chance | Pet drawn at (random) | Egg drawn at (half of that) | Money/s multiplier |
 |---|---|---|---|---|
-| Normal | 75.5% | 1x | 1x (0.7 studs scale) | x1 |
+| Normal | 75.5% | 1x | 1x (drawn at 0.8) | x1 |
 | Big | 20% | 2.5x to 3.5x (average 3x) | 1.25x to 1.75x | x2.5 to x3.5 (same as the size) |
 | Huge | 4% | 4x to 6x (average 5x) | 2x to 3x | x4 to x6 (same as the size) |
 | Gigantic | 0.5% | 8x | 4x | x16 (twice its size) |
