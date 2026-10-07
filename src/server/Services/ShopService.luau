@@ -313,6 +313,16 @@ adminCommands.Teleport = function(player, _data, n)
 		end
 		return false, "No lobby spawn"
 	end
+	if n == -2 then
+		local stage = workspace:FindFirstChild("SizeStage")
+		local landing = stage and stage:FindFirstChild("Landing") :: BasePart?
+		if landing then
+			-- Stand at the front of the size platform, looking at the pets (they face +X, towards you).
+			character:PivotTo(CFrame.lookAt(landing.Position + Vector3.new(0, 3, 0), landing.Position + Vector3.new(-100, 3, 0)))
+			return true, "Teleported to the pet size platform"
+		end
+		return false, "The size platform is not built yet"
+	end
 	local houses = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Street") and workspace.Map.Street:FindFirstChild("Houses")
 	local house = houses and houses:FindFirstChild("House" .. tostring(n))
 	local exit = house and (house:FindFirstChild("OwnerExit", true) or house:FindFirstChild("OwnerSpawn", true)) :: BasePart?

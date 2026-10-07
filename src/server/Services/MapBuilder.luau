@@ -1176,6 +1176,18 @@ function MapBuilder.BuildSizeStage()
 		floorLabel("RowName" .. r, 0, rowD[r] + rowHalf[r] + 17, length - MARGIN, 6, what .. string.upper(entry.Info.Name) .. " (" .. entry.Info.Rarity .. ")", Color3.fromRGB(255, 170, 70))
 	end
 
+	-- Where the Admin panel's "Sizes" teleport button puts you: the front middle of the platform.
+	part({
+		Name = "Landing",
+		Size = Vector3.new(1, 1, 1),
+		CFrame = CFrame.new(at(0, depthFront - 5, floorY + 0.5)),
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		Parent = folder,
+	})
+
 	-- A 5 stud tall marker at the front left, so you can compare the pets with a player.
 	local ref = part({
 		Name = "PlayerHeight",

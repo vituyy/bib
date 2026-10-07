@@ -2934,7 +2934,7 @@ local function buildAdminPanel()
 	local tpHolder = new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 22, Parent = scroll }, {
 		new("UIGridLayout", { CellSize = UDim2.fromOffset(52, 34), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-	for index, spot in { { "Hub", -1 }, { "Base", 0 }, { "H1", 1 }, { "H2", 2 }, { "H3", 3 }, { "H4", 4 }, { "H5", 5 }, { "H6", 6 }, { "H7", 7 }, { "H8", 8 }, { "H9", 9 } } do
+	for index, spot in { { "Hub", -1 }, { "Sizes", -2 }, { "Base", 0 }, { "H1", 1 }, { "H2", 2 }, { "H3", 3 }, { "H4", 4 }, { "H5", 5 }, { "H6", 6 }, { "H7", 7 }, { "H8", 8 }, { "H9", 9 } } do
 		chunkyButton({ Text = spot[1], LayoutOrder = index, ZIndex = 22, Parent = tpHolder }, PAINT.Grey, function()
 			run("Teleport", spot[2])
 		end)
