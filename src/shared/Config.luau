@@ -272,27 +272,26 @@ Config.Pets = {
 -- Egg variants. Every egg rolls two separate things, and one result never changes the other, so an egg can
 -- have both (a Big Diamond egg), only one (a Gigantic egg, a Rainbow egg) or neither:
 --   Size:     Big, Huge or Gigantic. The egg and the pet grow, and each egg gets its OWN random size inside the
---             tier's range (Min to Max). The money multiplier IS that size: a 4.2x Big egg pays x4.2.
+--             tier's range (Min to Max). The pet is drawn exactly that many times bigger than a normal pet, and
+--             the money multiplier follows the size: Min pays MoneyMin and Max pays MoneyMax, in a straight line
+--             between them (Big 2.5x pays x3.5, Big 4x pays x5).
 --   Material: Golden, Diamond or Rainbow. The egg and the pet glow.
 -- Chance is the share of all eggs that get that tier (the rest are normal: 1x). Multipliers stack: a pet's
 -- Money per second = its normal income x Size multiplier x Material multiplier.
--- A variant pet is stored as "<PetId>+<Size>+<Material>" where the size token carries the rolled multiplier
--- rounded to 0.1, for example "Bat+Big4.2+Golden", "Bat+Huge8.5" or "Bat+Gigantic15+Rainbow". Old saves use
--- the plain tier ("Bat+Big"), which still works as a fixed legacy size (LegacyMultiplier, Legacy scales).
+-- A variant pet is stored as "<PetId>+<Size>+<Material>" where the size token carries the rolled size rounded to
+-- 0.1, for example "Bat+Big3.2+Golden", "Bat+Huge6+Rainbow" or "Bat+Gigantic10". Old saves use the plain tier
+-- ("Bat+Big"), which still works as a fixed legacy size (LegacyMultiplier, Legacy scales).
 -- Config.Pets understands all of these ids, so scripts that look a pet up by id need no changes; use
 -- Config.SplitPet when you need the plain pet id (art, Index).
 ---------------------------------------------------------------------------
--- How big things are DRAWN. Drawing a 15x egg 15 times taller would be taller than a house, so the picture
--- grows more slowly than the multiplier: drawn scale = multiplier ^ exponent. Raise the exponents for a more
--- dramatic size, lower them to keep eggs smaller. A normal egg is drawn at DefaultEggScale and a normal pet
--- at 1.
+-- How big things are DRAWN. A pet is drawn at its size (a 4x Big pet is 4 times a normal pet). An egg is drawn
+-- at EggSizeFactor of that (half), relative to a normal egg, and a normal egg is drawn at DefaultEggScale.
 Config.DefaultEggScale = 0.7
-Config.EggScaleExponent = 0.45 -- Big 3.5x -> 1.23, Big 5x -> 1.44, Huge 10x -> 1.97, Gigantic 15x -> 2.37
-Config.PetScaleExponent = 0.4 -- Big 3.5x -> 1.65, Big 5x -> 1.90, Huge 10x -> 2.5, Gigantic 15x -> 2.95
+Config.EggSizeFactor = 0.5 -- Big 2.5x to 4x -> egg 1.25x to 2x; Huge 5x to 7x -> 2.5x to 3.5x; Gigantic 10x -> 5x
 Config.Sizes = {
-	Big = { Name = "Big", Chance = 0.20, Min = 3.5, Max = 5, LegacyMultiplier = 3, LegacyEggScale = 1.56, LegacyPetScale = 1.6 },
-	Huge = { Name = "Huge", Chance = 0.04, Min = 7, Max = 10, LegacyMultiplier = 8, LegacyEggScale = 1.89, LegacyPetScale = 2.1 },
-	Gigantic = { Name = "Gigantic", Chance = 0.005, Min = 15, Max = 15, LegacyMultiplier = 30, LegacyEggScale = 2.34, LegacyPetScale = 2.8 },
+	Big = { Name = "Big", Chance = 0.20, Min = 2.5, Max = 4, MoneyMin = 3.5, MoneyMax = 5, LegacyMultiplier = 3, LegacyEggScale = 1.56, LegacyPetScale = 1.6 },
+	Huge = { Name = "Huge", Chance = 0.04, Min = 5, Max = 7, MoneyMin = 7, MoneyMax = 10, LegacyMultiplier = 8, LegacyEggScale = 1.89, LegacyPetScale = 2.1 },
+	Gigantic = { Name = "Gigantic", Chance = 0.005, Min = 10, Max = 10, MoneyMin = 15, MoneyMax = 15, LegacyMultiplier = 30, LegacyEggScale = 2.34, LegacyPetScale = 2.8 },
 }
 Config.Materials = {
 	Golden = { Name = "Golden", Chance = 0.15, Multiplier = 3, Color = Color3.fromRGB(255, 205, 50) },
@@ -317,13 +316,14 @@ local function formatMultiplier(mult: number): string
 	return if mult == math.floor(mult) then tostring(mult) else string.format("%.1f", mult)
 end
 
--- The size token for a tier and a multiplier: ("Big", 4.2) -> "Big4.2", ("Gigantic", 15) -> "Gigantic15".
-function Config.SizeToken(tierName: string, multiplier: number): string
-	return tierName .. formatMultiplier(math.round(multiplier * 10) / 10)
+-- The size token for a tier and a size: ("Big", 3.2) -> "Big3.2", ("Gigantic", 10) -> "Gigantic10".
+function Config.SizeToken(tierName: string, size: number): string
+	return tierName .. formatMultiplier(math.round(size * 10) / 10)
 end
 
--- Reads a size token ("Big4.2", or the legacy "Big"). Returns nil if it is not one, else a table with
--- Tier, Multiplier (money), EggScale, PetScale (how big they are drawn) and Label ("Big 4.2x").
+-- Reads a size token ("Big3.2", or the legacy "Big"). Returns nil if it is not one, else a table with
+-- Tier, Size (how many times bigger it is drawn), Multiplier (money), EggScale, PetScale (drawn scales) and
+-- Label ("Big 3.2x").
 local sizeCache = {}
 function Config.SizeInfo(token: string)
 	local cached = sizeCache[token]
@@ -339,17 +339,20 @@ function Config.SizeInfo(token: string)
 	end
 	local info
 	if number then
-		local mult = math.round(math.clamp(number, tier.Min, tier.Max) * 10) / 10
+		local size = math.round(math.clamp(number, tier.Min, tier.Max) * 10) / 10
+		local t = if tier.Max > tier.Min then (size - tier.Min) / (tier.Max - tier.Min) else 0
 		info = {
 			Tier = tierName,
-			Multiplier = mult,
-			EggScale = Config.DefaultEggScale * mult ^ Config.EggScaleExponent,
-			PetScale = mult ^ Config.PetScaleExponent,
-			Label = tier.Name .. " " .. formatMultiplier(mult) .. "x",
+			Size = size,
+			Multiplier = math.round((tier.MoneyMin + t * (tier.MoneyMax - tier.MoneyMin)) * 100) / 100,
+			EggScale = Config.DefaultEggScale * size * Config.EggSizeFactor,
+			PetScale = size,
+			Label = tier.Name .. " " .. formatMultiplier(size) .. "x",
 		}
 	else
 		info = {
 			Tier = tierName,
+			Size = tier.LegacyPetScale,
 			Multiplier = tier.LegacyMultiplier,
 			EggScale = tier.LegacyEggScale,
 			PetScale = tier.LegacyPetScale,

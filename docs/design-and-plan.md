@@ -23,7 +23,7 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Phantom furniture (5.1) | Furniture inside the houses no longer blocks players. |
 | Playtime Rewards and potions (5.1) | Twelve daily gifts for playing time, and timed boost potions (Speed XP, Candy, Money, hatching). |
 | V6 changes | Candy multipliers of the costumes now climb much faster (x2, x4, x7, x12, x20, x35, x60, x100, x170, x300) with costume prices raised to keep the same pace; Pet Capacity gives +2, +2, +1, +1 slots (8, 10, 11, 12); the green signs between levels show the Recommended Level (the Speed Level to bring) and hang over the road; the potion timers at the top of the screen are gone (active potions show in the Rewards window). |
-| Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big 3.5x to 5x, Huge 7x to 10x, Gigantic 15x (before: fixed x3, x8 and x30). See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
+| Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big pets are drawn 2.5x to 4x bigger and pay x3.5 to x5, Huge 5x to 7x and x7 to x10, Gigantic 10x and x15 (before: fixed x3, x8 and x30). Eggs are drawn half as big as the pet. See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
 | Kick (5.0) | A caught thief is kicked about 100 studs away from the owner with a kick sound. `Config.KickDistance`, `KickAngle` and `KickSounds` tune it; the movement anti-cheat ignores the flight. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
@@ -170,16 +170,16 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 **Egg variants (added 1 October 2026):** every egg rolls two separate things, and one result never changes the other, so an egg can have both, one or neither (a Big Diamond egg, a Gigantic egg, a Rainbow egg...). The egg and the pet it hatches look the part: bigger for a size, glowing and sparkling for a material.
 
-| Size | Chance | Random size (= Money/s multiplier) | Egg drawn at | Pet drawn at |
+| Size | Chance | Pet drawn at (random) | Egg drawn at (half of that) | Money/s multiplier |
 |---|---|---|---|---|
-| Normal | 75.5% | 1x | 0.7x | 1x |
-| Big | 20% | 3.5x to 5x (average 4.25x) | 1.23x to 1.44x | 1.65x to 1.9x |
-| Huge | 4% | 7x to 10x (average 8.5x) | 1.68x to 1.97x | 2.2x to 2.5x |
-| Gigantic | 0.5% | 15x | 2.37x | 2.95x |
+| Normal | 75.5% | 1x | 1x (0.7 studs scale) | x1 |
+| Big | 20% | 2.5x to 4x (average 3.25x) | 1.25x to 2x | x3.5 to x5 |
+| Huge | 4% | 5x to 7x (average 6x) | 2.5x to 3.5x | x7 to x10 |
+| Gigantic | 0.5% | 10x | 5x | x15 |
 
-**Random sizes (6.1):** when an egg spawns it rolls its tier (Big, Huge, Gigantic or none) and then its own size inside the tier's range, rounded to 0.1 (a Big egg can be 3.5x, 3.6x ... 5x). The size is also the money multiplier, so a 4.2x Big egg pays x4.2 and a 5x Big egg pays x5. Names show it: "Big 4.2x Golden Bat". The picture grows slower than the number, because a 15 times taller egg would be taller than a house: drawn scale = size to the power 0.45 for eggs and 0.4 for pets (`Config.EggScaleExponent`, `Config.PetScaleExponent`); raise them for a more dramatic look. Eggs still carried in the thief's arms are capped at 1.4x.
+**Random sizes (6.1):** when an egg spawns it rolls its tier (Big, Huge, Gigantic or none) and then its own size inside the tier's range, rounded to 0.1 (a Big egg can be 2.5x, 2.6x ... 4x). The pet is drawn exactly that many times bigger than a normal pet, and the egg half as many times bigger than a normal egg (`Config.EggSizeFactor`). The money multiplier follows the size in a straight line between the tier's low and high end: a 2.5x Big pays x3.5, a 3.25x Big pays x4.25 and a 4x Big pays x5. Names show the size: "Big 3.2x Golden Bat". Eggs still carried in the thief's arms are capped at 1.4 (twice a normal egg), and eggs on the incubator pedestals are shrunk to fit under the roof; a 10x pet is about 25 studs tall on a base.
 
-Before 6.1 the sizes were fixed (Big x3, Huge x8, Gigantic x30, drawn 1.56x, 1.89x, 2.34x). Old saved pets such as "Bat+Big" keep working with those fixed values. The average size multiplier went from 1.83 to 2.03 (+11%): Big and Huge pay more, Gigantic pays less (x30 became x15).
+Before 6.1 the sizes were fixed (Big x3, Huge x8, Gigantic x30, drawn 1.6x, 2.1x, 2.8x). Old saved pets such as "Bat+Big" keep working with those fixed values. The average money multiplier went from 1.83 to 2.03 (+11%): Big and Huge pay more, Gigantic pays less (x30 became x15).
 
 | Material | Chance | Look | Money/s |
 |---|---|---|---|
@@ -187,7 +187,7 @@ Before 6.1 the sizes were fixed (Big x3, Huge x8, Gigantic x30, drawn 1.56x, 1.8
 | Diamond | 5% | ice-blue glow | x8 |
 | Rainbow | 1% | glow cycling through every colour | x25 |
 
-Multipliers stack: a Gigantic Rainbow pet earns x375 (a Gigantic Rainbow Pumpkin King would earn $5.6M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big4.2+Golden" (the size token carries the rolled multiplier) and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
+Multipliers stack: a Gigantic Rainbow pet earns x375 (a Gigantic Rainbow Pumpkin King would earn $5.6M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big3.2+Golden" (the size token carries the rolled size) and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
 
 Because variants raise the average pet income by about 3.4x, every Money price (costumes, trails, base upgrades, Index rewards) was multiplied by 3 so the pacing in 2.11 stays the same for an average-luck player. Lucky players are faster, unlucky ones a little slower.
 
