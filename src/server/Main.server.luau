@@ -29,6 +29,13 @@ task.spawn(function() -- stop flat surfaces in the houses and hub from flickerin
 	end
 end)
 
+task.spawn(function() -- the platform that compares pet sizes, floating in the void to the right of the map
+	local ok, err = pcall(MapBuilder.BuildSizeStage)
+	if not ok then
+		warn("[SpookySteal] size platform failed:", err)
+	end
+end)
+
 ShopService.Start(map)
 DataService.Start()
 game:GetService("MarketplaceService").ProcessReceipt = DataService.ProcessReceipt

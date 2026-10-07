@@ -998,6 +998,218 @@ function MapBuilder.FixFlicker(map: Instance)
 	print(string.format("[MapBuilder] flicker fix: %d overlapping surfaces, %d parts nudged (%.1f s)", pairCount, moved, os.clock() - started))
 end
 
+-- A platform floating in the void that shows how big Big, Huge and Gigantic pets are next to a normal one, for the
+-- smallest and the biggest pet in the game. It is built when the server starts (nothing is saved in the place).
+-- Looking from the map towards it, the columns run Normal, Big, Huge, Gigantic from left to right and the smallest
+-- pet stands in front of the biggest. Where it floats is Config.SizeStage.Center.
+local function fmtNumber(n: number): string
+	return if n == math.floor(n) then tostring(n) else string.format("%.1f", n)
+end
+
+function MapBuilder.BuildSizeStage()
+	local old = workspace:FindFirstChild("SizeStage")
+	if old then
+		old:Destroy()
+	end
+
+	-- The smallest and the biggest pet by drawn size (income breaks ties).
+	local smallest, biggest
+	for id, info in Config.Pets do
+		local size = Config.PetBodySize(info)
+		if not smallest or size < smallest.Size or (size == smallest.Size and info.MoneyPerSecond < smallest.Info.MoneyPerSecond) then
+			smallest = { Id = id, Info = info, Size = size }
+		end
+		if not biggest or size > biggest.Size or (size == biggest.Size and info.MoneyPerSecond > biggest.Info.MoneyPerSecond) then
+			biggest = { Id = id, Info = info, Size = size }
+		end
+	end
+	if not smallest or not biggest then
+		return
+	end
+
+	-- The four columns: a normal pet, then the middle of each size's range.
+	local columns = { { Title = "NORMAL", Detail = "1x size\npays x1", Color = Color3.fromRGB(215, 215, 215) } }
+	for _, tierName in { "Big", "Huge", "Gigantic" } do
+		local tier = Config.Sizes[tierName]
+		local range = if tier.Max > tier.Min then fmtNumber(tier.Min) .. "x - " .. fmtNumber(tier.Max) .. "x" else fmtNumber(tier.Min) .. "x"
+		local money = if tier.MoneyMax > tier.MoneyMin then "x" .. fmtNumber(tier.MoneyMin) .. " - x" .. fmtNumber(tier.MoneyMax) else "x" .. fmtNumber(tier.MoneyMin)
+		table.insert(columns, {
+			Tier = tierName,
+			Size = (tier.Min + tier.Max) / 2,
+			Title = string.upper(tierName),
+			Detail = range .. " size\npays " .. money,
+			Color = ({ Big = Color3.fromRGB(110, 235, 110), Huge = Color3.fromRGB(200, 120, 255), Gigantic = Color3.fromRGB(255, 200, 60) })[tierName],
+		})
+	end
+
+	-- Builds one pet for a column, standing on the floor with its feet at y = floorY.
+	local function petModel(entry, column)
+		local id = if column.Tier then Config.MakePetId(entry.Id, Config.SizeToken(column.Tier, column.Size)) else entry.Id
+		local info = Config.Pets[id]
+		local size = Config.PetBodySize(info)
+		local model = Art.Clone("Pets", id, size * 1.6)
+		local height = size
+		if model then
+			height = model:GetAttribute("ArtHeight") or size
+		else
+			model = Instance.new("Model")
+			local body = Instance.new("Part")
+			body.Name = "Body"
+			body.Size = Vector3.new(size, size, size)
+			body.Color = info.Color
+			body.Material = if Config.Rarities[info.Rarity].Order >= 6 then Enum.Material.Neon else Enum.Material.Plastic
+			body.Anchored = true
+			body.CanCollide = false
+			body.Parent = model
+			model.PrimaryPart = body
+		end
+		model.Name = id
+		return model, height, size * 1.6
+	end
+
+	-- Layout. u runs to the viewer's right (towards -Z), d runs towards the viewer (+X).
+	local pets = { smallest, biggest }
+	local widths = {} -- width of each column = the widest pet in it, over both rows
+	local heights = { 0, 0 }
+	local models = {}
+	for r, entry in pets do
+		models[r] = {}
+		for c, column in columns do
+			local model, height, width = petModel(entry, column)
+			models[r][c] = { Model = model, Height = height }
+			widths[c] = math.max(widths[c] or 0, width)
+			heights[r] = math.max(heights[r], width)
+		end
+	end
+	local GAP, MARGIN = 14, 16
+	local length = MARGIN * 2 - GAP
+	for _, w in widths do
+		length += w + GAP
+	end
+	-- Rows (front = smallest pet), each followed by two label bands: the size names and the pet's name.
+	local LABELS = 26 -- depth used by the labels in front of a row
+	local frontHalf, backHalf = heights[1] / 2, heights[2] / 2
+	local dFront = 0
+	local dBack = dFront - (frontHalf + LABELS + backHalf)
+	local depthFront = dFront + frontHalf + LABELS + 4
+	local depthBack = dBack - backHalf - 10
+	local depth = depthFront - depthBack
+
+	local center = Config.SizeStage.Center
+	local floorY = center.Y
+	local midD = (depthFront + depthBack) / 2
+	local folder = Instance.new("Folder")
+	folder.Name = "SizeStage"
+	local function at(u: number, d: number, y: number): Vector3
+		return Vector3.new(center.X + d - midD, y, center.Z - u)
+	end
+
+	part({
+		Name = "Platform",
+		Size = Vector3.new(depth, 4, length),
+		CFrame = CFrame.new(center.X, floorY - 2, center.Z),
+		Color = Color3.fromRGB(46, 36, 66),
+		Material = Enum.Material.SmoothPlastic,
+		Parent = folder,
+	})
+	for _, side in { 1, -1 } do -- glowing trim along the two long edges
+		part({
+			Name = "Trim",
+			Size = Vector3.new(1.5, 0.4, length),
+			CFrame = CFrame.new(center.X + side * (depth / 2 - 1), floorY + 0.2, center.Z),
+			Color = Color3.fromRGB(255, 140, 40),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			Parent = folder,
+		})
+	end
+
+	local function floorLabel(name: string, u: number, d: number, width: number, deep: number, text: string, color: Color3)
+		local board = part({
+			Name = name,
+			Size = Vector3.new(deep, 0.2, width),
+			CFrame = CFrame.new(at(u, d, floorY + 0.1)) * CFrame.Angles(0, math.pi / 2, 0),
+			Color = Color3.fromRGB(24, 20, 36),
+			Material = Enum.Material.SmoothPlastic,
+			TopSurface = Enum.SurfaceType.Smooth,
+			CanCollide = false,
+			Parent = folder,
+		})
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Top
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 40
+		gui.LightInfluence = 0
+		gui.Parent = board
+		local textLabel = Instance.new("TextLabel")
+		textLabel.Size = UDim2.fromScale(1, 1)
+		textLabel.BackgroundTransparency = 1
+		textLabel.Text = text
+		textLabel.TextColor3 = color
+		textLabel.TextStrokeTransparency = 0.4
+		textLabel.Font = Enum.Font.FredokaOne
+		textLabel.TextScaled = true
+		textLabel.Parent = gui
+		return board
+	end
+
+	-- Columns left to right.
+	local u = -length / 2 + MARGIN
+	local rowD = { dFront, dBack }
+	local rowHalf = { frontHalf, backHalf }
+	for c, column in columns do
+		local width = widths[c]
+		local cu = u + width / 2
+		for r = 1, 2 do
+			local m = models[r][c]
+			-- Face the viewer (+X) and stand on the floor.
+			m.Model:PivotTo(CFrame.new(at(cu, rowD[r], floorY + m.Height / 2)) * CFrame.Angles(0, -math.pi / 2, 0))
+			m.Model.Parent = folder
+			floorLabel("Label" .. c, cu, rowD[r] + rowHalf[r] + 4 + 4.5, math.max(width, 24), 9, column.Title .. "\n" .. column.Detail, column.Color)
+		end
+		u += width + GAP
+	end
+
+	-- Names of the two pets, in front of their rows (under the size labels).
+	for r, entry in pets do
+		local what = if r == 1 then "SMALLEST PET: " else "BIGGEST PET: "
+		floorLabel("RowName" .. r, 0, rowD[r] + rowHalf[r] + 17, length - MARGIN, 6, what .. string.upper(entry.Info.Name) .. " (" .. entry.Info.Rarity .. ")", Color3.fromRGB(255, 170, 70))
+	end
+
+	-- A 5 stud tall marker at the front left, so you can compare the pets with a player.
+	local ref = part({
+		Name = "PlayerHeight",
+		Size = Vector3.new(2, 5, 1),
+		CFrame = CFrame.new(at(-length / 2 + 6, depthFront - 8, floorY + 2.5)),
+		Color = Color3.fromRGB(120, 200, 255),
+		Transparency = 0.25,
+		Material = Enum.Material.SmoothPlastic,
+		Parent = folder,
+	})
+	billboard(ref, "player: 5 studs", Color3.fromRGB(150, 220, 255), 4, 22, 400)
+
+	-- Lamps so it is not dark at night.
+	for _, d in { depthFront - 4, depthBack + 4 } do
+		for i = 0, 4 do
+			local lamp = part({
+				Name = "Lamp",
+				Size = Vector3.new(2, 16, 2),
+				CFrame = CFrame.new(at(-length / 2 + 6 + i * (length - 12) / 4, d, floorY + 8)),
+				Color = Color3.fromRGB(70, 55, 90),
+				Parent = folder,
+			})
+			local light = Instance.new("PointLight")
+			light.Range = 60
+			light.Brightness = 2
+			light.Color = Color3.fromRGB(255, 220, 170)
+			light.Parent = lamp
+			part({ Name = "Bulb", Size = Vector3.new(3, 3, 3), CFrame = lamp.CFrame + Vector3.new(0, 9, 0), Color = Color3.fromRGB(255, 220, 150), Material = Enum.Material.Neon, CanCollide = false, Parent = folder })
+		end
+	end
+
+	folder.Parent = workspace
+end
+
 function MapBuilder.EnsureMap(): Instance
 	local existing = workspace:FindFirstChild("Map")
 	if existing then

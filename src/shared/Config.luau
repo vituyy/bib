@@ -434,6 +434,16 @@ setmetatable(Config.Pets, {
 	end,
 })
 
+-- How big a pet is drawn (studs, before its model is fitted): better rarities are bigger, and a Big, Huge or
+-- Gigantic pet grows by its Scale. Used by the pets walking on the bases and by the size platform.
+function Config.PetBodySize(pet): number
+	return 2.2 * (1 + Config.Rarities[pet.Rarity].Order * 0.12) * (pet.Scale or 1)
+end
+
+-- Where the size comparison platform is built (see MapBuilder.BuildSizeStage). It floats in the void to the
+-- right of the map when you look down the street. Change Center to move it.
+Config.SizeStage = { Center = Vector3.new(-290, 0, -30) }
+
 -- Index order: every pet, weakest first.
 Config.PetOrder = {}
 for petId in Config.Pets do

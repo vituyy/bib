@@ -152,7 +152,7 @@ local function renderPets(player: Player, data)
 		local pet = Config.Pets[petId]
 		if pet then
 			local rarity = Config.Rarities[pet.Rarity]
-			local size = 2.2 * (1 + rarity.Order * 0.12) * (pet.Scale or 1) -- Big, Huge and Gigantic pets are bigger
+			local size = Config.PetBodySize(pet) -- Big, Huge and Gigantic pets are bigger
 			local model = Art.Clone("Pets", petId, size * 1.6)
 			local height = size
 			if model then
