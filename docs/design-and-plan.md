@@ -22,8 +22,8 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Quests (5.1) | A Quests window with daily and weekly quests, chests, a day streak, rerolls and achievements. Every quest shows its effort in minutes next to its reward, and the reward is computed from that effort and from how much the player normally earns. |
 | Phantom furniture (5.1) | Furniture inside the houses no longer blocks players. |
 | Playtime Rewards and potions (5.1) | Twelve daily gifts for playing time, and timed boost potions (Speed XP, Candy, Money, hatching). |
-| Blood Moon event (5.1) | An hourly 5-minute night with a red sky, better eggs, a Blood variant, angrier owners, an event quest and a countdown on screen. |
 | V6 changes | Candy multipliers of the costumes now climb much faster (x2, x4, x7, x12, x20, x35, x60, x100, x170, x300) with costume prices raised to keep the same pace; Pet Capacity gives +2, +2, +1, +1 slots (8, 10, 11, 12); the green signs between levels show the Recommended Level (the Speed Level to bring) and hang over the road; the potion timers at the top of the screen are gone (active potions show in the Rewards window). |
+| Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big 3.5x to 5x, Huge 7x to 10x, Gigantic 15x (before: fixed x3, x8 and x30). See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
 | Kick (5.0) | A caught thief is kicked about 100 studs away from the owner with a kick sound. `Config.KickDistance`, `KickAngle` and `KickSounds` tune it; the movement anti-cheat ignores the flight. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
@@ -129,7 +129,7 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 - When an egg spawns, the game picks its pet straight away (using that house's rarity odds), and the egg takes that pet's design. The egg always hatches the pet it was made for.
 - There are no signs or labels above eggs. Players learn to read the designs: a black egg with little ears is a Black Cat, an orange ribbed egg with a stem is a Pumpkling.
-- Rarer eggs are bigger, more detailed and heavier to carry, which is the only built-in rarity hint. On top of that, any egg can be a Big, Huge or Gigantic one and can glow Golden, Diamond or Rainbow (see 2.8).
+- Rarer eggs are bigger, more detailed and heavier to carry, which is the only built-in rarity hint. On top of that, any egg can be a Big, Huge or Gigantic one (each with its own random size) and can glow Golden, Diamond or Rainbow (see 2.8).
 - Eggs sit in nests (as in the reference screenshots).
 - **Hatching is free**, in 3 incubators on your base (+1 per base upgrade). You can hold 12 unhatched eggs. Tap an egg in the Eggs menu to hatch it, or press Hatch Best to fill every free incubator with your rarest eggs. Hatch time depends on rarity:
 
@@ -170,12 +170,16 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 
 **Egg variants (added 1 October 2026):** every egg rolls two separate things, and one result never changes the other, so an egg can have both, one or neither (a Big Diamond egg, a Gigantic egg, a Rainbow egg...). The egg and the pet it hatches look the part: bigger for a size, glowing and sparkling for a material.
 
-| Size | Chance | Egg size | Pet size | Money/s |
+| Size | Chance | Random size (= Money/s multiplier) | Egg drawn at | Pet drawn at |
 |---|---|---|---|---|
-| Normal | 75.5% | 0.7x | 1x | x1 |
-| Big | 20% | 1.56x | 1.6x | x3 |
-| Huge | 4% | 1.89x | 2.1x | x8 |
-| Gigantic | 0.5% | 2.34x | 2.8x | x30 |
+| Normal | 75.5% | 1x | 0.7x | 1x |
+| Big | 20% | 3.5x to 5x (average 4.25x) | 1.23x to 1.44x | 1.65x to 1.9x |
+| Huge | 4% | 7x to 10x (average 8.5x) | 1.68x to 1.97x | 2.2x to 2.5x |
+| Gigantic | 0.5% | 15x | 2.37x | 2.95x |
+
+**Random sizes (6.1):** when an egg spawns it rolls its tier (Big, Huge, Gigantic or none) and then its own size inside the tier's range, rounded to 0.1 (a Big egg can be 3.5x, 3.6x ... 5x). The size is also the money multiplier, so a 4.2x Big egg pays x4.2 and a 5x Big egg pays x5. Names show it: "Big 4.2x Golden Bat". The picture grows slower than the number, because a 15 times taller egg would be taller than a house: drawn scale = size to the power 0.45 for eggs and 0.4 for pets (`Config.EggScaleExponent`, `Config.PetScaleExponent`); raise them for a more dramatic look. Eggs still carried in the thief's arms are capped at 1.4x.
+
+Before 6.1 the sizes were fixed (Big x3, Huge x8, Gigantic x30, drawn 1.56x, 1.89x, 2.34x). Old saved pets such as "Bat+Big" keep working with those fixed values. The average size multiplier went from 1.83 to 2.03 (+11%): Big and Huge pay more, Gigantic pays less (x30 became x15).
 
 | Material | Chance | Look | Money/s |
 |---|---|---|---|
@@ -183,7 +187,7 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 | Diamond | 5% | ice-blue glow | x8 |
 | Rainbow | 1% | glow cycling through every colour | x25 |
 
-Multipliers stack: a Gigantic Rainbow pet earns x750 (a Gigantic Rainbow Pumpkin King would earn $11.25M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big+Golden" and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
+Multipliers stack: a Gigantic Rainbow pet earns x375 (a Gigantic Rainbow Pumpkin King would earn $5.6M/s, about 1 egg in 20,000). A variant pet is stored as "Bat+Big4.2+Golden" (the size token carries the rolled multiplier) and counts as its plain pet in the Index. All numbers are in `Config.Sizes` and `Config.Materials`.
 
 Because variants raise the average pet income by about 3.4x, every Money price (costumes, trails, base upgrades, Index rewards) was multiplied by 3 so the pacing in 2.11 stays the same for an average-luck player. Lucky players are faster, unlucky ones a little slower.
 
@@ -397,25 +401,6 @@ A **Rewards** button (gift icon, red number = gifts ready) opens a window with t
 - **Potions** (bottom of the window): Speed Potion (x2 Speed XP), Candy Potion (x2 Candy from knocks), Money Potion (x2 Money from pets), Hatch Potion (eggs hatch 2x faster, applied when the egg goes into an incubator). Each lasts 10 minutes. Drinking another of the same kind adds its time (a boost never runs longer than 2 hours from now). Boosts end at a clock time, so they run while the player is away. Active boosts show as small coloured pills under the night/day timer.
 - Settings are in `Config.Playtime` and `Config.Potions`; the counting and paying are in `DataService`; the window in `Main.client`. The Admin panel can add 30 minutes of play time or 3 of every potion.
 
-### 2.18 Blood Moon (hourly event)
-
-**When:** every hour at :00 by the real clock (UTC), so every server runs it at the same moment. It lasts 5 minutes (`Config.BloodMoon.Seconds`). If a normal night is running it is ended quietly (eggs dropped, nobody sent home) and the Blood Moon starts at once. A **countdown pill** ("🩸 BLOOD MOON IN 12:30") sits at the top of the screen under the night/day timer; in the last minute it turns red and pulses, in the last 10 seconds it is big. A red chat warning appears 60 and 10 seconds before.
-
-**What changes while it lasts**
-
-| Area | Change |
-|---|---|
-| Sky and mood | Red sky and fog, a huge red moon, lightning flashes with thunder, a red banner, a rising-moon sound |
-| Music | An ominous track (low drone, heartbeat, far bells) replaces the chill theme; the chase music still takes over during chases |
-| Eggs | Each house puts a Blood Moon Egg (the Legendary egg, pets like the Blood Moon Bat) on some spots: 15% / 15% / 20% / 30% / 35% for houses 1 to 5 and 35% for the rest. Spots are fixed, so this replaces eggs instead of adding more |
-| Variant luck | Every Big / Huge / Gigantic and Golden / Diamond / Rainbow chance is doubled for eggs spawned that night |
-| Blood variant | A new material that only drops during the event (3%, 6% with the doubled luck): x15 income, red glow. It stacks with sizes like the others (a "Big Blood Bat") |
-| Angrier owners | 18% faster, notice a thief in 60% of the usual time, give up after 1.5x as long |
-| Blood Moon Quest | "Bring 4 eggs home" (about 8 minutes of effort, reward worth 1.2x), shown on top of the Quests window; finishing it opens a chest with an egg and a potion |
-| Reward for everyone | Everyone who brought at least 1 egg home gets a random potion when it ends |
-
-New pets and models: none. The Blood variant and the Blood Moon Egg use the existing glow and the existing (block) models. Everything is tuned in `Config.BloodMoon` (and the Blood entry in `Config.Materials`). The Admin panel has a "Start the Blood Moon now" button. The new audio files are `music_blood.mp3`, `blood_rise.mp3` and `thunder.mp3`; paste their ids into `Config.Audio`.
-
 ## 3. Built so far
 
 The main copy is the **SpookySteal-House V4.2** place, kept in the GitHub repo vituyy/bib as `place/SpookyStealV3.2.rbxl` together with all scripts in `src/`. Nothing is published yet.
@@ -577,7 +562,7 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 5. **Reading eggs.** With no signs, a new player can't tell a Common egg from a Mythic one. Decide how much help to give: only size, a subtle glow for Legendary and up, or the pet index revealing designs as you discover them (recommended).
 
-6. **Egg design surprise.** *(Done: egg variants, see 2.8.)* Check in play that a Gigantic Rainbow jackpot (x750) feels exciting and does not break the economy, and whether big eggs should also be heavier to carry.
+6. **Egg design surprise.** *(Done: egg variants, see 2.8.)* Check in play that a Gigantic Rainbow jackpot (x375) feels exciting and does not break the economy, and whether big eggs should also be heavier to carry.
 
 7. **Candy after the last costume.** Candy now buys the 10 costumes (about 4 hours for an active player). After the Red Devil it has nothing to buy. Options: speed potions, egg-luck boosts (more variants), costume dyes, extra pet or hatching-pad levels paid in Candy.
 

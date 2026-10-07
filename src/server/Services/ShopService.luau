@@ -291,11 +291,6 @@ adminCommands.Playtime = function(player)
 	return true, "+30 minutes of play time today"
 end
 
-adminCommands.BloodMoon = function()
-	require(script.Parent.DayNightService).TriggerBloodMoon()
-	return true, "The Blood Moon starts within a second"
-end
-
 adminCommands.God = function(player)
 	local on = not player:GetAttribute("AdminGod")
 	player:SetAttribute("AdminGod", on or nil)
@@ -368,10 +363,6 @@ end
 -- Quests (the rules live in DataService and Config.Quests).
 function actions.ClaimQuest(player: Player, _data, arg: any)
 	return DataService.ClaimQuest(player, arg)
-end
-
-function actions.ClaimBloodQuest(player: Player, _data, _arg: any)
-	return DataService.ClaimBloodQuest(player)
 end
 
 function actions.ClaimChest(player: Player, _data, arg: any)

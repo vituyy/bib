@@ -133,7 +133,7 @@ end
 
 ---------------------------------------------------------------------------
 -- Costumes: bought with Candy. Better houses only give Candy to good enough costumes (Tier).
---   CandyMultiplier: multiplies the Candy you get from every Trick-or-Treat knock (x2 for the first costume, up to x300).
+--   CandyMultiplier: multiplies the Candy you get from every Trick-or-Treat knock (the first costume is x2).
 --   XpPerSecond: the Speed XP per second you earn while running (anywhere; a treadmill multiplies it).
 -- "None" is what a brand-new player wears: x1 Candy and the lowest XP rate.
 ---------------------------------------------------------------------------
@@ -271,70 +271,126 @@ Config.Pets = {
 ---------------------------------------------------------------------------
 -- Egg variants. Every egg rolls two separate things, and one result never changes the other, so an egg can
 -- have both (a Big Diamond egg), only one (a Gigantic egg, a Rainbow egg) or neither:
---   Size:     Big, Huge or Gigantic. The egg and the pet grow.
+--   Size:     Big, Huge or Gigantic. The egg and the pet grow, and each egg gets its OWN random size inside the
+--             tier's range (Min to Max). The money multiplier IS that size: a 4.2x Big egg pays x4.2.
 --   Material: Golden, Diamond or Rainbow. The egg and the pet glow.
--- Chance is the share of all eggs that get that tier (the rest get none). Multipliers stack: a pet's Money per
--- second = its normal income x Size multiplier x Material multiplier.
--- A variant pet is stored as "<PetId>+<Size>+<Material>", for example "Bat+Big+Golden", "Bat+Huge" or
--- "Bat+Rainbow". Config.Pets understands those ids too, so scripts that look a pet up by id need no changes;
--- use Config.SplitPet when you need the plain pet id (art, Index).
+-- Chance is the share of all eggs that get that tier (the rest are normal: 1x). Multipliers stack: a pet's
+-- Money per second = its normal income x Size multiplier x Material multiplier.
+-- A variant pet is stored as "<PetId>+<Size>+<Material>" where the size token carries the rolled multiplier
+-- rounded to 0.1, for example "Bat+Big4.2+Golden", "Bat+Huge8.5" or "Bat+Gigantic15+Rainbow". Old saves use
+-- the plain tier ("Bat+Big"), which still works as a fixed legacy size (LegacyMultiplier, Legacy scales).
+-- Config.Pets understands all of these ids, so scripts that look a pet up by id need no changes; use
+-- Config.SplitPet when you need the plain pet id (art, Index).
 ---------------------------------------------------------------------------
--- EggScale / PetScale: how big the egg and the pet are drawn compared with the normal size. A normal egg is
--- drawn at DefaultEggScale (smaller than before) so a Big egg is clearly bigger next to it. Normal pets keep
--- their size (1); variant pets grow by PetScale.
+-- How big things are DRAWN. Drawing a 15x egg 15 times taller would be taller than a house, so the picture
+-- grows more slowly than the multiplier: drawn scale = multiplier ^ exponent. Raise the exponents for a more
+-- dramatic size, lower them to keep eggs smaller. A normal egg is drawn at DefaultEggScale and a normal pet
+-- at 1.
 Config.DefaultEggScale = 0.7
+Config.EggScaleExponent = 0.45 -- Big 3.5x -> 1.23, Big 5x -> 1.44, Huge 10x -> 1.97, Gigantic 15x -> 2.37
+Config.PetScaleExponent = 0.4 -- Big 3.5x -> 1.65, Big 5x -> 1.90, Huge 10x -> 2.5, Gigantic 15x -> 2.95
 Config.Sizes = {
-	Big = { Name = "Big", Chance = 0.20, Multiplier = 3, EggScale = 1.56, PetScale = 1.6 },
-	Huge = { Name = "Huge", Chance = 0.04, Multiplier = 8, EggScale = 1.89, PetScale = 2.1 },
-	Gigantic = { Name = "Gigantic", Chance = 0.005, Multiplier = 30, EggScale = 2.34, PetScale = 2.8 },
+	Big = { Name = "Big", Chance = 0.20, Min = 3.5, Max = 5, LegacyMultiplier = 3, LegacyEggScale = 1.56, LegacyPetScale = 1.6 },
+	Huge = { Name = "Huge", Chance = 0.04, Min = 7, Max = 10, LegacyMultiplier = 8, LegacyEggScale = 1.89, LegacyPetScale = 2.1 },
+	Gigantic = { Name = "Gigantic", Chance = 0.005, Min = 15, Max = 15, LegacyMultiplier = 30, LegacyEggScale = 2.34, LegacyPetScale = 2.8 },
 }
 Config.Materials = {
 	Golden = { Name = "Golden", Chance = 0.15, Multiplier = 3, Color = Color3.fromRGB(255, 205, 50) },
 	Diamond = { Name = "Diamond", Chance = 0.05, Multiplier = 8, Color = Color3.fromRGB(120, 230, 255) },
 	Rainbow = { Name = "Rainbow", Chance = 0.01, Multiplier = 25, Color = Color3.fromRGB(255, 120, 200) }, -- cycles through every colour
-	Blood = { Name = "Blood", Chance = 0.03, Multiplier = 15, Color = Color3.fromRGB(200, 10, 30), EventOnly = true }, -- only found during the Blood Moon
 }
 local SIZE_ORDER = { "Gigantic", "Huge", "Big" } -- rarest first
-local MATERIAL_ORDER = { "Blood", "Rainbow", "Diamond", "Golden" }
+local MATERIAL_ORDER = { "Rainbow", "Diamond", "Golden" }
 
-local function rollTier(pool, order: { string }, luck: number, event: boolean): string?
+local function rollTier(pool, order: { string }): string?
 	local roll = math.random()
 	for _, name in order do
-		local info = pool[name]
-		if event or not info.EventOnly then
-			roll -= info.Chance * luck
-			if roll < 0 then
-				return name
-			end
+		roll -= pool[name].Chance
+		if roll < 0 then
+			return name
 		end
 	end
 	return nil
 end
 
--- Rolls a freshly spawned egg's size and material: (size or nil, material or nil). `luck` multiplies every chance
--- (the Blood Moon doubles them); `event` lets the event-only Blood material drop.
-function Config.RollVariant(luck: number?, event: boolean?): (string?, string?)
-	local multiplier = luck or 1
-	return rollTier(Config.Sizes, SIZE_ORDER, multiplier, event == true), rollTier(Config.Materials, MATERIAL_ORDER, multiplier, event == true)
+local function formatMultiplier(mult: number): string
+	return if mult == math.floor(mult) then tostring(mult) else string.format("%.1f", mult)
 end
 
--- "Bat+Big+Golden" -> "Bat", "Big", "Golden". A plain id gives (id, nil, nil).
-function Config.SplitPet(id: string): (string, string?, string?)
+-- The size token for a tier and a multiplier: ("Big", 4.2) -> "Big4.2", ("Gigantic", 15) -> "Gigantic15".
+function Config.SizeToken(tierName: string, multiplier: number): string
+	return tierName .. formatMultiplier(math.round(multiplier * 10) / 10)
+end
+
+-- Reads a size token ("Big4.2", or the legacy "Big"). Returns nil if it is not one, else a table with
+-- Tier, Multiplier (money), EggScale, PetScale (how big they are drawn) and Label ("Big 4.2x").
+local sizeCache = {}
+function Config.SizeInfo(token: string)
+	local cached = sizeCache[token]
+	if cached ~= nil then
+		return cached or nil
+	end
+	local tierName, digits = string.match(token, "^(%a+)([%d%.]*)$")
+	local tier = tierName and Config.Sizes[tierName]
+	local number = if digits and digits ~= "" then tonumber(digits) else nil
+	if not tier or (digits ~= "" and not number) then
+		sizeCache[token] = false
+		return nil
+	end
+	local info
+	if number then
+		local mult = math.round(math.clamp(number, tier.Min, tier.Max) * 10) / 10
+		info = {
+			Tier = tierName,
+			Multiplier = mult,
+			EggScale = Config.DefaultEggScale * mult ^ Config.EggScaleExponent,
+			PetScale = mult ^ Config.PetScaleExponent,
+			Label = tier.Name .. " " .. formatMultiplier(mult) .. "x",
+		}
+	else
+		info = {
+			Tier = tierName,
+			Multiplier = tier.LegacyMultiplier,
+			EggScale = tier.LegacyEggScale,
+			PetScale = tier.LegacyPetScale,
+			Label = tier.Name,
+		}
+	end
+	sizeCache[token] = info
+	return info
+end
+
+-- Rolls a freshly spawned egg's size and material: (size token or nil, material or nil). The size token holds
+-- the egg's own random multiplier, so two Big eggs are usually not the same size.
+function Config.RollVariant(): (string?, string?)
+	local tierName = rollTier(Config.Sizes, SIZE_ORDER)
+	local token
+	if tierName then
+		local tier = Config.Sizes[tierName]
+		token = Config.SizeToken(tierName, tier.Min + math.random() * (tier.Max - tier.Min))
+	end
+	return token, rollTier(Config.Materials, MATERIAL_ORDER)
+end
+
+-- "Bat+Big4.2+Golden" -> "Bat", "Big", "Golden", sizeInfo (see Config.SizeInfo). A plain id gives (id, nil, nil).
+function Config.SplitPet(id: string): (string, string?, string?, any?)
 	local parts = string.split(id, "+")
-	local size, material
+	local size, sizeInfo, material
 	for i = 2, #parts do
 		local token = parts[i]
-		if Config.Sizes[token] and not size then
-			size = token
+		local info = not size and Config.SizeInfo(token)
+		if info then
+			size, sizeInfo = info.Tier, info
 		elseif Config.Materials[token] and not material then
 			material = token
 		else
-			return id, nil, nil -- not a valid variant id
+			return id, nil, nil, nil -- not a valid variant id
 		end
 	end
-	return parts[1], size, material
+	return parts[1], size, material, sizeInfo
 end
 
+-- `size` is a size token from Config.RollVariant ("Big4.2") or a plain tier name for a legacy pet.
 function Config.MakePetId(baseId: string, size: string?, material: string?): string
 	local id = baseId
 	if size then
@@ -356,18 +412,18 @@ setmetatable(Config.Pets, {
 		if cached then
 			return cached
 		end
-		local baseId, size, material = Config.SplitPet(id)
+		local baseId, size, material, sizeInfo = Config.SplitPet(id)
 		local base = rawget(Config.Pets, baseId)
 		if not base or not (size or material) then
 			return nil
 		end
-		local sizeInfo = size and Config.Sizes[size]
 		local materialInfo = material and Config.Materials[material]
 		local info = table.clone(base)
-		info.Name = (if sizeInfo then sizeInfo.Name .. " " else "") .. (if materialInfo then materialInfo.Name .. " " else "") .. base.Name
-		info.MoneyPerSecond = base.MoneyPerSecond * (if sizeInfo then sizeInfo.Multiplier else 1) * (if materialInfo then materialInfo.Multiplier else 1)
+		info.Name = (if sizeInfo then sizeInfo.Label .. " " else "") .. (if materialInfo then materialInfo.Name .. " " else "") .. base.Name
+		info.MoneyPerSecond = math.round(base.MoneyPerSecond * (if sizeInfo then sizeInfo.Multiplier else 1) * (if materialInfo then materialInfo.Multiplier else 1) * 100) / 100
 		info.BaseId = baseId
 		info.Size = size
+		info.SizeMultiplier = if sizeInfo then sizeInfo.Multiplier else 1
 		info.Material = material
 		info.Scale = if sizeInfo then sizeInfo.PetScale else 1
 		variantPets[id] = info
@@ -499,31 +555,6 @@ Config.StealHoldDuration = 1 -- seconds holding the prompt
 Config.ChaseMaxDuration = 30 -- owner gives up after this long
 Config.ChaseGiveUpDistance = 150 -- owner gives up if the thief gets this far ahead
 Config.CatchDistance = 5 -- studs between owner and thief that counts as caught
-
----------------------------------------------------------------------------
--- Blood Moon: every hour at :00 (UTC, so every server at the same moment) a special night starts for Seconds.
--- A warning appears WarningSeconds before. While it lasts: the sky and music change; every house puts a Blood
--- Moon Egg on some spots (MoonEggChance per house, the rest are the house's normal eggs); variant chances are
--- multiplied by LuckMultiplier and the event-only Blood material can drop; owners run OwnerSpeedMult faster,
--- notice thieves sooner (OwnerReactionMult) and chase longer (ChaseDurationMult). Quest: bring home Quest.Target
--- eggs for a reward and a bonus chest; everyone who brought home an egg gets a potion at the end.
----------------------------------------------------------------------------
-Config.BloodMoon = {
-	Seconds = 300,
-	WarningSeconds = 60,
-	LuckMultiplier = 2,
-	OwnerSpeedMult = 1.18,
-	OwnerReactionMult = 0.6,
-	ChaseDurationMult = 1.5,
-	MoonEggId = "MoonEgg",
-	MoonEggChance = { 0.15, 0.15, 0.2, 0.3, 0.35, 0.35, 0.35, 0.35, 0.35 }, -- per house; low houses get fewer so a new player is not handed a Legendary pet
-	Quest = { Target = 4, Minutes = 8, Mult = 1.2, Share = { Money = 0.4, Candy = 0.3, Xp = 0.3 } },
-}
-
--- True while the Blood Moon is on (the server sets this attribute; clients can read it too).
-function Config.IsBloodMoon(): boolean
-	return game:GetService("ReplicatedStorage"):GetAttribute("BloodMoon") == true
-end
 -- Furniture inside the houses is phantom: players run straight through tables, chairs, shelves and beds, so nobody
 -- gets stuck during a chase. Every part inside a house's Decor folder whose name contains one of Folders is
 -- switched to CanCollide = false when the server starts, except parts whose own name contains one of Keep
@@ -564,7 +595,6 @@ Config.Audio = {
 	Music = {
 		Chill = { Id = "104408838738669", File = "music_chill.mp3", Volume = 0.45 }, -- slow spooky waltz, always playing
 		Chase = { Id = "84750268429068", File = "music_chase.mp3", Volume = 0.7 }, -- replaces it while an owner chases you
-		Blood = { Id = "", File = "music_blood.mp3", Volume = 0.55 }, -- replaces the chill theme during the Blood Moon
 	},
 	Sfx = {
 		Click = { Id = "90777076070251", File = "ui_click.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/clickfast.wav" },
@@ -588,8 +618,6 @@ Config.Audio = {
 		Knock = { Id = "131329535742082", File = "knock.mp3", Volume = 1 },
 		DoorCreak = { Id = "137180994933404", File = "door_creak.mp3", Volume = 0.8 },
 		Whoosh = { Id = "73038656223943", File = "whoosh.mp3", Volume = 0.5 },
-		BloodRise = { Id = "", File = "blood_rise.mp3", Volume = 0.9 },
-		Thunder = { Id = "", File = "thunder.mp3", Volume = 0.8 },
 	},
 }
 
@@ -621,9 +649,9 @@ Config.FriendBoostPercent = 10 -- extra pet Money for every friend playing in th
 Config.BaseDepth = 40 -- depth of a new base (studs, front to back)
 Config.BaseDepthStep = 10
 Config.PetCapacityUpgrades = {
-	{ Price = 2000, Capacity = 8 }, -- +2
-	{ Price = 30000, Capacity = 10 }, -- +2
-	{ Price = 500000, Capacity = 11 }, -- +1 from here on
+	{ Price = 2000, Capacity = 8 },
+	{ Price = 30000, Capacity = 10 },
+	{ Price = 500000, Capacity = 11 },
 	{ Price = 8000000, Capacity = 12 },
 }
 Config.HatchPadUpgrades = {
@@ -634,8 +662,6 @@ Config.HatchPadUpgrades = {
 	{ Price = 90000000, Capacity = 7 },
 }
 
--- The Speed Level a player should have to rob this house (level 1 to 9 of the street): the lowest level whose speed,
--- with the egg's carrying slowdown (about 10%), still keeps up with the owner. It is shown on the signs between levels.
 function Config.RecommendedLevel(houseIndex: number): number
 	local house = Config.Houses[houseIndex]
 	if not house then

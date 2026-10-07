@@ -122,8 +122,7 @@ end
 function Art.Egg(eggId: string, petId: string?, withNest: boolean?, unanchored: boolean?, scaleCap: number?): Model
 	local Config = require(ReplicatedStorage.Shared.Config)
 	local egg = Config.Eggs[eggId]
-	local _, sizeName, materialName = Config.SplitPet(petId or "")
-	local sizeInfo = sizeName and Config.Sizes[sizeName]
+	local _, _, materialName, sizeInfo = Config.SplitPet(petId or "")
 	local scale = if sizeInfo then math.min(sizeInfo.EggScale, scaleCap or math.huge) else Config.DefaultEggScale
 	local height = (if egg then egg.Size else 2) * 1.8 * scale -- sized for the scaled-up houses
 	local model = Instance.new("Model")

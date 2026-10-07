@@ -8,7 +8,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local PlotService = require(script.Parent.PlotService)
-local DataService = require(script.Parent.DataService)
 
 local DayNightService = {}
 
@@ -19,25 +18,11 @@ function DayNightService.Skip()
 	skipPhase = true
 end
 
--- The Blood Moon starts at the top of every hour (UTC), so every server runs it at the same moment.
-local function nextFullHour(now: number): number
-	return (math.floor(now / 3600) + 1) * 3600
-end
-local nextBloodMoon = nextFullHour(os.time())
-local function bloodMoonDue(): boolean
-	return os.time() >= nextBloodMoon
-end
-
--- Starts the Blood Moon right away (Admin panel).
-function DayNightService.TriggerBloodMoon()
-	nextBloodMoon = os.time()
-end
-
--- task.wait that the Admin panel's "skip phase" can cut short, and that a Blood Moon that becomes due can too.
-local function waitPhase(seconds: number, endForBloodMoon: boolean)
+-- task.wait that the Admin panel's "skip phase" can cut short.
+local function waitPhase(seconds: number)
 	skipPhase = false
 	local deadline = os.clock() + seconds
-	while os.clock() < deadline and not skipPhase and not (endForBloodMoon and bloodMoonDue()) do
+	while os.clock() < deadline and not skipPhase do
 		task.wait(0.2)
 	end
 	skipPhase = false
@@ -84,75 +69,29 @@ function DayNightService.Start(map: Instance)
 		end
 	end
 
-	ReplicatedStorage:SetAttribute("NextBloodMoon", nextBloodMoon)
-	ReplicatedStorage:SetAttribute("BloodMoon", false)
-
-	-- Warnings: a minute and ten seconds before the Blood Moon.
-	task.spawn(function()
-		local warned: { [number]: boolean } = {}
-		while true do
-			task.wait(1)
-			local left = nextBloodMoon - os.time()
-			if left == Config.BloodMoon.WarningSeconds and not warned[nextBloodMoon] then
-				warned[nextBloodMoon] = true
-				Remotes.Notify:FireAllClients("🩸 The Blood Moon rises in 1 minute! Owners will be angrier, the eggs better.", Color3.fromRGB(255, 70, 70))
-			elseif left == 10 then
-				Remotes.Notify:FireAllClients("🩸 Blood Moon in 10 seconds!", Color3.fromRGB(255, 70, 70))
-			end
-		end
-	end)
-
 	task.spawn(function()
 		while true do
-			local bloodMoon = bloodMoonDue()
-			local duration = Config.NightSeconds
-			if bloodMoon then
-				local startedAt = os.time()
-				nextBloodMoon = nextFullHour(startedAt)
-				ReplicatedStorage:SetAttribute("NextBloodMoon", nextBloodMoon)
-				ReplicatedStorage:SetAttribute("BloodMoonId", startedAt)
-				ReplicatedStorage:SetAttribute("BloodMoon", true) -- before the callbacks, so houses fill with Blood Moon eggs
-				DataService.BloodMoonStarted()
-				duration = Config.BloodMoon.Seconds
-			end
-			setPhase(true, duration)
+			setPhase(true, Config.NightSeconds)
 			for _, callback in nightCallbacks do
 				task.spawn(callback)
 			end
-			if bloodMoon then
-				Remotes.Notify:FireAllClients("🩸 THE BLOOD MOON HAS RISEN! Better eggs, angrier owners.", Color3.fromRGB(255, 60, 60))
-			else
-				Remotes.Notify:FireAllClients("Night has fallen! Fresh eggs are in every house.", Color3.fromRGB(190, 120, 255))
-			end
-			waitPhase(duration, not bloodMoon)
+			Remotes.Notify:FireAllClients("Night has fallen! Fresh eggs are in every house.", Color3.fromRGB(190, 120, 255))
+			waitPhase(Config.NightSeconds)
 
-			local cutShort = not bloodMoon and bloodMoonDue()
-			if bloodMoon then
-				ReplicatedStorage:SetAttribute("BloodMoon", false)
-				DataService.BloodMoonEnded()
+			setPhase(false, Config.DaySeconds)
+			for _, callback in dayCallbacks do
+				callback() -- runs first so carried eggs are dropped before anyone is sent home
 			end
-			if cutShort then
-				-- The Blood Moon is due while a normal night is running: end the night quietly (eggs dropped, chases
-				-- stopped) without sending anybody home, and start the Blood Moon straight away.
-				for _, callback in dayCallbacks do
-					callback()
-				end
-			else
-				setPhase(false, Config.DaySeconds)
-				for _, callback in dayCallbacks do
-					callback() -- runs first so carried eggs are dropped before anyone is sent home
-				end
-				if zone then
-					for _, player in Players:GetPlayers() do
-						local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-						if root and isInside(zone, root.Position) then
-							PlotService.TeleportHome(player)
-						end
+			if zone then
+				for _, player in Players:GetPlayers() do
+					local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+					if root and isInside(zone, root.Position) then
+						PlotService.TeleportHome(player)
 					end
 				end
-				Remotes.Notify:FireAllClients("The sun is up! The street is closed until night.", Color3.fromRGB(255, 220, 120))
-				waitPhase(Config.DaySeconds, true)
 			end
+			Remotes.Notify:FireAllClients("The sun is up! The street is closed until night.", Color3.fromRGB(255, 220, 120))
+			waitPhase(Config.DaySeconds)
 		end
 	end)
 end

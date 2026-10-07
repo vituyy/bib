@@ -218,9 +218,6 @@ end
 
 -- Fade to a track; the others fade out but keep their place (the chill theme resumes where it was).
 local function setMusic(name: string, fade: number)
-	if not tracks[name] then
-		name = "Chill" -- a track without an uploaded sound: keep the chill theme going
-	end
 	if currentMusic == name then
 		return
 	end
@@ -1256,31 +1253,6 @@ function QR.questCard(order: number, quest, listName: string, index: number)
 	end
 end
 
--- The Blood Moon quest: only exists around an event. Finishing it opens a bonus chest (an egg and a potion).
-function QR.bloodCard(order: number, quest)
-	local ready = quest.Progress >= quest.Target
-	local live = Config.IsBloodMoon()
-	local card = box({ Size = UDim2.new(1, -8, 0, 104), LayoutOrder = order, Parent = list }, if quest.Claimed then PAINT.Grey elseif ready then PAINT.Green else PAINT.Red)
-	local pill = new("Frame", { Size = UDim2.fromOffset(190, 20), Position = UDim2.fromOffset(12, 8), BackgroundColor3 = Color3.fromRGB(120, 10, 25), ZIndex = 2, Parent = card }, { corner(10), border(2) })
-	outlined({ Size = UDim2.new(1, -10, 1, -2), Position = UDim2.fromOffset(5, 1), Text = if live then "🩸 BLOOD MOON   TONIGHT" else "🩸 BLOOD MOON   last event", ZIndex = 3, Parent = pill }, 1.5)
-	outlined({ Size = UDim2.new(1, -250, 0, 28), Position = UDim2.fromOffset(12, 32), Text = string.format("Bring %d eggs home", quest.Target), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2)
-	local bar, fill = progressBar({ Size = UDim2.new(1, -250, 0, 20), Position = UDim2.fromOffset(12, 66), Parent = card }, PAINT.XpFill)
-	setBar(fill, quest.Progress / quest.Target)
-	outlined({ Size = UDim2.new(1, -12, 1, -4), Position = UDim2.fromOffset(6, 2), Text = string.format("%d / %d", math.floor(quest.Progress), quest.Target), ZIndex = 3, Parent = bar }, 1.5)
-	outlined({ Size = UDim2.new(1, -250, 0, 14), Position = UDim2.fromOffset(12, 88), Text = "Chest: an egg and a potion", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 225, 225), ZIndex = 2, Parent = card }, 1)
-	QR.rewardChips(card, quest.Reward, UDim2.new(1, -222, 0, 12), 110)
-	if quest.Claimed then
-		QR.cardStatus(card, "✓ Done", WHITE)
-	elseif ready then
-		chunkyButton({ Size = UDim2.fromOffset(92, 44), Position = UDim2.new(1, -104, 0, 10), Text = "Open!", ZIndex = 2, Parent = card }, PAINT.Orange, function()
-			request("ClaimBloodQuest", nil)
-			sfx("Fanfare")
-		end)
-	else
-		QR.cardStatus(card, if live then "Hunting" else "Missed", ORANGE)
-	end
-end
-
 function QR.chestCard(order: number, listName: string, quests, now: number)
 	local quest_list = if listName == "Daily" then quests.Daily else quests.Weekly
 	local opened = quests[listName .. "Chest"]
@@ -1353,10 +1325,6 @@ function menus.Quests(d)
 		order += 1
 		return order
 	end
-	if quests.Blood and (Config.IsBloodMoon() or not quests.Blood.Claimed) then
-		header(nextOrder(), "🩸 Blood Moon Quest", Color3.fromRGB(255, 90, 90))
-		QR.bloodCard(nextOrder(), quests.Blood)
-	end
 	header(nextOrder(), "Daily Quests   ⏰ new ones in " .. QR.timeLeft(Config.Quests.SecondsToDaily(now)), ORANGE)
 	for index, quest in quests.Daily do
 		QR.questCard(nextOrder(), quest, "Daily", index)
@@ -1379,10 +1347,6 @@ function QR.claimableCount(d): number
 		return 0
 	end
 	local count = 0
-	local blood = d.Quests.Blood
-	if blood and not blood.Claimed and blood.Progress >= blood.Target then
-		count += 1
-	end
 	for _, set in { d.Quests.Daily, d.Quests.Weekly } do
 		for _, quest in set do
 			if quest.Progress >= quest.Target and not quest.Claimed then
@@ -1419,9 +1383,6 @@ function QR.questSignature(d): string
 			end
 		end
 		table.insert(parts, tostring(d.Quests.DailyChest) .. tostring(d.Quests.WeeklyChest) .. d.Quests.Streak .. ":" .. d.Quests.Day)
-		if d.Quests.Blood then
-			table.insert(parts, "b" .. d.Quests.Blood.Id .. ":" .. d.Quests.Blood.Progress .. tostring(d.Quests.Blood.Claimed) .. tostring(Config.IsBloodMoon()))
-		end
 	end
 	for id, tier in d.Achieved or {} do
 		table.insert(parts, id .. tier)
@@ -2748,7 +2709,7 @@ task.spawn(function()
 		local endsAt = ReplicatedStorage:GetAttribute("PhaseEndsAt")
 		if endsAt then
 			local left = endsAt - workspace:GetServerTimeNow()
-			phaseLabel.Text = if isNight then (if Config.IsBloodMoon() then "🩸 BLOOD MOON " else "🌙 NIGHT ") .. formatTime(left) else "☀️ DAY " .. formatTime(left) .. " - street closed"
+			phaseLabel.Text = if isNight then "🌙 NIGHT " .. formatTime(left) else "☀️ DAY " .. formatTime(left) .. " - street closed"
 		end
 		if openMenu == "Eggs" then
 			refreshIncubatorTimers()
@@ -2896,12 +2857,12 @@ Remotes.ChaseState.OnClientEvent:Connect(function(isChased: boolean)
 		sfx("ChaseAlert")
 		setMusic("Chase", 0.5)
 	else
-		setMusic(if Config.IsBloodMoon() then "Blood" else "Chill", 2.5)
+		setMusic("Chill", 2.5)
 	end
 end)
 Remotes.Kick.OnClientEvent:Connect(function()
 	sfx("Caught")
-	setMusic(if Config.IsBloodMoon() then "Blood" else "Chill", 2.5)
+	setMusic("Chill", 2.5)
 end)
 
 -- Play the hatch sound as the reveal egg opens, respecting the existing sound toggle.
@@ -2967,7 +2928,6 @@ local function buildAdminPanel()
 	button("New quests (reroll the set)", PAINT.Green, "QuestsNew")
 	button("+3 of every potion", PAINT.Purple, "Potions")
 	button("+30 min play time", PAINT.Purple, "Playtime")
-	button("Start the Blood Moon now", PAINT.Red, "BloodMoon")
 	button("God mode on/off", PAINT.Red, "God")
 
 	order += 1
@@ -3013,7 +2973,7 @@ player:GetAttributeChangedSignal("IsAdmin"):Connect(function()
 end)
 
 ---------------------------------------------------------------------------
--- Rewards: countdowns and the badge (active potions are shown only inside the Rewards window).
+-- Rewards: countdowns, the badge, and the row of active potion boosts under the night/day timer.
 ---------------------------------------------------------------------------
 do
 local wasReady = -1
@@ -3043,168 +3003,4 @@ task.spawn(function()
 		end
 	end
 end)
-end
-
----------------------------------------------------------------------------
--- Blood Moon (rules: Config.BloodMoon; the clock and the eggs are server side). Here: the countdown under the
--- timer, a blood-red sky with a big red moon, fog, lightning flashes, the red banner and the ominous music.
----------------------------------------------------------------------------
-do
-	local Lighting = game:GetService("Lighting")
-	local RED_ALERT = Color3.fromRGB(255, 70, 70)
-
-	-- Countdown to the next Blood Moon: a dark red pill at the top of the screen, under the night / day timer. It
-	-- pulses and grows in the last minute.
-	local pill = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Size = UDim2.fromOffset(330, 34),
-		Position = UDim2.new(0.5, 0, 0, 50),
-		BackgroundColor3 = Color3.fromRGB(70, 6, 14),
-		BackgroundTransparency = 0.12,
-		Visible = false,
-		Parent = gui,
-	}, { corner(17), new("UIStroke", { Color = Color3.fromRGB(235, 40, 50), Thickness = 2.5 }) })
-	local pillScale = new("UIScale", { Parent = pill })
-	local nextLabel = outlined({ Size = UDim2.new(1, -16, 1, -6), Position = UDim2.fromOffset(8, 3), Text = "", TextColor3 = Color3.fromRGB(255, 190, 190), Parent = pill }, 2)
-	task.spawn(function()
-		while true do
-			local at = ReplicatedStorage:GetAttribute("NextBloodMoon")
-			if at and not Config.IsBloodMoon() then
-				local left = at - workspace:GetServerTimeNow()
-				pill.Visible = true
-				nextLabel.Text = "🩸 BLOOD MOON IN " .. formatTime(left)
-				local near = left <= Config.BloodMoon.WarningSeconds
-				nextLabel.TextColor3 = if near then RED_ALERT else Color3.fromRGB(255, 190, 190)
-				pillScale.Scale = if near then 1.15 + 0.1 * math.sin(os.clock() * 6) else 1
-				if left <= 10 then
-					pillScale.Scale = 1.35 + 0.12 * math.sin(os.clock() * 10) -- the last ten seconds: big and urgent
-				end
-			else
-				pill.Visible = false
-			end
-			task.wait(0.1)
-		end
-	end)
-
-	local saved: { [string]: any }? = nil
-	local moon: Part? = nil
-	local moonLoop: RBXScriptConnection? = nil
-	local active = false
-
-	local function tween(target: Instance?, seconds: number, props: { [string]: any })
-		if target then
-			TweenService:Create(target, TweenInfo.new(seconds), props):Play()
-		end
-	end
-
-	local function setBloodMoon(on: boolean, instant: boolean?)
-		if on == active then
-			return
-		end
-		active = on
-		local seconds = if instant then 0.01 else 4
-		local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
-		local sky = Lighting:FindFirstChildOfClass("Sky")
-		local grade = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
-		if on then
-			saved = {
-				Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient, FogColor = Lighting.FogColor, FogStart = Lighting.FogStart, FogEnd = Lighting.FogEnd,
-				AtmosphereColor = atmosphere and atmosphere.Color, AtmosphereDecay = atmosphere and atmosphere.Decay,
-				Tint = grade and grade.TintColor, Saturation = grade and grade.Saturation, Moon = sky and sky.MoonAngularSize,
-			}
-			tween(Lighting, seconds, { Ambient = Color3.fromRGB(125, 20, 26), OutdoorAmbient = Color3.fromRGB(150, 28, 30), FogColor = Color3.fromRGB(95, 8, 14), FogStart = 100, FogEnd = 1700 })
-			tween(atmosphere, seconds, { Color = Color3.fromRGB(200, 40, 40), Decay = Color3.fromRGB(130, 10, 18) })
-			tween(grade, seconds, { TintColor = Color3.fromRGB(255, 165, 165), Saturation = 0.3 })
-			if sky then
-				sky.MoonAngularSize = 45
-			end
-			-- A huge red moon that follows the camera like part of the sky (sized and placed inside the fog distance).
-			local disc = new("Part", {
-				Name = "BloodMoonDisc", Shape = Enum.PartType.Ball, Size = Vector3.new(250, 250, 250), Material = Enum.Material.Neon,
-				Color = Color3.fromRGB(205, 18, 24), Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Parent = workspace,
-			})
-			moon = disc
-			moonLoop = RunService.RenderStepped:Connect(function()
-				local camera = workspace.CurrentCamera
-				if camera then
-					disc.Position = camera.CFrame.Position + Vector3.new(0.25, 0.5, 0.8).Unit * 780
-				end
-			end)
-		else
-			local old = saved
-			if old then
-				tween(Lighting, seconds, { Ambient = old.Ambient, OutdoorAmbient = old.OutdoorAmbient, FogColor = old.FogColor, FogStart = old.FogStart, FogEnd = old.FogEnd })
-				if atmosphere and old.AtmosphereColor then
-					tween(atmosphere, seconds, { Color = old.AtmosphereColor, Decay = old.AtmosphereDecay })
-				end
-				if grade and old.Tint then
-					tween(grade, seconds, { TintColor = old.Tint, Saturation = old.Saturation })
-				end
-				if sky and old.Moon then
-					sky.MoonAngularSize = old.Moon
-				end
-			end
-			if moonLoop then
-				moonLoop:Disconnect()
-				moonLoop = nil
-			end
-			if moon then
-				moon:Destroy()
-				moon = nil
-			end
-		end
-	end
-
-	-- Lightning: now and then the whole street flashes and thunder rolls.
-	task.spawn(function()
-		while true do
-			task.wait(math.random(40, 100) / 10)
-			if active then
-				local base = Lighting.Brightness
-				local ambient = Lighting.Ambient
-				for _ = 1, math.random(2, 3) do
-					Lighting.Brightness = base + 3.5
-					Lighting.Ambient = Color3.fromRGB(255, 120, 120)
-					task.wait(0.06)
-					Lighting.Brightness = base
-					Lighting.Ambient = ambient
-					task.wait(0.09)
-				end
-				task.delay(0.5, function()
-					sfx("Thunder")
-				end)
-			end
-		end
-	end)
-
-	local function showBanner(text: string)
-		local label = outlined({ AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(620, 70), Position = UDim2.fromScale(0.5, 0.3), Text = text, TextColor3 = RED_ALERT, ZIndex = 50, Parent = gui }, 4)
-		task.delay(4, function()
-			local stroke = label:FindFirstChildOfClass("UIStroke")
-			tween(label, 1, { TextTransparency = 1 })
-			tween(stroke, 1, { Transparency = 1 })
-			task.wait(1.1)
-			label:Destroy()
-		end)
-	end
-
-	local function onChanged(first: boolean?)
-		local on = Config.IsBloodMoon()
-		setBloodMoon(on, first)
-		if on then
-			if not first then
-				sfx("BloodRise")
-				showBanner("🩸 THE BLOOD MOON HAS RISEN 🩸")
-			end
-			if currentMusic ~= "Chase" then
-				setMusic("Blood", if first then 1 else 4)
-			end
-		elseif not first and currentMusic ~= "Chase" then
-			setMusic("Chill", 4)
-		end
-	end
-	ReplicatedStorage:GetAttributeChangedSignal("BloodMoon"):Connect(onChanged)
-	if Config.IsBloodMoon() then
-		onChanged(true)
-	end
 end
