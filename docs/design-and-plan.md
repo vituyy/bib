@@ -23,7 +23,9 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Phantom furniture (5.1) | Furniture inside the houses no longer blocks players. |
 | Playtime Rewards and potions (5.1) | Twelve daily gifts for playing time, and timed boost potions (Speed XP, Candy, Money, hatching). |
 | V6 changes | Candy multipliers of the costumes now climb much faster (x2, x4, x7, x12, x20, x35, x60, x100, x170, x300) with costume prices raised to keep the same pace; Pet Capacity gives +2, +2, +1, +1 slots (8, 10, 11, 12); the green signs between levels show the Recommended Level (the Speed Level to bring) and hang over the road; the potion timers at the top of the screen are gone (active potions show in the Rewards window). |
-| Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big pets are drawn 2.5x to 3.5x bigger and pay the same (x2.5 to x3.5), Huge 4x to 6x and x4 to x6, Gigantic 8x and x16 (before: fixed x3, x8 and x30). Eggs are drawn half as big as the pet. See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
+| Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big pets are drawn 2x to 3x bigger and pay x2.5 to x3.5, Huge 3x to 5x and x4 to x6, Gigantic 7x and x16 (before: fixed x3, x8 and x30). Eggs are drawn half as big as the pet. See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
+| V6.5 adopted | Your uploaded V6.5 is now the main place: the Blood Moon event with bloody eggs, houses 5 and 6 with their own pets, the Settings window, login rewards and the lighter quest rewards come from it. |
+| Costume requirements and Candy (6.5) | Houses 1 and 2 now need the 1st costume (Bedsheet Ghost), house 3 the 2nd, house 4 the 3rd and so on up to the Mummy for house 9. To make up for it, Candy per knock is about 1.2x what it would have been and costume prices are about 15% lower: you can afford the next costume after 8 to 40 knocks (before: 10 to 118). |
 | Kick (5.0) | A caught thief is kicked about 100 studs away from the owner with a kick sound. `Config.KickDistance`, `KickAngle` and `KickSounds` tune it; the movement anti-cheat ignores the flight. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
@@ -86,15 +88,15 @@ Houses 1 (swamp) and 2 (desert) are built and themed; the themes for houses 3 to
 
 | # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs | Drops | Look |
 |---|---|---|---|---|---|---|---|---|
-| 1 | Old Witch | 17 | 5 | None | 1 | 4 | Swamp Egg (5 level pets) | Built: swamp cottage with chimney smoke, cauldrons and reeds |
-| 2 | Friendly Mummy | 38 | 10 | None | 1 | 4 | Pyramid Egg (5 level pets) | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
-| 3 | Scarecrow | 53 | 20 | Bedsheet Ghost | 1 | 5 | Harvest Egg (5 level pets) | Placeholder |
-| 4 | Zombie Chef | 72 | 40 | Pumpkin Head | 2 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
-| 5 | Gravedigger | 84 | 80 | Witch | 1 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
-| 6 | Count Vlad | 88 | 160 | Vampire | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
-| 7 | Banshee | 105 | 320 | Glowing Skeleton | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
-| 8 | Headless Horseman | 125 | 650 | Werewolf | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
-| 9 | Lich King | 145 | 1,300 | Grim Reaper | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
+| 1 | Old Witch | 17 | 12 | Bedsheet Ghost | 1 | 4 | Swamp Egg (5 level pets) | Built: swamp cottage with chimney smoke, cauldrons and reeds |
+| 2 | Friendly Mummy | 38 | 24 | Bedsheet Ghost | 1 | 4 | Pyramid Egg (5 level pets) | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
+| 3 | Scarecrow | 53 | 48 | Pumpkin Head | 1 | 5 | Harvest Egg (5 level pets) | Placeholder |
+| 4 | Zombie Chef | 72 | 100 | Witch | 2 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
+| 5 | Gravedigger | 84 | 200 | Vampire | 1 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
+| 6 | Count Vlad | 88 | 400 | Glowing Skeleton | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
+| 7 | Banshee | 105 | 800 | Werewolf | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
+| 8 | Headless Horseman | 125 | 1,600 | Grim Reaper | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
+| 9 | Lich King | 145 | 3,200 | Mummy | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
 
 Owner speed rises with every house so the last houses need a well-trained runner. House 1's owner (17) is slower than a brand-new player (20), so a first-timer can always get away from it. The Candy you get from a knock is the number above times your costume's Candy multiplier. Owner names, speeds, Candy and egg odds live in `Config.Houses`; the house models carry the same `Index` and `Owner` attributes (House 1 = Old Witch, House 2 = Friendly Mummy).
 
@@ -173,11 +175,11 @@ A 5-minute night, then a **10-second day**. During the day every house closes, a
 | Size | Chance | Pet drawn at (random) | Egg drawn at (half of that) | Money/s multiplier |
 |---|---|---|---|---|
 | Normal | 75.5% | 1x | 1x (drawn at 0.8) | x1 |
-| Big | 20% | 2.5x to 3.5x (average 3x) | 1.25x to 1.75x | x2.5 to x3.5 (same as the size) |
-| Huge | 4% | 4x to 6x (average 5x) | 2x to 3x | x4 to x6 (same as the size) |
-| Gigantic | 0.5% | 8x | 4x | x16 (twice its size) |
+| Big | 20% | 2x to 3x (average 2.5x) | 1x to 1.5x | x2.5 to x3.5 |
+| Huge | 4% | 3x to 5x (average 4x) | 1.5x to 2.5x | x4 to x6 |
+| Gigantic | 0.5% | 7x | 3.5x | x16 |
 
-**Random sizes (6.1):** when an egg spawns it rolls its tier (Big, Huge, Gigantic or none) and then its own size inside the tier's range, rounded to 0.1 (a Big egg can be 2.5x, 2.6x ... 4x). The pet is drawn exactly that many times bigger than a normal pet, and the egg half as many times bigger than a normal egg (`Config.EggSizeFactor`). The money multiplier equals the size for Big and Huge: a 2.5x Big pays x2.5, a 3.2x Big pays x3.2 and a 6x Huge pays x6. Gigantic is the exception: it is always 8x big and pays x16. (`MoneyMin` and `MoneyMax` in `Config.Sizes` set the multiplier at the low and high end of each range.) Names show the size: "Big 3.2x Golden Bat". Eggs still carried in the thief's arms are capped at 1.4 (twice a normal egg), and eggs on the incubator pedestals are shrunk to fit under the roof; an 8x pet is about 20 to 50 studs tall on a base.
+**Random sizes (6.1):** when an egg spawns it rolls its tier (Big, Huge, Gigantic or none) and then its own size inside the tier's range, rounded to 0.1 (a Big egg can be 2.5x, 2.6x ... 4x). The pet is drawn exactly that many times bigger than a normal pet, and the egg half as many times bigger than a normal egg (`Config.EggSizeFactor`). The money multiplier follows the size in a straight line between the tier's two ends (`MoneyMin` and `MoneyMax` in `Config.Sizes`, which did not change in 6.5): a 2x Big pays x2.5, a 2.5x Big pays x3 and a 3x Big pays x3.5; a 3x Huge pays x4 and a 5x Huge pays x6. Gigantic is always 7x big and pays x16. Names show the size: "Big 3.2x Golden Bat". Eggs still carried in the thief's arms are capped at 1.4 (twice a normal egg), and eggs on the incubator pedestals are shrunk to fit under the roof; a 7x pet is about 18 to 45 studs tall on a base.
 
 **Size platform (6.1):** a platform floats in the void to the right of the map (about 40 to 210 studs from the hub's right edge, at `Config.SizeStage.Center`). It shows the smallest pet (Bat) and the biggest pet (Pumpkin King) in four columns, Normal, Big, Huge, Gigantic, at the middle of each size's range, with labels on the floor that give the size range and the money multiplier, and a 5 stud marker for comparing with a player. It is built when the server starts (`MapBuilder.BuildSizeStage`), so it only shows in play mode and is not saved in the place. It is not connected to the map by a bridge; the Admin panel has a **Sizes** teleport button (next to Hub and Base) that puts you at its front, looking at the pets.
 
@@ -276,15 +278,15 @@ A new player wears no costume (x1 Candy, 1 XP/s) and starts with 100 Candy, exac
 |---|---|---|---|---|
 | 0 | No Costume | free | x1 | 1 |
 | 1 | Bedsheet Ghost | 100 | x2 | 1.5 |
-| 2 | Pumpkin Head | 400 | x4 | 2.5 |
-| 3 | Witch | 2,000 | x7 | 4 |
-| 4 | Vampire | 10,000 | x12 | 7 |
-| 5 | Glowing Skeleton | 50,000 | x20 | 12 |
-| 6 | Werewolf | 220,000 | x35 | 20 |
-| 7 | Grim Reaper | 880,000 | x60 | 35 |
-| 8 | Mummy | 3,700,000 | x100 | 60 |
-| 9 | Frankenstein | 10,000,000 | x170 | 100 |
-| 10 | Red Devil | 26,000,000 | x300 | 170 |
+| 2 | Pumpkin Head | 350 | x4 | 2.5 |
+| 3 | Witch | 1,700 | x7 | 4 |
+| 4 | Vampire | 8,500 | x12 | 7 |
+| 5 | Glowing Skeleton | 42,000 | x20 | 12 |
+| 6 | Werewolf | 190,000 | x35 | 20 |
+| 7 | Grim Reaper | 750,000 | x60 | 35 |
+| 8 | Mummy | 3,100,000 | x100 | 60 |
+| 9 | Frankenstein | 8,500,000 | x170 | 100 |
+| 10 | Red Devil | 22,000,000 | x300 | 170 |
 
 The shop signs show each costume's Candy multiplier, XP rate and Candy price; the price changes to WEARING or OWNED once you have it.
 
@@ -295,17 +297,17 @@ These come from a simulation of an active player (about 40% of the time on the t
 | Milestone | Active player | Casual player |
 |---|---|---|
 | First costume (starting Candy) | at once | at once |
-| Second costume (Pumpkin Head, 400 Candy) | 11 min | 18 min |
-| Steal from house 2 | 8 min | 13 min |
+| Second costume (Pumpkin Head, 350 Candy) | 7 min | 12 min |
+| Steal from house 2 | 10 min | 16 min |
 | Steal from house 3 | 18 min (target about 20) | 29 min |
-| Steal from house 4 | 36 min (target about 35) | 58 min |
-| Costume 5 (Skeleton) | 52 min | 1.4 h |
-| Steal from house 6 | 41 min | 1.1 h |
-| Steal from house 9 | about 1.5 h | 2.4 h |
+| Steal from house 4 | 33 min (target about 35) | 53 min |
+| Costume 5 (Skeleton) | 37 min | 1 h |
+| Steal from house 6 | 42 min | 1.1 h |
+| Steal from house 9 | about 1.3 h | 2.1 h |
 | Treadmills 2 to 7 | 2 min to 57 min | 3 min to 1.5 h |
 | Pet Capacity 1 to 4 | 3 min to 1.1 h | 5 min to 1.7 h |
 | Hatching Pads 1 to 5 | 8 min to 1.8 h | 13 min to 2.9 h |
-| All 10 costumes | 4.6 h | 7.4 h |
+| All 10 costumes | 2.3 h | 3.7 h |
 
 Candy now has a real job: it buys all 10 costumes, and the multipliers make each knock worth far more. Money buys treadmills, trails, both base upgrades and gets Index rewards. Candy still has nothing to buy after the Red Devil (see 5.1).
 

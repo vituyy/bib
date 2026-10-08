@@ -142,15 +142,15 @@ end
 Config.Costumes = {
 	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyMultiplier = 1, XpPerSecond = 1, Color = Color3.fromRGB(200, 200, 200) },
 	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 100, CandyMultiplier = 2, XpPerSecond = 1.5, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
-	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 400, CandyMultiplier = 4, XpPerSecond = 2.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
-	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 2000, CandyMultiplier = 7, XpPerSecond = 4, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
-	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 10000, CandyMultiplier = 12, XpPerSecond = 7, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
-	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 50000, CandyMultiplier = 20, XpPerSecond = 12, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
-	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 220000, CandyMultiplier = 35, XpPerSecond = 20, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
-	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 880000, CandyMultiplier = 60, XpPerSecond = 35, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
-	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 3700000, CandyMultiplier = 100, XpPerSecond = 60, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
-	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 10000000, CandyMultiplier = 170, XpPerSecond = 100, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
-	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 26000000, CandyMultiplier = 300, XpPerSecond = 170, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
+	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 350, CandyMultiplier = 4, XpPerSecond = 2.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
+	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1700, CandyMultiplier = 7, XpPerSecond = 4, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
+	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 8500, CandyMultiplier = 12, XpPerSecond = 7, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
+	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 42000, CandyMultiplier = 20, XpPerSecond = 12, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
+	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 190000, CandyMultiplier = 35, XpPerSecond = 20, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
+	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 750000, CandyMultiplier = 60, XpPerSecond = 35, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
+	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 3100000, CandyMultiplier = 100, XpPerSecond = 60, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
+	{ Id = "Frankenstein", Name = "Frankenstein", Tier = 9, Price = 8500000, CandyMultiplier = 170, XpPerSecond = 100, Attach = "Head", ArtSize = 2.8, Color = Color3.fromRGB(90, 150, 70) },
+	{ Id = "Devil", Name = "Red Devil", Tier = 10, Price = 22000000, CandyMultiplier = 300, XpPerSecond = 170, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(200, 25, 25) },
 }
 
 -- A brand-new player starts with exactly enough Candy for the cheapest costume (the tutorial sends them to buy it).
@@ -292,12 +292,12 @@ Config.Pets = {
 --   Size:     Big, Huge or Gigantic. The egg and the pet grow, and each egg gets its OWN random size inside the
 --             tier's range (Min to Max). The pet is drawn exactly that many times bigger than a normal pet, and
 --             the money multiplier follows the size: Min pays MoneyMin and Max pays MoneyMax, in a straight line
---             between them (Big 2.5x pays x2.5, Big 3.5x pays x3.5; Gigantic is the exception: 8x size pays x16).
+--             between them (Big 2x pays x2.5, Big 3x pays x3.5, Huge 3x pays x4, Huge 5x pays x6; Gigantic 7x pays x16).
 --   Material: Golden, Diamond or Rainbow. The egg and the pet glow.
 -- Chance is the share of all eggs that get that tier (the rest are normal: 1x). Multipliers stack: a pet's
 -- Money per second = its normal income x Size multiplier x Material multiplier.
 -- A variant pet is stored as "<PetId>+<Size>+<Material>" where the size token carries the rolled size rounded to
--- 0.1, for example "Bat+Big3.2+Golden", "Bat+Huge5+Rainbow" or "Bat+Gigantic8". Old saves use the plain tier
+-- 0.1, for example "Bat+Big3.2+Golden", "Bat+Huge5+Rainbow" or "Bat+Gigantic7". Old saves use the plain tier
 -- ("Bat+Big"), which still works as a fixed legacy size (LegacyMultiplier, Legacy scales).
 -- Config.Pets understands all of these ids, so scripts that look a pet up by id need no changes; use
 -- Config.SplitPet when you need the plain pet id (art, Index).
@@ -305,11 +305,11 @@ Config.Pets = {
 -- How big things are DRAWN. A pet is drawn at its size (a 4x Big pet is 4 times a normal pet). An egg is drawn
 -- at EggSizeFactor of that (half), relative to a normal egg, and a normal egg is drawn at DefaultEggScale.
 Config.DefaultEggScale = 0.8
-Config.EggSizeFactor = 0.5 -- Big 2.5x to 3.5x -> egg 1.25x to 1.75x; Huge 4x to 6x -> 2x to 3x; Gigantic 8x -> 4x
+Config.EggSizeFactor = 0.5 -- Big 2x to 3x -> egg 1x to 1.5x; Huge 3x to 5x -> 1.5x to 2.5x; Gigantic 7x -> 3.5x
 Config.Sizes = {
-	Big = { Name = "Big", Chance = 0.20, Min = 2.5, Max = 3.5, MoneyMin = 2.5, MoneyMax = 3.5, LegacyMultiplier = 3, LegacyEggScale = 1.56, LegacyPetScale = 1.6 },
-	Huge = { Name = "Huge", Chance = 0.04, Min = 4, Max = 6, MoneyMin = 4, MoneyMax = 6, LegacyMultiplier = 8, LegacyEggScale = 1.89, LegacyPetScale = 2.1 },
-	Gigantic = { Name = "Gigantic", Chance = 0.005, Min = 8, Max = 8, MoneyMin = 16, MoneyMax = 16, LegacyMultiplier = 30, LegacyEggScale = 2.34, LegacyPetScale = 2.8 },
+	Big = { Name = "Big", Chance = 0.20, Min = 2, Max = 3, MoneyMin = 2.5, MoneyMax = 3.5, LegacyMultiplier = 3, LegacyEggScale = 1.56, LegacyPetScale = 1.6 },
+	Huge = { Name = "Huge", Chance = 0.04, Min = 3, Max = 5, MoneyMin = 4, MoneyMax = 6, LegacyMultiplier = 8, LegacyEggScale = 1.89, LegacyPetScale = 2.1 },
+	Gigantic = { Name = "Gigantic", Chance = 0.005, Min = 7, Max = 7, MoneyMin = 16, MoneyMax = 16, LegacyMultiplier = 30, LegacyEggScale = 2.34, LegacyPetScale = 2.8 },
 }
 Config.Materials = {
 	Golden = { Name = "Golden", Chance = 0.15, Multiplier = 3, Color = Color3.fromRGB(255, 205, 50) },
@@ -566,26 +566,27 @@ end
 ---------------------------------------------------------------------------
 -- The street: 9 houses, each one its own level. House 1 is next to the bases, house 9 is the far end.
 -- Floors: 1 or 2. Scale: house size multiplier. EggCount: eggs spawned inside each night.
--- CostumeTier: the minimum costume tier that gets Candy at the door.
+-- CostumeTier: the minimum costume tier that gets Candy at the door. Houses 1 and 2 need the 1st costume (Ghost),
+-- house 3 the 2nd (Pumpkin), house 4 the 3rd (Witch) and so on, so a costume is always one step ahead of the street.
 ---------------------------------------------------------------------------
 Config.Houses = {
-	{ Owner = "Old Witch", OwnerSpeed = 20, CandyPerKnock = 5, CostumeTier = 0, Floors = 1, Scale = 1.0, EggCount = 4,
+	{ Owner = "Old Witch", OwnerSpeed = 20, CandyPerKnock = 12, CostumeTier = 1, Floors = 1, Scale = 1.0, EggCount = 4,
 		EggWeights = { SwampEgg = 100 } },
-	{ Owner = "Friendly Mummy", OwnerSpeed = 41, CandyPerKnock = 10, CostumeTier = 0, Floors = 1, Scale = 1.05, EggCount = 4,
+	{ Owner = "Friendly Mummy", OwnerSpeed = 41, CandyPerKnock = 24, CostumeTier = 1, Floors = 1, Scale = 1.05, EggCount = 4,
 		EggWeights = { PyramidEgg = 100 } },
-	{ Owner = "Scarecrow", OwnerSpeed = 56, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
+	{ Owner = "Scarecrow", OwnerSpeed = 56, CandyPerKnock = 48, CostumeTier = 2, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { HarvestEgg = 100 } },
-	{ Owner = "Zombie Chef", OwnerSpeed = 75, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
+	{ Owner = "Zombie Chef", OwnerSpeed = 75, CandyPerKnock = 100, CostumeTier = 3, Floors = 2, Scale = 1.15, EggCount = 5,
 		EggWeights = { BakeryEgg = 100 }, BloodyEgg = "BloodyBakeryEgg" },
-	{ Owner = "Gravedigger", OwnerSpeed = 87, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
+	{ Owner = "Gravedigger", OwnerSpeed = 87, CandyPerKnock = 200, CostumeTier = 4, Floors = 1, Scale = 1.2, EggCount = 5,
 		EggWeights = { GraveyardEgg = 100 }, BloodyEgg = "BloodyGraveyardEgg" },
-	{ Owner = "Count Vlad", OwnerSpeed = 91, CandyPerKnock = 160, CostumeTier = 4, Floors = 2, Scale = 1.25, EggCount = 6,
+	{ Owner = "Count Vlad", OwnerSpeed = 91, CandyPerKnock = 400, CostumeTier = 5, Floors = 2, Scale = 1.25, EggCount = 6,
 		EggWeights = { CastleEgg = 100 }, BloodyEgg = "BloodyCastleEgg" },
-	{ Owner = "Banshee", OwnerSpeed = 108, CandyPerKnock = 320, CostumeTier = 5, Floors = 2, Scale = 1.3, EggCount = 6,
+	{ Owner = "Banshee", OwnerSpeed = 108, CandyPerKnock = 800, CostumeTier = 6, Floors = 2, Scale = 1.3, EggCount = 6,
 		EggWeights = { BatEgg = 20, GhostEgg = 45, MoonEgg = 30, CursedEgg = 5 } },
-	{ Owner = "Headless Horseman", OwnerSpeed = 128, CandyPerKnock = 650, CostumeTier = 6, Floors = 2, Scale = 1.35, EggCount = 6,
+	{ Owner = "Headless Horseman", OwnerSpeed = 128, CandyPerKnock = 1600, CostumeTier = 7, Floors = 2, Scale = 1.35, EggCount = 6,
 		EggWeights = { GhostEgg = 40, MoonEgg = 40, CursedEgg = 18, NightmareEgg = 2 } },
-	{ Owner = "Lich King", OwnerSpeed = 148, CandyPerKnock = 1300, CostumeTier = 7, Floors = 2, Scale = 1.45, EggCount = 6,
+	{ Owner = "Lich King", OwnerSpeed = 148, CandyPerKnock = 3200, CostumeTier = 8, Floors = 2, Scale = 1.45, EggCount = 6,
 		EggWeights = { GhostEgg = 20, MoonEgg = 45, CursedEgg = 30, NightmareEgg = 5 } },
 }
 
