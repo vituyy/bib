@@ -337,7 +337,7 @@ local function attachCarriedEgg(player: Player, eggId: string, petId: string?)
 	local eggModel = Art.Egg(eggId, petId, false, true, 1.4) -- a Gigantic egg is not drawn bigger than this in your arms
 	eggModel.Name = "CarriedEgg"
 	-- Held in front of the chest. The model's pivot is the egg's bottom centre. Every client bends the carrier's
-	-- arms around it (see "Carrying an egg" at the end of Main.client), so it sits close and chest high.
+	-- arms around it (see "Carrying an egg" in CostumeLabels.client), so it sits close and chest high.
 	local height = eggModel:GetAttribute("EggHeight") or 3
 	eggModel:PivotTo(root.CFrame * CFrame.new(0, 0.6 - height / 2, -(0.7 + 0.32 * height)))
 	for _, d in eggModel:GetDescendants() do

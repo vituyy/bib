@@ -7,3 +7,4 @@
   Put new code in an existing script or ModuleScript, or ask the owner to add an empty script in Studio first.
 - If the owner uploads a newer place file, copy it over `place/SpookySteal-V6.rbxl` and re-extract the scripts into `src/`.
 - A place file uploaded on github.com ("Add files via upload") lands on the repo's default branch, which is `claude/inspiring-bohr-18n3sq`, not `main`. Look there first (`git fetch`, then `git ls-tree -r origin/claude/inspiring-bohr-18n3sq`).
+- `src/client/Main.client.luau` is at Roblox's limit of 200 local variables alive at once. One more top-level `local` (even inside a `do` block at the end) makes Roblox refuse the whole script and the player sees no HUD at all. `luau-compile` does not catch this. Put new client code in another client script (for example `CostumeLabels.client.luau`) and run `python3 tools/check_locals.py <path to luau-ast>` after changing any script.
