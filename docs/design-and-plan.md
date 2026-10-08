@@ -25,8 +25,8 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | V6 changes | Candy multipliers of the costumes now climb much faster (x2, x4, x7, x12, x20, x35, x60, x100, x170, x300) with costume prices raised to keep the same pace; Pet Capacity gives +2, +2, +1, +1 slots (8, 10, 11, 12); the green signs between levels show the Recommended Level (the Speed Level to bring) and hang over the road; the potion timers at the top of the screen are gone (active potions show in the Rewards window). |
 | Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big pets are drawn 2x to 3x bigger and pay x2.5 to x3.5, Huge 3x to 5x and x4 to x6, Gigantic 7x and x16 (before: fixed x3, x8 and x30). Eggs are drawn half as big as the pet. See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
 | V6.5 adopted | Your uploaded V6.5 is now the main place: the Blood Moon event with bloody eggs, houses 5 and 6 with their own pets, the Settings window, login rewards and the lighter quest rewards come from it. |
-| Eggs carried in the arms (6.5) | A thief now holds the egg with both arms: every player's client bends the carrier's shoulders and elbows so the hands rest on the sides of the egg (two-bone arm IK on the R15 joints, applied over the run animation), and the egg sits closer and chest high. It is only a pose, so there is no new animation asset. |
-| Costume requirements and Candy (6.5) | Houses 1 and 2 now need the 1st costume (Bedsheet Ghost), house 3 the 2nd, house 4 the 3rd and so on up to the Mummy for house 9. To make up for it, Candy per knock is about 1.2x what it would have been and costume prices are about 15% lower: you can afford the next costume after 8 to 40 knocks (before: 10 to 118). |
+| Eggs carried in the arms (6.5) | A thief now holds the egg with both arms: every player's client bends the carrier's shoulders and elbows so the hands rest on the sides of the egg (two-bone arm IK on the R15 joints, written into the joints' C0 so the run animation can not overwrite it), and the egg sits closer and chest high. It is only a pose, so there is no new animation asset. |
+| Costume requirements and Candy (6.5) | Houses 1 and 2 now need the 1st costume (Bedsheet Ghost), house 3 the 2nd, house 4 the 3rd and so on up to the Mummy for house 9. To make up for it, Candy per knock is higher (the Old Witch gives 20 and the Friendly Mummy 45) and costume prices are lower (Pumpkin 300, Witch 1,500, Vampire 7,000, Skeleton 35,000): you can afford the next costume after 3 to 40 knocks (before: 10 to 118). |
 | Kick (5.0) | A caught thief is kicked about 100 studs away from the owner with a kick sound. `Config.KickDistance`, `KickAngle` and `KickSounds` tune it; the movement anti-cheat ignores the flight. |
 | Chase fix (5.0) | The owner now chases the thief's live position every frame and catches on live distance every frame (before, both were sampled ten times a second, so a thief close to the owner's speed was never reached). His speed is enforced every frame, the server keeps control of his movement after the door scene, and new paths no longer make him double back. |
 | Kept from Version 4 | Witch house and Mummy house, door scene, owner chase, egg variants, codes, save lock and the other safety fixes. |
@@ -89,8 +89,8 @@ Houses 1 (swamp) and 2 (desert) are built and themed; the themes for houses 3 to
 
 | # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs | Drops | Look |
 |---|---|---|---|---|---|---|---|---|
-| 1 | Old Witch | 17 | 12 | Bedsheet Ghost | 1 | 4 | Swamp Egg (5 level pets) | Built: swamp cottage with chimney smoke, cauldrons and reeds |
-| 2 | Friendly Mummy | 38 | 24 | Bedsheet Ghost | 1 | 4 | Pyramid Egg (5 level pets) | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
+| 1 | Old Witch | 17 | 20 | Bedsheet Ghost | 1 | 4 | Swamp Egg (5 level pets) | Built: swamp cottage with chimney smoke, cauldrons and reeds |
+| 2 | Friendly Mummy | 38 | 45 | Bedsheet Ghost | 1 | 4 | Pyramid Egg (5 level pets) | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
 | 3 | Scarecrow | 53 | 48 | Pumpkin Head | 1 | 5 | Harvest Egg (5 level pets) | Placeholder |
 | 4 | Zombie Chef | 72 | 100 | Witch | 2 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
 | 5 | Gravedigger | 84 | 200 | Vampire | 1 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
@@ -279,10 +279,10 @@ A new player wears no costume (x1 Candy, 1 XP/s) and starts with 100 Candy, exac
 |---|---|---|---|---|
 | 0 | No Costume | free | x1 | 1 |
 | 1 | Bedsheet Ghost | 100 | x2 | 1.5 |
-| 2 | Pumpkin Head | 350 | x4 | 2.5 |
-| 3 | Witch | 1,700 | x7 | 4 |
-| 4 | Vampire | 8,500 | x12 | 7 |
-| 5 | Glowing Skeleton | 42,000 | x20 | 12 |
+| 2 | Pumpkin Head | 300 | x4 | 2.5 |
+| 3 | Witch | 1,500 | x7 | 4 |
+| 4 | Vampire | 7,000 | x12 | 7 |
+| 5 | Glowing Skeleton | 35,000 | x20 | 12 |
 | 6 | Werewolf | 190,000 | x35 | 20 |
 | 7 | Grim Reaper | 750,000 | x60 | 35 |
 | 8 | Mummy | 3,100,000 | x100 | 60 |
@@ -298,17 +298,17 @@ These come from a simulation of an active player (about 40% of the time on the t
 | Milestone | Active player | Casual player |
 |---|---|---|
 | First costume (starting Candy) | at once | at once |
-| Second costume (Pumpkin Head, 350 Candy) | 7 min | 12 min |
-| Steal from house 2 | 10 min | 16 min |
-| Steal from house 3 | 18 min (target about 20) | 29 min |
-| Steal from house 4 | 33 min (target about 35) | 53 min |
-| Costume 5 (Skeleton) | 37 min | 1 h |
-| Steal from house 6 | 42 min | 1.1 h |
-| Steal from house 9 | about 1.3 h | 2.1 h |
+| Second costume (Pumpkin Head, 300 Candy) | 4 min | 7 min |
+| Steal from house 2 | 8 min | 13 min |
+| Steal from house 3 | 16 min (target about 20) | 26 min |
+| Steal from house 4 | 29 min (target about 35) | 47 min |
+| Costume 5 (Skeleton) | 28 min | 45 min |
+| Steal from house 6 | 38 min | 1 h |
+| Steal from house 9 | about 1.2 h | 1.9 h |
 | Treadmills 2 to 7 | 2 min to 57 min | 3 min to 1.5 h |
 | Pet Capacity 1 to 4 | 3 min to 1.1 h | 5 min to 1.7 h |
 | Hatching Pads 1 to 5 | 8 min to 1.8 h | 13 min to 2.9 h |
-| All 10 costumes | 2.3 h | 3.7 h |
+| All 10 costumes | 2.2 h | 3.5 h |
 
 Candy now has a real job: it buys all 10 costumes, and the multipliers make each knock worth far more. Money buys treadmills, trails, both base upgrades and gets Index rewards. Candy still has nothing to buy after the Red Devil (see 5.1).
 

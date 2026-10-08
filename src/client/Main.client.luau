@@ -3314,7 +3314,8 @@ end
 
 -- Carrying an egg: the arms wrap around it. The server only welds the egg to the body; this poses the R15 arm
 -- joints on every client, for every player who carries an egg, so both arms reach the sides of the egg
--- (two-bone IK on the shoulder and elbow Motor6Ds, applied after the walking animation each frame).
+-- (two-bone IK on the shoulder and elbow Motor6Ds). The pose is written into the joints' C0, which animations
+-- never touch, so the walking animation can not undo it; the animation's own Transform is cancelled out of it.
 do
 	local CARRY_ARMS = {
 		{ Side = 1, Shoulder = "RightShoulder", Elbow = "RightElbow", Wrist = "RightWrist" },
@@ -3333,6 +3334,9 @@ do
 		if not (shoulder and elbow and wrist and shoulder:IsA("Motor6D") and elbow:IsA("Motor6D") and wrist:IsA("Motor6D")) then
 			return nil
 		end
+		if not shoulder.Part0 then
+			return nil
+		end
 		local F1 = shoulder.C1:Inverse() * elbow.C0 -- elbow joint, seen from the shoulder joint
 		local F2 = elbow.C1:Inverse() * wrist.C0 -- wrist joint, seen from the elbow joint
 		local toHand = F2 * wrist.C1:Inverse().Position -- hand centre, seen from the elbow joint
@@ -3342,9 +3346,9 @@ do
 			Side = def.Side,
 			Shoulder = shoulder,
 			Elbow = elbow,
-			Wrist = wrist,
 			Part0 = shoulder.Part0,
 			C0 = shoulder.C0,
+			ElbowC0 = elbow.C0,
 			F1 = F1,
 			A = F1.Position.Magnitude, -- shoulder to elbow
 			B = toHand.Magnitude, -- elbow to hand centre
@@ -3353,8 +3357,8 @@ do
 		}
 	end
 
-	-- The Transform of the shoulder and the elbow that put the hand centre on `target` (or as close as the arm
-	-- reaches), with the elbow bent outwards and down.
+	-- The rotations of the shoulder and the elbow joints that put the hand centre on `target` (or as close as the
+	-- arm reaches), with the elbow bent outwards and down.
 	local function solveArm(arm, target: Vector3): (CFrame?, CFrame?)
 		local torso = arm.Part0.CFrame
 		local joint = torso * arm.C0
@@ -3382,20 +3386,29 @@ do
 		-- Shoulder: turn the upper arm to point at the elbow with the bend axis along the bend.
 		local worldBasis = CFrame.fromMatrix(Vector3.zero, bendAxis, upper)
 		local toWorld = worldBasis * arm.Basis:Inverse()
-		local shoulderTransform = joint.Rotation:Inverse() * toWorld
+		local shoulderRotation = joint.Rotation:Inverse() * toWorld
 		-- Elbow: a hinge about its X axis that turns the forearm onto the hand.
 		local elbowFrame = toWorld * arm.F1.Rotation
 		local want = elbowFrame:VectorToObjectSpace(lower)
 		local angle = math.atan2(want.Z, want.Y) - math.atan2(arm.HandDir.Z, arm.HandDir.Y)
-		return shoulderTransform, CFrame.Angles(angle, 0, 0)
+		return shoulderRotation, CFrame.Angles(angle, 0, 0)
 	end
 	-- END-IK
 
 	local function release(rig)
 		for _, arm in rig.Arms do
-			arm.Shoulder.Transform = CFrame.identity
-			arm.Elbow.Transform = CFrame.identity
+			arm.Shoulder.C0 = arm.C0
+			arm.Elbow.C0 = arm.ElbowC0
 		end
+	end
+
+	local function usable(rig, character: Model): boolean
+		for _, arm in rig.Arms do
+			if not (arm.Shoulder:IsDescendantOf(character) and arm.Elbow:IsDescendantOf(character) and arm.Part0:IsDescendantOf(character)) then
+				return false
+			end
+		end
+		return #rig.Arms > 0
 	end
 
 	RunService.Heartbeat:Connect(function(dt)
@@ -3403,8 +3416,12 @@ do
 			local character = other.Character
 			local egg = character and character:FindFirstChild("CarriedEgg")
 			local eggRoot = egg and egg:FindFirstChild("EggRoot") :: BasePart?
-			local rig = rigs[character :: any]
+			local rig = if character then rigs[character] else nil
 			if character and eggRoot then
+				if rig and not usable(rig, character) then
+					rigs[character] = nil
+					rig = nil
+				end
 				if rig == nil then
 					local arms = {}
 					for _, def in CARRY_ARMS do
@@ -3415,6 +3432,9 @@ do
 					end
 					rig = { Arms = arms }
 					rigs[character] = rig
+					if #arms == 0 then
+						warn("[SpookySteal] carry pose: no R15 arm joints found on " .. character.Name)
+					end
 					character.Destroying:Connect(function()
 						rigs[character] = nil
 						blend[character] = nil
@@ -3426,10 +3446,17 @@ do
 				for _, arm in rig.Arms do
 					-- The hands rest on the sides of the egg, a little below its middle and towards the player.
 					local target = eggRoot.CFrame * Vector3.new(arm.Side * size.X * 0.46, -size.Y * 0.12, size.Z * 0.12)
-					local ok, shoulderT, elbowT = pcall(solveArm, arm, target)
-					if ok and shoulderT and elbowT then
-						arm.Shoulder.Transform = arm.Shoulder.Transform:Lerp(shoulderT, weight)
-						arm.Elbow.Transform = arm.Elbow.Transform:Lerp(elbowT, weight)
+					local ok, shoulderR, elbowR = pcall(solveArm, arm, target)
+					if not ok and not arm.Warned then
+						arm.Warned = true
+						warn("[SpookySteal] carry pose failed:", shoulderR)
+					end
+					if ok and shoulderR and elbowR then
+						-- joint = C0 * Transform. Pick C0 so that C0 * (the animation's Transform) is the wanted rotation.
+						local shoulderDelta = shoulderR * arm.Shoulder.Transform:Inverse()
+						local elbowDelta = elbowR * arm.Elbow.Transform:Inverse()
+						arm.Shoulder.C0 = arm.C0 * CFrame.identity:Lerp(shoulderDelta, weight)
+						arm.Elbow.C0 = arm.ElbowC0 * CFrame.identity:Lerp(elbowDelta, weight)
 					end
 				end
 			elseif character and blend[character] then

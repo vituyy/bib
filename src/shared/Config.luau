@@ -142,10 +142,10 @@ end
 Config.Costumes = {
 	{ Id = "None", Name = "No Costume", Tier = 0, Price = 0, CandyMultiplier = 1, XpPerSecond = 1, Color = Color3.fromRGB(200, 200, 200) },
 	{ Id = "Ghost", Name = "Bedsheet Ghost", Tier = 1, Price = 100, CandyMultiplier = 2, XpPerSecond = 1.5, Attach = "Body", ArtSize = 5.8, Color = Color3.fromRGB(245, 245, 255) },
-	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 350, CandyMultiplier = 4, XpPerSecond = 2.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
-	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1700, CandyMultiplier = 7, XpPerSecond = 4, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
-	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 8500, CandyMultiplier = 12, XpPerSecond = 7, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
-	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 42000, CandyMultiplier = 20, XpPerSecond = 12, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
+	{ Id = "Pumpkin", Name = "Pumpkin Head", Tier = 2, Price = 300, CandyMultiplier = 4, XpPerSecond = 2.5, Attach = "Head", ArtSize = 2.6, Color = Color3.fromRGB(255, 140, 0) },
+	{ Id = "Witch", Name = "Witch", Tier = 3, Price = 1500, CandyMultiplier = 7, XpPerSecond = 4, Attach = "Hat", ArtSize = 2.8, Color = Color3.fromRGB(60, 140, 60) },
+	{ Id = "Vampire", Name = "Vampire", Tier = 4, Price = 7000, CandyMultiplier = 12, XpPerSecond = 7, Attach = "Back", ArtSize = 4.6, Color = Color3.fromRGB(140, 0, 25) },
+	{ Id = "Skeleton", Name = "Glowing Skeleton", Tier = 5, Price = 35000, CandyMultiplier = 20, XpPerSecond = 12, Attach = "Head", ArtSize = 2.5, Color = Color3.fromRGB(230, 255, 200) },
 	{ Id = "Werewolf", Name = "Werewolf", Tier = 6, Price = 190000, CandyMultiplier = 35, XpPerSecond = 20, Attach = "Head", ArtSize = 2.9, Color = Color3.fromRGB(100, 70, 50) },
 	{ Id = "Reaper", Name = "Grim Reaper", Tier = 7, Price = 750000, CandyMultiplier = 60, XpPerSecond = 35, Attach = "Body", ArtSize = 6.2, Color = Color3.fromRGB(25, 25, 30) },
 	{ Id = "Mummy", Name = "Mummy", Tier = 8, Price = 3100000, CandyMultiplier = 100, XpPerSecond = 60, Attach = "Body", ArtSize = 6, Color = Color3.fromRGB(225, 215, 180) },
@@ -570,9 +570,9 @@ end
 -- house 3 the 2nd (Pumpkin), house 4 the 3rd (Witch) and so on, so a costume is always one step ahead of the street.
 ---------------------------------------------------------------------------
 Config.Houses = {
-	{ Owner = "Old Witch", OwnerSpeed = 20, CandyPerKnock = 12, CostumeTier = 1, Floors = 1, Scale = 1.0, EggCount = 4,
+	{ Owner = "Old Witch", OwnerSpeed = 20, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.0, EggCount = 4,
 		EggWeights = { SwampEgg = 100 } },
-	{ Owner = "Friendly Mummy", OwnerSpeed = 41, CandyPerKnock = 24, CostumeTier = 1, Floors = 1, Scale = 1.05, EggCount = 4,
+	{ Owner = "Friendly Mummy", OwnerSpeed = 41, CandyPerKnock = 45, CostumeTier = 1, Floors = 1, Scale = 1.05, EggCount = 4,
 		EggWeights = { PyramidEgg = 100 } },
 	{ Owner = "Scarecrow", OwnerSpeed = 56, CandyPerKnock = 48, CostumeTier = 2, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { HarvestEgg = 100 } },
