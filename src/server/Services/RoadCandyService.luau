@@ -1,5 +1,5 @@
 -- Road candy: candy icons scattered all along the road. Run through one to grab it.
--- Each pickup gives BASE_CANDY times your costume's CandyMultiplier (no costume = x1), then respawns elsewhere.
+-- Each pickup gives BASE_CANDY times your costume's CandyMultiplier (no costume = x1), then respawns in the same stretch of road.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -46,10 +46,13 @@ local function makeCandy(): Model
 	return model
 end
 
-local function randomRoadCFrame(asphalt: BasePart): CFrame
+-- A random spot inside slice `index` of `count` equal slices along the road. Every candy keeps its own slice
+-- for good, so the candies stay spread evenly: picking up the ones near the start makes them come back
+-- near the start, not somewhere far along the road.
+local function randomRoadCFrame(asphalt: BasePart, index: number, count: number): CFrame
 	local size = asphalt.Size
 	local x = (math.random() - 0.5) * (size.X - 6)
-	local z = (math.random() - 0.5) * (size.Z - 10)
+	local z = ((index - 1 + math.random()) / count - 0.5) * (size.Z - 10)
 	local top = asphalt.Position.Y + size.Y / 2
 	local at = asphalt.CFrame:PointToWorldSpace(Vector3.new(x, 0, z))
 	return CFrame.new(at.X, top + 1.6, at.Z) * CFrame.Angles(0, math.random() * math.pi * 2, math.rad(20))
@@ -70,9 +73,9 @@ function RoadCandyService.Start(map: Instance)
 	folder.Name = "RoadCandy"
 	folder.Parent = workspace
 
-	local function place(candy: Model)
+	local function place(candy: Model, index: number)
 		local hitbox = candy.PrimaryPart :: BasePart
-		hitbox.CFrame = CFrame.new(randomRoadCFrame(area).Position)
+		hitbox.CFrame = CFrame.new(randomRoadCFrame(area, index, COUNT).Position)
 		candy.Parent = folder
 	end
 
@@ -93,9 +96,9 @@ function RoadCandyService.Start(map: Instance)
 		end
 	end)
 
-	for _ = 1, COUNT do
+	for index = 1, COUNT do
 		local candy = makeCandy()
-		place(candy)
+		place(candy, index)
 		local taken = false
 		;(candy.PrimaryPart :: BasePart).Touched:Connect(function(hit)
 			if taken then
@@ -117,7 +120,7 @@ function RoadCandyService.Start(map: Instance)
 			candy.Parent = nil
 			task.delay(RESPAWN_SECONDS, function()
 				paint(candy)
-				place(candy)
+				place(candy, index)
 				taken = false
 			end)
 		end)
