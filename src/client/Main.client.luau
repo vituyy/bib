@@ -3311,3 +3311,133 @@ do
 	Remotes.DataChanged.OnClientEvent:Connect(function(snapshot) controller:SetData(snapshot) end)
 	if data then controller:SetData(data) end
 end
+
+-- Carrying an egg: the arms wrap around it. The server only welds the egg to the body; this poses the R15 arm
+-- joints on every client, for every player who carries an egg, so both arms reach the sides of the egg
+-- (two-bone IK on the shoulder and elbow Motor6Ds, applied after the walking animation each frame).
+do
+	local CARRY_ARMS = {
+		{ Side = 1, Shoulder = "RightShoulder", Elbow = "RightElbow", Wrist = "RightWrist" },
+		{ Side = -1, Shoulder = "LeftShoulder", Elbow = "LeftElbow", Wrist = "LeftWrist" },
+	}
+	local BLEND_SPEED = 9 -- how fast the arms move into and out of the carrying pose (per second)
+	local rigs: { [Model]: any } = {}
+	local blend: { [Model]: number } = {}
+
+	-- BEGIN-IK
+	-- Reads the fixed frames of one arm once (the same for every pose).
+	local function readArm(character: Model, def)
+		local shoulder = character:FindFirstChild(def.Shoulder, true)
+		local elbow = character:FindFirstChild(def.Elbow, true)
+		local wrist = character:FindFirstChild(def.Wrist, true)
+		if not (shoulder and elbow and wrist and shoulder:IsA("Motor6D") and elbow:IsA("Motor6D") and wrist:IsA("Motor6D")) then
+			return nil
+		end
+		local F1 = shoulder.C1:Inverse() * elbow.C0 -- elbow joint, seen from the shoulder joint
+		local F2 = elbow.C1:Inverse() * wrist.C0 -- wrist joint, seen from the elbow joint
+		local toHand = F2 * wrist.C1:Inverse().Position -- hand centre, seen from the elbow joint
+		local u1 = F1.Position.Unit
+		local h1 = F1.RightVector - u1 * F1.RightVector:Dot(u1) -- the elbow's bend axis, straightened
+		return {
+			Side = def.Side,
+			Shoulder = shoulder,
+			Elbow = elbow,
+			Wrist = wrist,
+			Part0 = shoulder.Part0,
+			C0 = shoulder.C0,
+			F1 = F1,
+			A = F1.Position.Magnitude, -- shoulder to elbow
+			B = toHand.Magnitude, -- elbow to hand centre
+			Basis = CFrame.fromMatrix(Vector3.zero, h1.Unit, u1),
+			HandDir = toHand.Unit,
+		}
+	end
+
+	-- The Transform of the shoulder and the elbow that put the hand centre on `target` (or as close as the arm
+	-- reaches), with the elbow bent outwards and down.
+	local function solveArm(arm, target: Vector3): (CFrame?, CFrame?)
+		local torso = arm.Part0.CFrame
+		local joint = torso * arm.C0
+		local shoulderPos = joint.Position
+		local toTarget = target - shoulderPos
+		local distance = toTarget.Magnitude
+		if distance < 0.05 then
+			return nil, nil
+		end
+		local dir = toTarget / distance
+		local reach = math.clamp(distance, math.abs(arm.A - arm.B) + 0.05, (arm.A + arm.B) * 0.995)
+		local along = (arm.A * arm.A - arm.B * arm.B + reach * reach) / (2 * reach)
+		local out = math.sqrt(math.max(arm.A * arm.A - along * along, 0))
+		local pole = torso:VectorToWorldSpace(Vector3.new(arm.Side * 0.6, -1, 0.15))
+		pole -= dir * pole:Dot(dir)
+		if pole.Magnitude < 1e-3 then
+			pole = -torso.UpVector
+		end
+		pole = pole.Unit
+		local elbowPos = shoulderPos + dir * along + pole * out
+		local handPos = shoulderPos + dir * reach
+		local upper = (elbowPos - shoulderPos).Unit
+		local lower = (handPos - elbowPos).Unit
+		local bendAxis = pole:Cross(dir).Unit
+		-- Shoulder: turn the upper arm to point at the elbow with the bend axis along the bend.
+		local worldBasis = CFrame.fromMatrix(Vector3.zero, bendAxis, upper)
+		local toWorld = worldBasis * arm.Basis:Inverse()
+		local shoulderTransform = joint.Rotation:Inverse() * toWorld
+		-- Elbow: a hinge about its X axis that turns the forearm onto the hand.
+		local elbowFrame = toWorld * arm.F1.Rotation
+		local want = elbowFrame:VectorToObjectSpace(lower)
+		local angle = math.atan2(want.Z, want.Y) - math.atan2(arm.HandDir.Z, arm.HandDir.Y)
+		return shoulderTransform, CFrame.Angles(angle, 0, 0)
+	end
+	-- END-IK
+
+	local function release(rig)
+		for _, arm in rig.Arms do
+			arm.Shoulder.Transform = CFrame.identity
+			arm.Elbow.Transform = CFrame.identity
+		end
+	end
+
+	RunService.Heartbeat:Connect(function(dt)
+		for _, other in Players:GetPlayers() do
+			local character = other.Character
+			local egg = character and character:FindFirstChild("CarriedEgg")
+			local eggRoot = egg and egg:FindFirstChild("EggRoot") :: BasePart?
+			local rig = rigs[character :: any]
+			if character and eggRoot then
+				if rig == nil then
+					local arms = {}
+					for _, def in CARRY_ARMS do
+						local arm = readArm(character, def)
+						if arm then
+							table.insert(arms, arm)
+						end
+					end
+					rig = { Arms = arms }
+					rigs[character] = rig
+					character.Destroying:Connect(function()
+						rigs[character] = nil
+						blend[character] = nil
+					end)
+				end
+				local weight = math.min(1, (blend[character] or 0) + dt * BLEND_SPEED)
+				blend[character] = weight
+				local size = eggRoot.Size
+				for _, arm in rig.Arms do
+					-- The hands rest on the sides of the egg, a little below its middle and towards the player.
+					local target = eggRoot.CFrame * Vector3.new(arm.Side * size.X * 0.46, -size.Y * 0.12, size.Z * 0.12)
+					local ok, shoulderT, elbowT = pcall(solveArm, arm, target)
+					if ok and shoulderT and elbowT then
+						arm.Shoulder.Transform = arm.Shoulder.Transform:Lerp(shoulderT, weight)
+						arm.Elbow.Transform = arm.Elbow.Transform:Lerp(elbowT, weight)
+					end
+				end
+			elseif character and blend[character] then
+				blend[character] = nil
+				if rig then
+					release(rig)
+				end
+			end
+		end
+	end)
+end
