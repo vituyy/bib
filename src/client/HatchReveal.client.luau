@@ -7,6 +7,7 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Art = require(ReplicatedStorage.Shared.Art)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local UIScaling = require(ReplicatedStorage.Shared.UIScaling)
 local player = Players.LocalPlayer
 
 -- Only show the owner's hatch prompts. The server independently checks ownership and distance.
@@ -45,7 +46,7 @@ local function reveal(payload)
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.48),
 		Size = UDim2.fromOffset(320, 338), BackgroundColor3 = Color3.fromRGB(35, 18, 57),
 		BackgroundTransparency = 0.06, BorderSizePixel = 0,
-	}, gui)
+	}, UIScaling.attach(gui)) -- the card is built in layout units; UIScaling fits them to the screen
 	make("UICorner", { CornerRadius = UDim.new(0, 18) }, card)
 	make("UIStroke", { Color = rarity.Color, Thickness = 3 }, card)
 	local uiScale = make("UIScale", { Scale = 0.75 }, card)

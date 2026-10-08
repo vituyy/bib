@@ -182,6 +182,15 @@ local function dressOwner(owner: Model, index: number, scale: number)
 	end
 end
 
+-- Owners run Config.BloodMoon.OwnerSpeedMultiplier faster during the Blood Moon.
+local function ownerSpeed(state: HouseState): number
+	local speed = state.Info.OwnerSpeed
+	if ReplicatedStorage:GetAttribute("BloodMoon") then
+		speed *= Config.BloodMoon.OwnerSpeedMultiplier
+	end
+	return speed
+end
+
 local function resetOwner(state: HouseState)
 	local house = state.House
 	local spawnPart = house:FindFirstChild("OwnerSpawn") :: BasePart?
@@ -199,7 +208,7 @@ local function resetOwner(state: HouseState)
 	end
 	assert(owner and humanoid, "owner rig missing")
 
-	humanoid.WalkSpeed = state.Info.OwnerSpeed
+	humanoid.WalkSpeed = ownerSpeed(state)
 	if spawnPart then
 		owner:PivotTo(spawnPart.CFrame)
 	end
@@ -299,11 +308,19 @@ local function spawnEggs(state: HouseState)
 		return rarityOrder(a) < rarityOrder(b)
 	end)
 
+	-- Blood Moon: bigger size and material chances, and half the time one bloody egg on the hardest spot.
+	local bloodMoon = ReplicatedStorage:GetAttribute("BloodMoon") == true
+	local bloodySpot = if bloodMoon and state.Info.BloodyEgg and math.random() < Config.BloodMoon.BloodyEggChance then #state.Spots else nil
 	for spotIndex = 1, #state.Spots do
 		local eggId = rolled[spotIndex]
 		-- The pet is decided now, so the egg can look like what is inside it. Size and material are two
 		-- separate rolls, so an egg can get both, one or neither.
-		local size, material = Config.RollVariant()
+		local size, material = Config.RollVariant(if bloodMoon then Config.BloodMoon.VariantChanceMultiplier else nil)
+		if spotIndex == bloodySpot then
+			-- Bloody eggs roll a material at the normal chance, never a size.
+			eggId = state.Info.BloodyEgg
+			size, material = Config.RollVariant(nil, true)
+		end
 		local petId = Config.MakePetId(PlotService.RollPet(eggId), size, material)
 		placeEgg(state, spotIndex, eggId, petId)
 	end
@@ -413,6 +430,27 @@ local function finishTheft(player: Player, outcome: string)
 		end)
 		DataService.QuestEvent(player, "Deliver", 1, { House = state.Index })
 		notify(player, "You escaped with a " .. eggName .. "! Put it in an incubator from the Eggs menu.", GREEN)
+		if egg.Rarity == "Bloody" then
+			DataService.Update(player, function(data)
+				data.BloodMoonSurvivor = true
+			end)
+			player:SetAttribute("Title", Config.BloodMoon.Title)
+			notify(player, "🩸 You earned the title " .. Config.BloodMoon.Title .. "!", Color3.fromRGB(255, 40, 40))
+			if Config.BloodMoon.BadgeId ~= 0 then
+				task.spawn(pcall, function()
+					game:GetService("BadgeService"):AwardBadge(player.UserId, Config.BloodMoon.BadgeId)
+				end)
+			end
+		end
+	elseif outcome == "caught" and ReplicatedStorage:GetAttribute("BloodMoon") then
+		-- Under the Blood Moon an owner kills the thief. Only the carried egg is lost.
+		DataService.QuestEvent(player, "Caught", 1)
+		notify(player, state.OwnerName .. " caught you under the Blood Moon and KILLED you! The " .. eggName .. " went back in its nest.", RED)
+		playSfx("Kick", rootOf(player.Character) or state.House, 0)
+		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.Health = 0
+		end
 	elseif outcome == "caught" then
 		DataService.QuestEvent(player, "Caught", 1)
 		notify(player, state.OwnerName .. " caught you and KICKED you away! The " .. eggName .. " went back in its nest.", RED)
@@ -514,7 +552,7 @@ local function followGoal(state: HouseState, dt: number)
 	local waypoints = state.Waypoints
 	if waypoints then
 		local index = state.WpIndex
-		local reach = math.max(3, state.Info.OwnerSpeed * dt * 1.5)
+		local reach = math.max(3, ownerSpeed(state) * dt * 1.5)
 		while index <= #waypoints do
 			local p = waypoints[index].Position + Vector3.new(0, state.GroundOffset, 0)
 			if Vector3.new(p.X - root.Position.X, 0, p.Z - root.Position.Z).Magnitude < reach then
@@ -540,7 +578,7 @@ local function followGoal(state: HouseState, dt: number)
 	local flat = Vector3.new(target.X - root.Position.X, 0, target.Z - root.Position.Z)
 	local distance = flat.Magnitude
 	if distance > 0.25 then
-		local speed = math.min(state.Info.OwnerSpeed, distance / math.max(dt, 1 / 120))
+		local speed = math.min(ownerSpeed(state), distance / math.max(dt, 1 / 120))
 		local direction = flat / distance
 		local velocity = root.AssemblyLinearVelocity
 		root.AssemblyLinearVelocity = Vector3.new(direction.X * speed, velocity.Y, direction.Z * speed)
@@ -635,7 +673,7 @@ local function startChase(state: HouseState, player: Player, eggId: string, petI
 		end
 		local ownerHumanoid = state.Owner:FindFirstChildOfClass("Humanoid")
 		if ownerHumanoid then
-			ownerHumanoid.WalkSpeed = state.Info.OwnerSpeed
+			ownerHumanoid.WalkSpeed = ownerSpeed(state)
 		end
 		openChaseDoor(state)
 	end
@@ -683,8 +721,8 @@ local function chaseStep()
 					ownerRoot:SetNetworkOwner(nil) -- a client simulating him would lag behind the server's view
 				end)
 			end
-			if ownerHumanoid.WalkSpeed ~= state.Info.OwnerSpeed then
-				ownerHumanoid.WalkSpeed = state.Info.OwnerSpeed
+			if ownerHumanoid.WalkSpeed ~= ownerSpeed(state) then
+				ownerHumanoid.WalkSpeed = ownerSpeed(state)
 			end
 			local home = state.House:FindFirstChild("OwnerSpawn") :: BasePart?
 			if home and ownerRoot.Position.Y < home.Position.Y - 40 then

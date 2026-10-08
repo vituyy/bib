@@ -178,6 +178,29 @@ function CharacterService.Refresh(player: Player)
 	-- The costume shop labels read these to show Owned / Wearing.
 	player:SetAttribute("CostumeEquipped", costume.Id)
 	player:SetAttribute("CostumesOwned", table.concat(data.OwnedCostumes, ","))
+	-- Earned titles show over the head ("Blood Moon Survivor", red).
+	if data.BloodMoonSurvivor then
+		player:SetAttribute("Title", Config.BloodMoon.Title)
+	end
+	local title = player:GetAttribute("Title")
+	local head = character:FindFirstChild("Head")
+	if title and head and not head:FindFirstChild("TitleTag") then
+		local tag = Instance.new("BillboardGui")
+		tag.Name = "TitleTag"
+		tag.Size = UDim2.fromOffset(220, 26)
+		tag.StudsOffset = Vector3.new(0, 3.2, 0)
+		tag.MaxDistance = 80
+		tag.Parent = head
+		local text = Instance.new("TextLabel")
+		text.Size = UDim2.fromScale(1, 1)
+		text.BackgroundTransparency = 1
+		text.Font = Enum.Font.FredokaOne
+		text.TextScaled = true
+		text.Text = "🩸 " .. title
+		text.TextColor3 = Color3.fromRGB(255, 50, 50)
+		text.TextStrokeTransparency = 0
+		text.Parent = tag
+	end
 	if character:GetAttribute("CostumeWorn") == costume.Id then
 		return
 	end

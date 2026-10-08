@@ -84,6 +84,7 @@ end
 
 -- Repair a loaded save so one bad value (NaN, a negative, a removed pet or egg) can not break the game.
 local function sanitize(data: { [string]: any })
+	data.Settings = require(ReplicatedStorage.Shared.PlayerSettings).Normalize(data.Settings)
 	-- Saves from before the two separate base upgrades had one BaseLevel (10 + 2 pets and 3 + 1 pads per level).
 	-- Turn it into the closest Pet Capacity and Hatching Pad levels that never take anything away.
 	if isNumber(data.BaseLevel) then
@@ -135,6 +136,7 @@ local function sanitize(data: { [string]: any })
 	end
 	local quests = if type(data.Quests) == "table" then data.Quests else {}
 	data.Quests = {
+		Version = if isNumber(quests.Version) then quests.Version else 0,
 		Day = if isNumber(quests.Day) then quests.Day else 0,
 		Week = if isNumber(quests.Week) then quests.Week else 0,
 		Daily = cleanQuests(quests.Daily),
@@ -144,6 +146,28 @@ local function sanitize(data: { [string]: any })
 		Streak = if isNumber(quests.Streak) then math.max(0, math.floor(quests.Streak)) else 0,
 		LastStreakDay = if isNumber(quests.LastStreakDay) then quests.LastStreakDay else 0,
 		Salt = if isNumber(quests.Salt) then quests.Salt else 0, -- the Admin panel changes it to get a different set
+	}
+	local login = if type(data.LoginRewards) == "table" then data.LoginRewards else {}
+	local offers = {}
+	if type(login.Offers) == "table" then
+		for index, offer in login.Offers do
+			if type(index) == "number" and index >= 1 and index <= 7 and type(offer) == "table" then
+				local clean = {}
+				for _, currency in { "Money", "Candy" } do
+					if isNumber(offer[currency]) and offer[currency] >= 0 then clean[currency] = math.floor(offer[currency]) end
+				end
+				if Config.Potions[offer.Potion] and isNumber(offer.Count) then
+					clean.Potion, clean.Count = offer.Potion, math.clamp(math.floor(offer.Count), 1, 2)
+				end
+				offers[index] = clean
+			end
+		end
+	end
+	data.LoginRewards = {
+		LastClaimDay = if isNumber(login.LastClaimDay) then math.floor(login.LastClaimDay) else -1,
+		ClaimCount = if isNumber(login.ClaimCount) then math.max(0, math.floor(login.ClaimCount)) else 0,
+		OfferDay = if isNumber(login.OfferDay) then math.floor(login.OfferDay) else -1,
+		Offers = offers,
 	}
 	local stats = if type(data.Stats) == "table" then data.Stats else {}
 	data.Stats = {}
@@ -485,6 +509,7 @@ function DataService.Load(player: Player)
 	sanitize(profiles[player])
 	refreshQuests(player, profiles[player])
 	playtimeNewDay(profiles[player])
+	DataService.RefreshLoginRewards(player, false)
 	lastActive[player] = os.clock()
 	-- Saves from before the Index: pets already on the base count as discovered.
 	for _, petId in profiles[player].Pets do
@@ -647,7 +672,7 @@ local function makeQuest(data: { [string]: any }, id: string, slotConfig, rng: R
 		Rerolled = false,
 		Minutes = math.floor(minutes * 10 + 0.5) / 10,
 		Param = if template.Kind == "DeliverBest" then QuestCfg.Tier(data) else nil,
-		Reward = QuestCfg.Reward(data, minutes, template.Share, mult),
+		Reward = QuestCfg.BalancedReward(data, minutes, template.Share, mult),
 	}
 end
 
@@ -683,6 +708,30 @@ refreshQuests = function(player: Player, data: { [string]: any }): boolean
 		quests.Week = week
 		quests.Weekly = generateQuests(player, data, QuestCfg.WeeklySlots, QuestCfg.WeeklyMult, week * 104729 + (quests.Salt or 0) * 131)
 		quests.WeeklyChest = false
+		changed = true
+	end
+	-- Preserve claimed rewards/chests and absolute progress when installing new balance.
+	if quests.Version ~= QuestCfg.Version then
+		for _, name in { "Daily", "Weekly" } do
+			local slots = if name == "Daily" then QuestCfg.DailySlots else QuestCfg.WeeklySlots
+			local mult = if name == "Daily" then QuestCfg.DailyMult else QuestCfg.WeeklyMult
+			local replacements = generateQuests(player, data, slots, mult, day * 7919 + quests.Salt)
+			for index, old in quests[name] do
+				if not old.Claimed then
+					local fresh = replacements[index]
+					local template = QuestCfg.Templates[old.Id]
+					if template and template.Slots[slots[index].Slot] then
+						fresh = makeQuest(data, old.Id, slots[index], Random.new(day + index * 137), mult)
+						fresh.Progress = math.min(old.Progress, fresh.Target)
+					elseif old.Progress >= old.Target then
+						fresh = old -- never take away an already-earned reward
+					end
+					fresh.Rerolled = old.Rerolled
+					quests[name][index] = fresh
+				end
+			end
+		end
+		quests.Version = QuestCfg.Version
 		changed = true
 	end
 	return changed
@@ -1268,6 +1317,7 @@ function DataService.Start()
 		while true do
 			task.wait(30)
 			for player, data in profiles do
+				DataService.RefreshLoginRewards(player, true)
 				if refreshQuests(player, data) then
 					publish(player)
 					notify(player, "New quests are ready!", QUEST_GREEN)
@@ -1316,4 +1366,38 @@ function DataService.ProcessReceipt(receipt): Enum.ProductPurchaseDecision
 	end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
+-- One server-authorized claim per UTC day. A missed day never erases cycle progress.
+function DataService.RefreshLoginRewards(player: Player, send: boolean)
+	local data = profiles[player]
+	if not data then return end
+	local login = data.LoginRewards
+	local today = Config.Quests.DayKey(os.time())
+	if login.OfferDay ~= today or #login.Offers ~= 7 then
+		login.OfferDay = today
+		login.Offers = Config.LoginRewards.Resolve(data)
+		if send then publish(player) end
+	end
+end
+
+function DataService.ClaimLogin(player: Player): (boolean, string)
+	local data = profiles[player]
+	if not data or releasing[player] then return false, "Your rewards are still loading" end
+	DataService.RefreshLoginRewards(player, false)
+	local login = data.LoginRewards
+	local index, available = Config.LoginRewards.State(login, os.time())
+	if not available then return false, "Already claimed today. A new gift arrives at 00:00 UTC!" end
+	local reward = login.Offers[index]
+	-- Mark claimed before publishing or saving: concurrent requests cannot award twice.
+	DataService.Update(player, function(d)
+		d.LoginRewards.LastClaimDay = Config.Quests.DayKey(os.time())
+		d.LoginRewards.ClaimCount += 1
+		d.Money += reward.Money or 0
+		d.Candy += reward.Candy or 0
+		if reward.Potion then d.Potions[reward.Potion] = math.min(9999, d.Potions[reward.Potion] + reward.Count) end
+	end)
+	task.spawn(DataService.Save, player)
+	return true, "Day " .. index .. " claimed! Come back tomorrow for your next gift."
+end
+
+
 return DataService

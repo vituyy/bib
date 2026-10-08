@@ -14,6 +14,7 @@ local TweenService = game:GetService("TweenService")
 local Art = require(ReplicatedStorage.Shared.Art)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local UIScaling = require(ReplicatedStorage.Shared.UIScaling) -- fits every screen layer to the device (phone, tablet, PC, TV)
 
 local player = Players.LocalPlayer
 local data: { [string]: any }? = nil
@@ -198,15 +199,17 @@ local SoundService = game:GetService("SoundService")
 local Debris = game:GetService("Debris")
 local ContentProvider = game:GetService("ContentProvider")
 
-local audioOn = { Music = true, Sfx = true }
+local audioOn = { Music = true, Sfx = true, Values = { MusicVolume = 1, SfxVolume = 1, ShowGains = true, EventEffects = true } }
 local musicGroup = new("SoundGroup", { Name = "Music", Parent = SoundService })
 local sfxGroup = new("SoundGroup", { Name = "Sfx", Parent = SoundService })
 local tracks: { [string]: { Sound: Sound, Volume: number } } = {}
 local currentMusic = ""
 
 local function applyAudioSettings()
-	musicGroup.Volume = if audioOn.Music then 1 else 0
-	sfxGroup.Volume = if audioOn.Sfx then 1 else 0
+	musicGroup.Volume = audioOn.Values.MusicVolume
+	sfxGroup.Volume = audioOn.Values.SfxVolume
+	audioOn.Music = audioOn.Values.MusicVolume > 0
+	audioOn.Sfx = audioOn.Values.SfxVolume > 0
 end
 
 for name, info in Config.Audio.Music do
@@ -217,7 +220,12 @@ for name, info in Config.Audio.Music do
 end
 
 -- Fade to a track; the others fade out but keep their place (the chill theme resumes where it was).
+local requestedMusic = "Chill" -- what the game asked for; during the Blood Moon "Chill" plays the BloodMoon track
 local function setMusic(name: string, fade: number)
+	requestedMusic = name
+	if name == "Chill" and ReplicatedStorage:GetAttribute("BloodMoon") and tracks.BloodMoon then
+		name = "BloodMoon"
+	end
 	if currentMusic == name then
 		return
 	end
@@ -269,11 +277,21 @@ task.spawn(function() -- load everything before it is needed, so the first click
 end)
 applyAudioSettings()
 setMusic("Chill", 3)
+-- Route world effects through the same local SFX bus without altering their base volume.
+do
+	local function route(sound)
+		if sound:IsA("Sound") and sound.SoundGroup ~= musicGroup then sound.SoundGroup = sfxGroup end
+	end
+	for _, sound in workspace:GetDescendants() do route(sound) end
+	workspace.DescendantAdded:Connect(route)
+	for _, sound in SoundService:GetDescendants() do if sound:IsA("Sound") then route(sound) end end
+	SoundService.DescendantAdded:Connect(route)
+end
 
 ---------------------------------------------------------------------------
 -- HUD
 ---------------------------------------------------------------------------
-local gui = new("ScreenGui", { Name = "SpookyHUD", ResetOnSpawn = false, IgnoreGuiInset = false, Parent = player:WaitForChild("PlayerGui") })
+local gui = UIScaling.attach(new("ScreenGui", { Name = "SpookyHUD", ResetOnSpawn = false, IgnoreGuiInset = false, Parent = player:WaitForChild("PlayerGui") }), true)
 
 -- Money and Candy, right side in the middle: a cartoon icon and a big number in gradient letters
 -- with a thick black outline. The icons are drawn from shapes; to use your own pictures instead,
@@ -485,6 +503,14 @@ local function refreshCustomSpeed(d)
 end
 
 -- Night / day timer, top centre: just outlined text.
+-- Blood Moon countdown: up in the top bar, right above the night timer. A blood drop, then white text with
+-- "Blood Moon" in red ("Next Blood Moon Night in: 18:38"); it turns into the event timer while it lasts.
+local BLOOD_DROP = "rbxassetid://99909101943455"
+local bloodMoonHolder = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(560, 46), Position = UDim2.new(0.5, 0, 0, -50), BackgroundTransparency = 1, Parent = gui }, {
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+})
+new("ImageLabel", { Name = "BloodDrop", Size = UDim2.fromOffset(40, 40), BackgroundTransparency = 1, Image = BLOOD_DROP, ScaleType = Enum.ScaleType.Fit, LayoutOrder = 1, Parent = bloodMoonHolder })
+local bloodMoonLabel = outlined({ Size = UDim2.fromOffset(500, 44), RichText = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "", LayoutOrder = 2, Parent = bloodMoonHolder }, 3)
 local phaseLabel = outlined({ AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(340, 40), Position = UDim2.new(0.5, 0, 0, 10), Text = "", Parent = gui }, 3)
 
 -- Chase / carrying banner. Pulses gently while shown.
@@ -571,7 +597,7 @@ local function studs(parent: GuiObject, cell: number, radius: number, color: Col
 	local function fill()
 		-- AbsoluteSize includes the pop-open UIScale; divide it out so the count doesn't change mid-animation.
 		local scale = parent:FindFirstChildOfClass("UIScale")
-		local size = layer.AbsoluteSize / (if scale and scale.Scale > 0 then scale.Scale else 1)
+		local size = layer.AbsoluteSize / ((if scale and scale.Scale > 0 then scale.Scale else 1) * UIScaling.Scale)
 		local columns = math.floor(size.X / cell)
 		local count = columns * math.floor(size.Y / cell)
 		if count == built or columns <= 0 then
@@ -615,6 +641,10 @@ local panel = new("Frame", {
 	new("UISizeConstraint", { MaxSize = Vector2.new(620, 470), MinSize = Vector2.new(320, 260) }),
 })
 local panelScale = new("UIScale", { Parent = panel })
+-- The menu windows live in their own layer above the HUD; toasts sit in one above that. (The HUD uses global ZIndex, so
+-- anything created after the window used to draw over it on small screens.)
+panel.Parent = UIScaling.attach(new("ScreenGui", { Name = "SpookyMenus", ResetOnSpawn = false, IgnoreGuiInset = false, DisplayOrder = 5, ZIndexBehavior = Enum.ZIndexBehavior.Global, Parent = player:WaitForChild("PlayerGui") }), true)
+toastHolder.Parent = UIScaling.attach(new("ScreenGui", { Name = "SpookyToasts", ResetOnSpawn = false, IgnoreGuiInset = false, DisplayOrder = 10, ZIndexBehavior = Enum.ZIndexBehavior.Global, Parent = player:WaitForChild("PlayerGui") }), true)
 studs(panel, 28, 22)
 
 -- Title sticks out over the top-left corner: menu icon, then the name in big outlined letters.
@@ -718,6 +748,7 @@ invPanel = new("Frame", {
 	new("UISizeConstraint", { MaxSize = Vector2.new(760, 520), MinSize = Vector2.new(360, 280) }),
 })
 local invScale = new("UIScale", { Parent = invPanel })
+invPanel.Parent = panel.Parent
 studs(invPanel, 34, 14, WHITE, 0.9)
 
 local invHeader = box({ Size = UDim2.new(1, 0, 0, 66), Parent = invPanel }, PAINT.Header)
@@ -744,7 +775,7 @@ local searchBox = new("TextBox", {
 	new("UIStroke", { Color = Color3.fromRGB(10, 25, 55), Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 	new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }),
 })
-chunkyButton({ AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(52, 52), Position = UDim2.new(1, -10, 0.5, 0), Text = "X", ZIndex = 3, Parent = invHeader }, PAINT.Red, closeMenus)
+chunkyButton({ AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(56, 56), Position = UDim2.new(1, -10, 0.5, 0), Text = "X", ZIndex = 3, Parent = invHeader }, PAINT.Red, closeMenus)
 
 local invList = new("ScrollingFrame", {
 	Size = UDim2.new(1, -20, 1, -152),
@@ -1139,25 +1170,8 @@ function menus.Store(_d)
 		request("RedeemCode", code)
 	end)
 	header(2, "Coming soon!")
-	header(100, "Sound")
-	for index, setting in { { Key = "Music", Label = "Music" }, { Key = "Sfx", Label = "Sound effects" } } do
-		local holder = box({ Size = UDim2.new(1, -8, 0, 52), LayoutOrder = 100 + index, Parent = list }, PAINT.Cyan)
-		outlined({ Size = UDim2.new(1, -156, 1, -16), Position = UDim2.fromOffset(14, 8), Text = setting.Label, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = holder }, 2)
-		local toggle
-		toggle = chunkyButton({ Size = UDim2.new(0, 132, 1, -12), Position = UDim2.new(1, -138, 0, 6), Text = if audioOn[setting.Key] then "ON" else "OFF", ZIndex = 2, Parent = holder }, if audioOn[setting.Key] then PAINT.Green else PAINT.Grey, function()
-			audioOn[setting.Key] = not audioOn[setting.Key]
-			applyAudioSettings()
-			local paint = if audioOn[setting.Key] then PAINT.Green else PAINT.Grey
-			local label = toggle:FindFirstChildOfClass("TextLabel")
-			if label then
-				label.Text = if audioOn[setting.Key] then "ON" else "OFF"
-			end
-			local fill = toggle:FindFirstChildOfClass("UIGradient")
-			if fill then
-				fill.Color = ColorSequence.new(paint[1], paint[2])
-			end
-		end)
-	end
+	header(100, "Preferences")
+	row(101, "Audio and display", WHITE, "Settings", PAINT.Cyan, function() toggleMenu("Settings", true) end)
 	for n, item in STORE_ITEMS do
 		row(n + 2, string.format("%s (%s)", item.Name, item.Kind), WHITE, "R$ ??", PAINT.Grey, function()
 			toast("The Store opens soon!", ORANGE)
@@ -1171,7 +1185,7 @@ end
 -- can choose. The rules, numbers and reward sizes are in Config.Quests; the server does the counting and paying.
 ---------------------------------------------------------------------------
 -- Helpers of the Quests and Rewards windows live in one table (a Luau script can only have 200 top-level locals).
-local QR = { Seconds = 0, At = os.clock(), Timers = {}, PotionTimers = {}, badges = {} }
+local QR = { Seconds = 0, At = os.clock(), Timers = {}, PotionTimers = {}, badges = {}, Tab = "Daily" }
 QR.PINK = Color3.fromRGB(255, 170, 225)
 QR.GOLD = Color3.fromRGB(255, 230, 90)
 
@@ -1186,25 +1200,50 @@ function QR.timeLeft(seconds: number): string
 	return string.format("%dm %ds", minutes, seconds % 60)
 end
 
--- A small dark pill with one emoji and an amount, e.g. "💰 12.4K".
+-- Pale card colours for quest cards (like the concept art), and the darker blue of a tab that is not selected.
+QR.LIGHT = { Color3.fromRGB(246, 250, 255), Color3.fromRGB(201, 219, 245) }
+QR.STUD = Color3.fromRGB(176, 196, 228)
+QR.TAB_OFF = { Color3.fromRGB(70, 125, 205), Color3.fromRGB(38, 78, 158) }
+QR.TABS = {
+	{ Name = "Daily", Title = "Daily Quests", Width = 104 },
+	{ Name = "Weekly", Title = "Weekly Quests", Width = 112 },
+	{ Name = "Goals", Title = "Achievements", Width = 104 },
+}
+
+-- Quest card look: dark blue glass cards with a round badge in the quest's colour on the left, a thick progress bar, dark
+-- reward pills and a pill-shaped status on the right. Ready quests turn green and glow gold, claimed ones go grey.
+QR.CARD = { Color3.fromRGB(70, 80, 142), Color3.fromRGB(38, 44, 94) }
+QR.CARD_STUD = Color3.fromRGB(140, 152, 225)
+QR.DARK_PILL = Color3.fromRGB(18, 20, 44)
+
+-- Reward pills: a dark pill with a glossy icon hanging over its left end and the amount, e.g. (coins) $12.4K.
 function QR.rewardChips(parent: GuiObject, reward: { [string]: number }, position: UDim2, width: number)
-	local holder = new("Frame", { Size = UDim2.fromOffset(width, 70), Position = position, BackgroundTransparency = 1, ZIndex = 2, Parent = parent }, {
+	local holder = new("Frame", { Size = UDim2.fromOffset(width, 78), Position = position, BackgroundTransparency = 1, ZIndex = 2, Parent = parent }, {
 		new("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
 	})
 	local order = 0
-	for _, entry in { { "Money", "💰 $", "", Color3.fromRGB(255, 232, 90) }, { "Candy", "🍬 ", "", QR.PINK }, { "Xp", "⚡ ", " XP", CYAN } } do
+	for _, entry in { { "Money", QR.GIFT_ICONS.Money, "$", "", QR.GOLD }, { "Candy", QR.GIFT_ICONS.Candy, "", "", QR.PINK }, { "Xp", QR.GIFT_ICONS.Xp, "", " XP", CYAN } } do
 		local amount = reward[entry[1]]
 		if amount then
 			order += 1
-			local chip = new("Frame", { Size = UDim2.new(1, 0, 0, 21), BackgroundColor3 = Color3.fromRGB(35, 25, 55), BackgroundTransparency = 0.1, LayoutOrder = order, ZIndex = 2, Parent = holder }, { corner(9) })
-			outlined({ Size = UDim2.new(1, -10, 1, -3), Position = UDim2.fromOffset(5, 1), Text = entry[2] .. formatNumber(amount) .. entry[3], TextColor3 = entry[4], TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3, Parent = chip }, 1.5)
+			local row = new("Frame", { Size = UDim2.new(1, 0, 0, 23), BackgroundColor3 = QR.DARK_PILL, BackgroundTransparency = 0.1, LayoutOrder = order, ZIndex = 2, Parent = holder }, {
+				new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+				new("UIStroke", { Color = BLACK, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+			})
+			new("ImageLabel", { Size = UDim2.fromOffset(28, 28), Position = UDim2.fromOffset(-5, -3), BackgroundTransparency = 1, Image = entry[2], ScaleType = Enum.ScaleType.Fit, ZIndex = 4, Parent = row })
+			outlined({ Size = UDim2.new(1, -34, 1, -4), Position = UDim2.fromOffset(26, 2), Text = entry[3] .. formatNumber(amount) .. entry[4], TextColor3 = entry[5], TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3, Parent = row }, 1.6)
 		end
 	end
 end
 
--- Right-hand button column of a card: a Claim button, a status text, or a Reroll button.
+-- Right-hand status of a card ("Working", "Done", "Locked"): a dark pill with coloured text. Returns the pill.
 function QR.cardStatus(card: GuiObject, text: string, color: Color3)
-	outlined({ Size = UDim2.fromOffset(92, 30), Position = UDim2.new(1, -104, 0, 14), Text = text, TextColor3 = color, ZIndex = 2, Parent = card }, 2)
+	local pill = new("Frame", { Size = UDim2.fromOffset(92, 30), Position = UDim2.new(1, -104, 0, 14), BackgroundColor3 = QR.DARK_PILL, BackgroundTransparency = 0.15, ZIndex = 2, Parent = card }, {
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		new("UIStroke", { Color = BLACK, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	})
+	outlined({ Size = UDim2.new(1, -14, 1, -8), Position = UDim2.fromOffset(7, 4), Text = text, TextColor3 = color, ZIndex = 3, Parent = pill }, 1.8)
+	return pill
 end
 
 function QR.slotColor(slot: string): Color3
@@ -1218,35 +1257,61 @@ function QR.slotColor(slot: string): Color3
 	return CYAN
 end
 
+-- The round badge at the left of a card: a glossy circle in `color` with an emoji.
+function QR.badge(card: GuiObject, size: number, color: Color3, icon: string)
+	local b = circle({ AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.fromOffset(size, size), Position = UDim2.new(0, 14, 0.5, 0), ZIndex = 2, Parent = card }, { color:Lerp(WHITE, 0.4), color }, 3)
+	outlined({ AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.62, 0.62), Position = UDim2.fromScale(0.5, 0.5), Text = icon, ZIndex = 3, Parent = b }, 0)
+	return b
+end
+
 function QR.questCard(order: number, quest, listName: string, index: number)
 	local template = Config.Quests.Templates[quest.Id]
 	local ready = quest.Progress >= quest.Target
-	local paint = if quest.Claimed then PAINT.Grey elseif ready then PAINT.Green else PAINT.Cyan
-	local card = box({ Size = UDim2.new(1, -8, 0, 100), LayoutOrder = order, Parent = list }, paint)
+	local compact = UIScaling.Compact
+	-- Vertical positions of the pill, title, bar, reward rows and buttons (tighter on phones).
+	local height, pillY, titleY, barY, chipY, statusY, buttonY, rerollY = 100, 8, 32, 68, 12, 14, 10, 56
+	if compact then
+		height, pillY, titleY, barY, chipY, statusY, buttonY, rerollY = 84, 5, 24, 54, 6, 8, 6, 46
+	end
+	local badgeSize = if compact then 48 else 62
+	local textX = 14 + badgeSize + 12
+	local paint = if quest.Claimed then { Color3.fromRGB(88, 90, 106), Color3.fromRGB(58, 60, 74) } elseif ready then { Color3.fromRGB(78, 200, 88), Color3.fromRGB(34, 130, 58) } else QR.CARD
+	local card = box({ Size = UDim2.new(1, -8, 0, height), LayoutOrder = order, Parent = list }, paint)
+	studs(card, 22, 12, if ready or quest.Claimed then WHITE else QR.CARD_STUD, if ready or quest.Claimed then 0.85 else 0.82)
+	if ready and not quest.Claimed then -- a ready quest glows gold so it is easy to spot
+		local stroke = card:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = Color3.fromRGB(255, 220, 70)
+			stroke.Thickness = 4
+			TweenService:Create(stroke, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Thickness = 2 }):Play()
+		end
+	end
+
+	QR.badge(card, badgeSize, QR.slotColor(quest.Slot), (template and template.Icon) or "⭐")
 
 	-- Difficulty and effort: "EASY  ~4 min".
-	local pill = new("Frame", { Size = UDim2.fromOffset(160, 20), Position = UDim2.fromOffset(12, 8), BackgroundColor3 = QR.slotColor(quest.Slot), ZIndex = 2, Parent = card }, { corner(10), border(2) })
+	local pill = new("Frame", { Size = UDim2.fromOffset(160, 20), Position = UDim2.fromOffset(textX, pillY), BackgroundColor3 = QR.slotColor(quest.Slot), ZIndex = 2, Parent = card }, { corner(10), border(2) })
 	local minutes = if quest.Minutes >= 10 then tostring(math.floor(quest.Minutes + 0.5)) else string.format("%.1f", quest.Minutes)
 	outlined({ Size = UDim2.new(1, -10, 1, -2), Position = UDim2.fromOffset(5, 1), Text = string.upper(quest.Slot) .. "   ~" .. minutes .. " min", ZIndex = 3, Parent = pill }, 1.5)
 
-	outlined({ Size = UDim2.new(1, -250, 0, 28), Position = UDim2.fromOffset(12, 32), Text = (template and template.Icon or "") .. " " .. Config.Quests.Describe(quest), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2)
+	outlined({ Size = UDim2.new(1, -(textX + 238), 0, if compact then 26 else 28), Position = UDim2.fromOffset(textX, titleY), Text = Config.Quests.Describe(quest), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2)
 
-	local bar, fill = progressBar({ Size = UDim2.new(1, -250, 0, 20), Position = UDim2.fromOffset(12, 68), Parent = card }, PAINT.XpFill)
+	local bar, fill = progressBar({ Size = UDim2.new(1, -(textX + 238), 0, if compact then 22 else 24), Position = UDim2.fromOffset(textX, if compact then barY else barY + 2), Parent = card }, PAINT.XpFill)
 	setBar(fill, quest.Progress / quest.Target)
 	outlined({ Size = UDim2.new(1, -12, 1, -4), Position = UDim2.fromOffset(6, 2), Text = Config.Quests.ProgressText(quest), ZIndex = 3, Parent = bar }, 1.5)
 
-	QR.rewardChips(card, quest.Reward, UDim2.new(1, -222, 0, 12), 110)
+	QR.rewardChips(card, quest.Reward, UDim2.new(1, -222, 0, chipY), 110)
 
 	if quest.Claimed then
-		QR.cardStatus(card, "✓ Done", WHITE)
+		QR.cardStatus(card, "✓ Done", Color3.fromRGB(150, 255, 150)).Position = UDim2.new(1, -104, 0, statusY)
 	elseif ready then
-		chunkyButton({ Size = UDim2.fromOffset(92, 44), Position = UDim2.new(1, -104, 0, 10), Text = "Claim", ZIndex = 2, Parent = card }, PAINT.Orange, function()
+		chunkyButton({ Size = UDim2.fromOffset(92, if compact then 40 else 44), Position = UDim2.new(1, -104, 0, buttonY), Text = "Claim", ZIndex = 2, Parent = card }, PAINT.Orange, function()
 			request("ClaimQuest", { List = listName, Index = index })
 		end)
 	else
-		QR.cardStatus(card, "Working", ORANGE)
+		QR.cardStatus(card, "Working", ORANGE).Position = UDim2.new(1, -104, 0, statusY)
 		if listName == "Daily" and quest.Progress <= 0 and not quest.Rerolled then
-			chunkyButton({ Size = UDim2.fromOffset(92, 30), Position = UDim2.new(1, -104, 0, 56), Text = "↻ Reroll", ZIndex = 2, Parent = card }, PAINT.Grey, function()
+			chunkyButton({ Size = UDim2.fromOffset(92, 30), Position = UDim2.new(1, -104, 0, rerollY), Text = "↻ Reroll", ZIndex = 2, Parent = card }, PAINT.Grey, function()
 				request("RerollQuest", index)
 			end)
 		end
@@ -1268,7 +1333,9 @@ function QR.chestCard(order: number, listName: string, quests, now: number)
 	local reward = Config.Quests.ChestReward(quest_list, streak)
 	local paint = if opened then PAINT.Grey elseif complete then PAINT.Orange else PAINT.Purple
 	local card = box({ Size = UDim2.new(1, -8, 0, 88), LayoutOrder = order, Parent = list }, paint)
-	outlined({ Size = UDim2.new(1, -250, 0, 30), Position = UDim2.fromOffset(12, 8), Text = "🎁 " .. listName .. " Chest", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = QR.GOLD, ZIndex = 2, Parent = card }, 2.5)
+	QR.badge(card, 56, if complete and not opened then Color3.fromRGB(255, 190, 40) else Color3.fromRGB(150, 80, 230), "🎁")
+	local textX = 86
+	outlined({ Size = UDim2.new(1, -(textX + 238), 0, 30), Position = UDim2.fromOffset(textX, 8), Text = listName .. " Chest", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = QR.GOLD, ZIndex = 2, Parent = card }, 2.5)
 	local sub = string.format("%d / %d quests claimed", claimed, #quest_list)
 	if listName == "Daily" then
 		local shown = if quests.LastStreakDay >= day - 1 then quests.Streak else 0
@@ -1277,12 +1344,12 @@ function QR.chestCard(order: number, listName: string, quests, now: number)
 			sub ..= string.format(" (bonus +%d%%)", math.floor((streak - 1) * Config.Quests.StreakStep * 100 + 0.5))
 		end
 	end
-	outlined({ Size = UDim2.new(1, -250, 0, 22), Position = UDim2.fromOffset(12, 44), Text = sub, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 1.8)
+	outlined({ Size = UDim2.new(1, -(textX + 238), 0, 22), Position = UDim2.fromOffset(textX, 42), Text = sub, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 1.8)
 	local note = if listName == "Daily" then "Come back every day to grow the bonus" else "Finish both weekly quests"
-	outlined({ Size = UDim2.new(1, -250, 0, 16), Position = UDim2.fromOffset(12, 66), Text = note, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(230, 225, 255), ZIndex = 2, Parent = card }, 1.2)
-	QR.rewardChips(card, reward, UDim2.new(1, -222, 0, 9), 110)
+	outlined({ Size = UDim2.new(1, -(textX + 238), 0, 16), Position = UDim2.fromOffset(textX, 66), Text = note, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(230, 225, 255), ZIndex = 2, Parent = card }, 1.2)
+	QR.rewardChips(card, reward, UDim2.new(1, -222, 0, 5), 110)
 	if opened then
-		QR.cardStatus(card, "✓ Opened", WHITE)
+		QR.cardStatus(card, "✓ Opened", Color3.fromRGB(150, 255, 150))
 	elseif complete then
 		chunkyButton({ Size = UDim2.fromOffset(92, 44), Position = UDim2.new(1, -104, 0, 20), Text = "Open!", ZIndex = 2, Parent = card }, PAINT.Green, function()
 			request("ClaimChest", listName)
@@ -1296,20 +1363,24 @@ end
 function QR.achievementCard(order: number, d, achievement)
 	local claimed, value, target, ready = Config.Quests.AchievementState(d, achievement)
 	local maxed = target == nil
-	local card = box({ Size = UDim2.new(1, -8, 0, 84), LayoutOrder = order }, if maxed then PAINT.Grey elseif ready then PAINT.Green else PAINT.Cyan)
+	local paint = if maxed then { Color3.fromRGB(88, 90, 106), Color3.fromRGB(58, 60, 74) } elseif ready then { Color3.fromRGB(78, 200, 88), Color3.fromRGB(34, 130, 58) } else QR.CARD
+	local card = box({ Size = UDim2.new(1, -8, 0, 84), LayoutOrder = order }, paint)
+	studs(card, 22, 12, if ready or maxed then WHITE else QR.CARD_STUD, if ready or maxed then 0.85 else 0.82)
 	card.Parent = list
-	outlined({ Size = UDim2.new(1, -250, 0, 26), Position = UDim2.fromOffset(12, 6), Text = achievement.Icon .. " " .. achievement.Title .. string.format("   (%d/%d)", claimed, #achievement.Tiers), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2)
+	QR.badge(card, 54, if maxed then QR.GOLD else Color3.fromRGB(255, 160, 60), achievement.Icon)
+	local textX = 82
+	outlined({ Size = UDim2.new(1, -(textX + 238), 0, 26), Position = UDim2.fromOffset(textX, 6), Text = achievement.Title .. string.format("   (%d/%d)", claimed, #achievement.Tiers), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 2)
 	if maxed then
-		outlined({ Size = UDim2.new(1, -250, 0, 22), Position = UDim2.fromOffset(12, 40), Text = "Every step claimed. Legend!", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = QR.GOLD, ZIndex = 2, Parent = card }, 1.8)
+		outlined({ Size = UDim2.new(1, -(textX + 238), 0, 22), Position = UDim2.fromOffset(textX, 40), Text = "Every step claimed. Legend!", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = QR.GOLD, ZIndex = 2, Parent = card }, 1.8)
 		QR.cardStatus(card, "MAX", QR.GOLD)
 		return
 	end
-	outlined({ Size = UDim2.new(1, -250, 0, 20), Position = UDim2.fromOffset(12, 34), Text = string.format(achievement.Text, target), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 1.6)
-	local bar, fill = progressBar({ Size = UDim2.new(1, -250, 0, 18), Position = UDim2.fromOffset(12, 58), Parent = card }, PAINT.XpFill)
+	outlined({ Size = UDim2.new(1, -(textX + 238), 0, 20), Position = UDim2.fromOffset(textX, 34), Text = string.format(achievement.Text, target), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card }, 1.6)
+	local bar, fill = progressBar({ Size = UDim2.new(1, -(textX + 238), 0, 20), Position = UDim2.fromOffset(textX, 57), Parent = card }, PAINT.XpFill)
 	setBar(fill, value / target)
 	outlined({ Size = UDim2.new(1, -12, 1, -4), Position = UDim2.fromOffset(6, 2), Text = string.format("%s / %s", formatNumber(math.min(value, target)), formatNumber(target)), ZIndex = 3, Parent = bar }, 1.5)
 	local reward = Config.Quests.Reward(d, Config.Quests.AchievementMinutes[claimed + 1], { Money = 0.5, Candy = 0.3, Xp = 0.2 }, 1)
-	QR.rewardChips(card, reward, UDim2.new(1, -222, 0, 6), 110)
+	QR.rewardChips(card, reward, UDim2.new(1, -222, 0, 3), 110)
 	if ready then
 		chunkyButton({ Size = UDim2.fromOffset(92, 40), Position = UDim2.new(1, -104, 0, 36), Text = "Claim", ZIndex = 2, Parent = card }, PAINT.Orange, function()
 			request("ClaimAchievement", achievement.Id)
@@ -1317,29 +1388,106 @@ function QR.achievementCard(order: number, d, achievement)
 	end
 end
 
+function QR.timeFull(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	return string.format("%dd %dh %dm", seconds // 86400, seconds % 86400 // 3600, seconds % 3600 // 60)
+end
+
+-- Daily / Weekly / Goals tabs on the left, the time until the quests refresh (with a clock) on the right.
+function QR.tabRow(order: number, active: string)
+	local camera = workspace.CurrentCamera
+	local compact = camera ~= nil and camera.ViewportSize.Y < 520
+	local frame = spacer(order, if compact then 48 else 58)
+	local x = 0
+	local shrink = 1 -- the whole UI is already scaled to the screen, so the tabs keep their tap size
+	for _, info in QR.TABS do
+		local on = info.Name == active
+		local button = chunkyButton({
+			Size = UDim2.fromOffset(info.Width * shrink, if compact then (if on then 44 else 38) else (if on then 50 else 44)),
+			Position = UDim2.fromOffset(x + 2, if compact then (if on then 2 else 6) else (if on then 4 else 9)),
+			Text = info.Name,
+			Parent = frame,
+		}, if on then PAINT.Cyan else QR.TAB_OFF, function()
+			QR.Tab = info.Name
+			renderMenu()
+			list.CanvasPosition = Vector2.zero
+		end)
+		if on then
+			local stroke = button:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Color = Color3.fromRGB(215, 246, 255)
+			end
+			studs(button, 16, 12, WHITE, 0.6)
+		end
+		x += info.Width * shrink + 6
+	end
+	QR.timerLabel = nil
+	if QR.timerSeconds then
+		local holder = new("Frame", { AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(if compact then 150 else 220, 48), Position = UDim2.new(1, -4, 0.5, 0), BackgroundTransparency = 1, Parent = frame })
+		local clock = circle({ AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(46, 46), Position = UDim2.new(1, 0, 0.5, 0), ZIndex = 2, Parent = holder }, PAINT.Cyan, 3)
+		local face = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.68, 0.68), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = WHITE, ZIndex = 3, Parent = clock }, {
+			new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		})
+		new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(3, 10), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(35, 90, 170), BorderSizePixel = 0, ZIndex = 4, Parent = face })
+		new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.fromOffset(8, 3), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(35, 90, 170), BorderSizePixel = 0, ZIndex = 4, Parent = face })
+		QR.timerLabel = outlined({
+			Size = UDim2.new(1, -54, 1, -8),
+			Position = UDim2.fromOffset(0, 4),
+			Text = QR.timeFull(QR.timerSeconds(workspace:GetServerTimeNow())),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 2,
+			Parent = holder,
+		}, 3)
+	end
+end
+
 function menus.Quests(d)
 	local now = workspace:GetServerTimeNow()
 	local quests = d.Quests
-	local order = 0
-	local function nextOrder(): number
+	local tab = QR.Tab
+	local deco = panel:FindFirstChild("SpookyDeco")
+	local title = deco and deco:FindFirstChild("HeaderTitle")
+	for _, info in QR.TABS do
+		if info.Name == tab and title then
+			title.Text = info.Title
+		end
+	end
+	QR.timerSeconds = if tab == "Daily" then Config.Quests.SecondsToDaily elseif tab == "Weekly" then Config.Quests.SecondsToWeekly else nil
+	QR.tabRow(1, tab)
+	local order = 1
+	if tab == "Goals" then
+		for _, achievement in Config.Quests.Achievements do
+			order += 1
+			QR.achievementCard(order, d, achievement)
+		end
+		return
+	end
+	local set = if tab == "Daily" then quests.Daily else quests.Weekly
+	for index, quest in set do
 		order += 1
-		return order
+		QR.questCard(order, quest, tab, index)
 	end
-	header(nextOrder(), "Daily Quests   ⏰ new ones in " .. QR.timeLeft(Config.Quests.SecondsToDaily(now)), ORANGE)
-	for index, quest in quests.Daily do
-		QR.questCard(nextOrder(), quest, "Daily", index)
-	end
-	QR.chestCard(nextOrder(), "Daily", quests, now)
-	header(nextOrder(), "Weekly Quests   ⏰ new ones in " .. QR.timeLeft(Config.Quests.SecondsToWeekly(now)), Color3.fromRGB(200, 150, 255))
-	for index, quest in quests.Weekly do
-		QR.questCard(nextOrder(), quest, "Weekly", index)
-	end
-	QR.chestCard(nextOrder(), "Weekly", quests, now)
-	header(nextOrder(), "Achievements   (rewards grow with every step)", CYAN)
-	for _, achievement in Config.Quests.Achievements do
-		QR.achievementCard(nextOrder(), d, achievement)
-	end
+	QR.chestCard(order + 1, tab, quests, now)
 end
+
+-- Rebuild the open Quests window when the screen size changes (window resize, device rotation), so the compact
+-- phone layout and the window size follow the screen.
+UIScaling.Changed:Connect(function()
+	if openMenu then
+		renderMenu()
+	end
+end)
+
+-- The clock on the Quests window counts down every second without redrawing the window.
+task.spawn(function()
+	while true do
+		local label, seconds = QR.timerLabel, QR.timerSeconds
+		if label and label.Parent and seconds then
+			label.Text = QR.timeFull(seconds(workspace:GetServerTimeNow()))
+		end
+		task.wait(1)
+	end
+end)
 
 -- How many things are waiting to be claimed (shown on the Quests button).
 function QR.claimableCount(d): number
@@ -1375,7 +1523,7 @@ end
 
 -- Changes whenever the Quests menu needs a redraw (times are rounded so the menu is not redrawn every second).
 function QR.questSignature(d): string
-	local parts = {}
+	local parts = { QR.Tab }
 	if d.Quests then
 		for _, set in { d.Quests.Daily, d.Quests.Weekly } do
 			for _, quest in set do
@@ -2015,18 +2163,20 @@ local NAVY = Color3.fromRGB(14, 22, 52)
 local HEADERS = {
 	Rewards = { Title = "Playtime Rewards", Icon = "rbxassetid://115753816614274", Top = Color3.fromRGB(111, 211, 255), Bottom = Color3.fromRGB(44, 159, 234), Rim = Color3.fromRGB(168, 236, 255) },
 	Potions = { Title = "Potions", Icon = "rbxassetid://75316663864314", Top = Color3.fromRGB(196, 140, 255), Bottom = Color3.fromRGB(128, 60, 222), Rim = Color3.fromRGB(228, 200, 255) },
+	Quests = { Title = "Daily Quests", Icon = "rbxassetid://139515933174863", IconScale = 1.3, Top = Color3.fromRGB(255, 166, 82), Bottom = Color3.fromRGB(214, 98, 34), Rim = Color3.fromRGB(255, 208, 150) },
 }
 local function themePanel(name: string)
 	local style = HEADERS[name]
 	local styled = style ~= nil
 	local big = name == "Rewards"
-	local BAR = 76
+	local BAR = if UIScaling.Compact then 64 else 76 -- slimmer bar on phones
+	local compact = BAR < 76
 	panelGradient.Color = if styled then ColorSequence.new(Color3.fromRGB(44, 40, 66), Color3.fromRGB(22, 20, 36)) else ColorSequence.new(PAINT.Panel[1], PAINT.Panel[2])
 	panelStroke.Color = if styled then Color3.fromRGB(10, 10, 14) else BLACK
 	panelStroke.Thickness = if styled then 5 else 4
 	panelCorner.CornerRadius = UDim.new(0, if styled then 8 else 22)
-	panelSizeLimit.MaxSize = if big then Vector2.new(920, 660) elseif styled then Vector2.new(760, 640) else Vector2.new(620, 470)
-	panel.Size = if big then UDim2.fromScale(0.8, 0.88) elseif styled then UDim2.fromScale(0.7, 0.88) else UDim2.fromScale(0.62, 0.76)
+	panelSizeLimit.MaxSize = if big then Vector2.new(920, 660) elseif name == "Quests" then Vector2.new(720, 600) elseif styled then Vector2.new(760, 640) elseif compact then Vector2.new(720, 470) else Vector2.new(620, 470)
+	panel.Size = if big then UDim2.fromScale(0.8, 0.88) elseif name == "Quests" then (if compact then UDim2.fromScale(0.92, 0.95) else UDim2.fromScale(0.64, 0.86)) elseif styled then (if compact then UDim2.fromScale(0.9, 0.9) else UDim2.fromScale(0.7, 0.88)) elseif compact then UDim2.fromScale(0.86, 0.8) else UDim2.fromScale(0.62, 0.76)
 	panelTitle.Visible = not styled
 	if styled then
 		panelIcon.Visible = false
@@ -2075,7 +2225,7 @@ local function themePanel(name: string)
 	closeButton.AnchorPoint = if styled then Vector2.new(1, 0.5) else closeButton.AnchorPoint
 	local oldDeco = panel:FindFirstChild("SpookyDeco")
 	if oldDeco then
-		if oldDeco:GetAttribute("Menu") == name and oldDeco:GetAttribute("V2") then
+		if oldDeco:GetAttribute("Menu") == name and oldDeco:GetAttribute("V2") and oldDeco:GetAttribute("Bar") == BAR then
 			return
 		end
 		oldDeco:Destroy()
@@ -2086,6 +2236,7 @@ local function themePanel(name: string)
 	end
 	local deco = new("Folder", { Name = "SpookyDeco", Parent = panel })
 	deco:SetAttribute("Menu", name)
+	deco:SetAttribute("Bar", BAR)
 	deco:SetAttribute("V2", true)
 	-- Bar: black outline, thin light inner rim, sky-to-azure gradient, lighter glossy top band.
 	local bar = new("Frame", { Name = "Header", Size = UDim2.new(1, 0, 0, BAR), BackgroundColor3 = WHITE, ClipsDescendants = true, ZIndex = 5, Parent = deco }, {
@@ -2117,9 +2268,14 @@ local function themePanel(name: string)
 	end
 	-- Icon ~1.2x the bar, poking out left and above; title next to it.
 	local icon = math.floor(BAR * 1.3)
-	new("ImageLabel", { Size = UDim2.fromOffset(icon, icon), Position = UDim2.fromOffset(-10, BAR - icon + 4), BackgroundTransparency = 1, Image = style.Icon, ScaleType = Enum.ScaleType.Fit, ZIndex = 8, Parent = deco })
+	if style.Emoji then
+		outlined({ Size = UDim2.fromOffset(icon, icon), Position = UDim2.fromOffset(-10, BAR - icon + 4), Text = style.Emoji, ZIndex = 8, Parent = deco }, 0)
+	else
+		local big = math.floor(icon * (if compact then math.min(style.IconScale or 1, 1.1) else style.IconScale or 1))
+		new("ImageLabel", { Size = UDim2.fromOffset(big, big), Position = UDim2.fromOffset(-14, math.max(BAR - big + 8, if compact then -6 else -52)), BackgroundTransparency = 1, Image = style.Icon, ScaleType = Enum.ScaleType.Fit, ZIndex = 8, Parent = deco })
+	end
 	local titleX = icon - 10 + math.floor(icon * 0.3)
-	outlined({ AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.new(1, -(titleX + xSize + 40), 0, math.floor(BAR * 0.62)), Position = UDim2.new(0, titleX, 0, BAR / 2), Text = style.Title, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 8, Parent = deco }, 4)
+	outlined({ Name = "HeaderTitle", AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.new(1, -(titleX + xSize + 40), 0, math.floor(BAR * 0.62)), Position = UDim2.new(0, titleX, 0, BAR / 2), Text = style.Title, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 8, Parent = deco }, 4)
 end
 
 -- Active potions on the HUD: each running boost shows its potion with a big countdown under it (h:mm:ss over an
@@ -2267,16 +2423,7 @@ local menuButtons = new("Frame", {
 	Parent = gui,
 })
 do
-	local fit = new("UIScale", { Parent = menuButtons })
-	local function refit()
-		local camera = workspace.CurrentCamera
-		local height = if camera then camera.ViewportSize.Y else 800
-		fit.Scale = math.clamp((height - 220) / (STORE_H + GAP + 3 * (TILE + GAP)), 0.55, 1)
-	end
-	refit()
-	if workspace.CurrentCamera then
-		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(refit)
-	end
+	new("UIScale", { Parent = menuButtons }) -- sized in the responsive layout near the end of this script
 end
 local TILE_STYLE = { Quests = { Emoji = "📜", Paint = PAINT.Orange }, Rewards = { Emoji = "🎁", Paint = PAINT.Purple }, Potions = { Image = "rbxassetid://118551182065848", Paint = PAINT.Cyan } }
 local function badgeFor(menu: string, parent: GuiObject, position: UDim2)
@@ -2711,6 +2858,13 @@ task.spawn(function()
 			local left = endsAt - workspace:GetServerTimeNow()
 			phaseLabel.Text = if isNight then "🌙 NIGHT " .. formatTime(left) else "☀️ DAY " .. formatTime(left) .. " - street closed"
 		end
+		local bloodAt = ReplicatedStorage:GetAttribute("BloodMoonAt")
+		local RED_TEXT = '<font color="#FF2B2B">%s</font>'
+		if ReplicatedStorage:GetAttribute("BloodMoon") then
+			bloodMoonLabel.Text = string.format(RED_TEXT, "Blood Moon") .. " Night ends in: " .. (if endsAt then formatTime(endsAt - workspace:GetServerTimeNow()) else "")
+		elseif bloodAt then
+			bloodMoonLabel.Text = "Next " .. string.format(RED_TEXT, "Blood Moon") .. " Night in: " .. formatTime(bloodAt - workspace:GetServerTimeNow())
+		end
 		if openMenu == "Eggs" then
 			refreshIncubatorTimers()
 		end
@@ -2759,6 +2913,7 @@ local POPUP_ICONS = { Xp = "rbxassetid://70813922518734", Candy = CURRENCY_IMAGE
 local POPUP_COLORS = { Xp = Color3.fromRGB(255, 225, 60), Candy = Color3.fromRGB(255, 150, 210) }
 local pendingGain: { [string]: number } = {}
 local function showGain(kind: string, amount: number)
+	if not audioOn.Values.ShowGains then return end
 	local holder = new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.fromOffset(220, 64),
@@ -2791,6 +2946,7 @@ local function showGain(kind: string, amount: number)
 	end)
 end
 local function queueGain(kind: string, amount: number)
+	if not audioOn.Values.ShowGains then return end
 	if amount <= 0 then
 		return
 	end
@@ -2874,6 +3030,58 @@ end)
 -- Admin panel (playtest tools). Shown only to admins (the server sets IsAdmin; every command is checked again
 -- there). Open it with F2 or the small ADMIN button.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- Responsive layout. UIScaling already shrinks / grows the whole UI to the screen; this places the HUD blocks that
+-- need a different arrangement on short screens (phones). The right-hand column moves to the top-right so it clears the
+-- jump button, Rewards and Friend Boost go top-left, the potion timers sit above the level bar, and the bottom-left
+-- corner stays free for the thumbstick. On touch tablets the same corners are kept clear.
+---------------------------------------------------------------------------
+do
+	local UserInputService = game:GetService("UserInputService")
+	local rewardsTop = gui:FindFirstChild("RewardsTop") :: Frame
+	local menuFit = menuButtons:FindFirstChildOfClass("UIScale") :: UIScale
+	local boostList = boostRow:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+	local stackScale = new("UIScale", { Parent = currencyStack })
+	local speedScale = new("UIScale", { Parent = customSpeedHud })
+	local topRight = Vector2.new(1, 0)
+	local function layout()
+		local height = UIScaling.Size.Y
+		local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local menuHeight = menuButtons.Size.Y.Offset
+		currencyStack.AnchorPoint, customSpeedHud.AnchorPoint = topRight, topRight
+		invPanel.Size = if UIScaling.Compact then UDim2.fromScale(0.88, 0.9) else UDim2.fromScale(0.66, 0.78)
+		if UIScaling.Compact then
+			stackScale.Scale, speedScale.Scale = 0.68, 0.6 -- Money / Candy 20% smaller, Custom speed 30% smaller
+			currencyStack.Position = UDim2.new(1, -12, 0, 6)
+			customSpeedHud.Position = UDim2.new(1, -12, 0, 6 + math.ceil(160 * 0.68) + 6)
+			rewardsTop.AnchorPoint, rewardsTop.Position = Vector2.zero, UDim2.fromOffset(16, 4)
+			local menuTop = 108
+			menuFit.Scale = math.clamp((height - menuTop - 52) / menuHeight, 0.5, 1)
+			menuButtons.AnchorPoint, menuButtons.Position = Vector2.zero, UDim2.fromOffset(16, menuTop)
+			friendHud.AnchorPoint, friendHud.Position = Vector2.zero, UDim2.fromOffset(16, menuTop + math.ceil(menuHeight * menuFit.Scale) + 6) -- under the menu buttons
+			boostRow.AnchorPoint, boostRow.Position = Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -104)
+			boostList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			toastHolder.Position = UDim2.new(0.5, 0, 1, -190)
+		else
+			stackScale.Scale, speedScale.Scale = 0.8, 0.7 -- Money / Candy 20% smaller, Custom speed 30% smaller
+			-- Centred on the screen, but high enough to leave room for the potion timers (and the jump button on touch).
+			local column = 160 * 0.8 + 6 + 124 * 0.7 -- height of the two blocks stacked
+			local top = math.clamp(math.min(height / 2 - column / 2, height - column - (if touch then 190 else 144)), 106, 600)
+			currencyStack.Position = UDim2.new(1, -16, 0, top)
+			customSpeedHud.Position = UDim2.new(1, -16, 0, top + 160 * 0.8 + 6)
+			rewardsTop.AnchorPoint, rewardsTop.Position = Vector2.new(0.5, 0), UDim2.new(0.5, 280, 0, 4)
+			menuFit.Scale = math.clamp((height - 220) / menuHeight, 0.55, 1)
+			menuButtons.AnchorPoint, menuButtons.Position = Vector2.new(0, 0.5), UDim2.new(0, 16, 0.5, 0)
+			friendHud.AnchorPoint, friendHud.Position = Vector2.zero, UDim2.new(0, 16, 0.5, math.ceil(menuHeight * menuFit.Scale / 2) + 6) -- under the menu buttons
+			boostRow.AnchorPoint, boostRow.Position = Vector2.one, UDim2.new(1, if touch then -200 else -16, 1, -54)
+			boostList.HorizontalAlignment = Enum.HorizontalAlignment.Right
+			toastHolder.Position = UDim2.new(0.5, 0, 1, -110)
+		end
+	end
+	layout()
+	UIScaling.Changed:Connect(layout)
+end
+
 local function buildAdminPanel()
 	if gui:FindFirstChild("AdminPanel") then
 		return
@@ -2924,6 +3132,7 @@ local function buildAdminPanel()
 	button("Add one of every egg", PAINT.Cyan, "Eggs")
 	button("Hatch everything now", PAINT.Cyan, "HatchNow")
 	button("Skip day / night phase", PAINT.Cyan, "Phase")
+	button("Start a Blood Moon", PAINT.Red, "BloodMoon")
 	button("Finish all quests", PAINT.Green, "QuestsDone")
 	button("New quests (reroll the set)", PAINT.Green, "QuestsNew")
 	button("+3 of every potion", PAINT.Purple, "Potions")
@@ -2953,7 +3162,7 @@ local function buildAdminPanel()
 		end
 	end)
 
-	chunkyButton({ Size = UDim2.fromOffset(86, 34), Position = UDim2.new(1, -96, 1, -48), Text = "ADMIN", ZIndex = 30, Parent = gui }, PAINT.Purple, function()
+	chunkyButton({ Size = UDim2.fromOffset(86, 34), Position = UDim2.new(1, -96, 1, if game:GetService("UserInputService").TouchEnabled then -190 else -48), Text = "ADMIN", ZIndex = 30, Parent = gui }, PAINT.Purple, function()
 		frame.Visible = not frame.Visible
 	end)
 	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
@@ -3003,4 +3212,102 @@ task.spawn(function()
 		end
 	end
 end)
+end
+
+---------------------------------------------------------------------------
+-- Blood Moon (client side): falling red embers around the camera, the Blood Moon music, and a pulsing timer.
+-- The red sky, fog and moon are set by the server for everyone.
+---------------------------------------------------------------------------
+do
+	local emberPart: BasePart? = nil
+	local emberConn: RBXScriptConnection? = nil
+	local pulse: Tween? = nil
+	local function setBloodMoon(on: boolean)
+		setMusic(requestedMusic, 3)
+		on = on and audioOn.Values.EventEffects
+		if on and not emberPart then
+			local part = new("Part", { Name = "BloodMoonEmbers", Size = Vector3.new(120, 1, 120), Transparency = 1, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Parent = workspace })
+			new("ParticleEmitter", {
+				Texture = "rbxasset://textures/particles/sparkles_main.dds",
+				Color = ColorSequence.new(Color3.fromRGB(255, 60, 30), Color3.fromRGB(160, 0, 10)),
+				LightEmission = 1,
+				Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.1) }),
+				Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }),
+				Lifetime = NumberRange.new(5, 8),
+				Rate = 70,
+				Speed = NumberRange.new(4, 7),
+				SpreadAngle = Vector2.new(25, 25),
+				Acceleration = Vector3.new(1.5, -1, 0.5),
+				EmissionDirection = Enum.NormalId.Bottom,
+				Parent = part,
+			})
+			emberPart = part
+			emberConn = RunService.RenderStepped:Connect(function()
+				local cam = workspace.CurrentCamera
+				if cam then
+					part.CFrame = CFrame.new(cam.CFrame.Position + Vector3.new(0, 35, 0))
+				end
+			end)
+			pulse = TweenService:Create(bloodMoonLabel, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { TextTransparency = 0.35 })
+			pulse:Play()
+		elseif not on and emberPart then
+			if emberConn then
+				emberConn:Disconnect()
+			end
+			emberPart:Destroy()
+			emberPart, emberConn = nil, nil
+			if pulse then
+				pulse:Cancel()
+			end
+			bloodMoonLabel.TextTransparency = 0
+		end
+	end
+	ReplicatedStorage:GetAttributeChangedSignal("BloodMoon"):Connect(function()
+		setBloodMoon(ReplicatedStorage:GetAttribute("BloodMoon") == true)
+	end)
+	audioOn.ApplyEventEffects = function() setBloodMoon(ReplicatedStorage:GetAttribute("BloodMoon") == true) end
+	setBloodMoon(ReplicatedStorage:GetAttribute("BloodMoon") == true)
+end
+
+
+-- Dedicated native-resolution quest and daily-login menus. Existing HUD and playtime gifts remain intact.
+do
+	local controller = require(ReplicatedStorage.Shared.QuestRewardsUI).new({
+		Notify = toast,
+		CloseOthers = function() closeMenus(); if audioOn.Settings and audioOn.Settings.panel.Visible then audioOn.Settings:Close() end end,
+		CanAutoOpen = function()
+			return data ~= nil and not Config.NeedsTutorial(data) and openMenu == nil
+				and not (audioOn.Settings and audioOn.Settings.panel.Visible)
+				and not player:GetAttribute("CarryingEgg") and not banner.Visible
+		end,
+	})
+	local originalToggle = toggleMenu
+	audioOn.Settings = require(ReplicatedStorage.Shared.SettingsUI).new({
+		Icon = "rbxassetid://84813511233758",
+		CloseOthers = function() closeMenus(); controller:Close() end,
+		Apply = function(values)
+			local changedEffects = audioOn.Values.EventEffects ~= values.EventEffects
+			audioOn.Values = table.clone(values)
+			applyAudioSettings()
+			if changedEffects and audioOn.ApplyEventEffects then audioOn.ApplyEventEffects() end
+		end,
+	})
+	Remotes.DataChanged.OnClientEvent:Connect(function(snapshot) audioOn.Settings:SetData(snapshot) end)
+	if data then audioOn.Settings:SetData(data) end
+	toggleMenu = function(name, forceOpen)
+		if name == "Settings" then
+			if audioOn.Settings.panel.Visible and not forceOpen then audioOn.Settings:Close() else audioOn.Settings:Open() end
+			return
+		end
+		if audioOn.Settings.panel.Visible then audioOn.Settings:Close() end
+		if name == "Quests" or name == "DailyRewards" then
+			if controller.panel.Visible and not forceOpen then controller:Close()
+			else controller:Open(if name == "Quests" then "Quests" else "Login") end
+		else
+			controller:Close()
+			originalToggle(name, forceOpen)
+		end
+	end
+	Remotes.DataChanged.OnClientEvent:Connect(function(snapshot) controller:SetData(snapshot) end)
+	if data then controller:SetData(data) end
 end

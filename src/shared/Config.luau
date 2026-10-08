@@ -33,6 +33,8 @@ Config.StartingData = {
 	Quests = { Day = 0, Week = 0, Daily = {}, Weekly = {}, DailyChest = false, WeeklyChest = false, Streak = 0, LastStreakDay = 0 },
 	Potions = { Xp = 0, Candy = 0, Money = 0, Hatch = 0 }, -- potions in the bag, by kind (see Config.Potions)
 	Boosts = { Xp = 0, Candy = 0, Money = 0, Hatch = 0 }, -- kind -> unix time the active boost ends (0 = none)
+	Settings = { MusicVolume = 1, SfxVolume = 1, ShowGains = true, EventEffects = true },
+	LoginRewards = { LastClaimDay = -1, ClaimCount = 0, OfferDay = -1, Offers = {} },
 	Playtime = { Day = 0, Seconds = 0, Claimed = {} }, -- today's active play time and the Playtime Rewards already claimed
 }
 
@@ -219,6 +221,9 @@ Config.Rarities = {
 	Pyramid = { Order = 2, Color = Color3.fromRGB(240, 200, 100) },
 	Harvest = { Order = 3, Color = Color3.fromRGB(255, 150, 40) },
 	Bakery = { Order = 4, Color = Color3.fromRGB(232, 141, 160) },
+	Graveyard = { Order = 5, Color = Color3.fromRGB(150, 230, 170) },
+	Castle = { Order = 6, Color = Color3.fromRGB(190, 70, 255) },
+	Bloody = { Order = 7, Color = Color3.fromRGB(220, 0, 20) }, -- blood-soaked pets: only from Blood Moon eggs (Config.BloodMoon)
 }
 
 ---------------------------------------------------------------------------
@@ -229,6 +234,19 @@ Config.Pets = {
 	CupcakeGhost = { Name = "Cupcake Ghost", Rarity = "Bakery", MoneyPerSecond = 380, Color = Color3.fromRGB(227, 200, 236) },
 	DonutSpider = { Name = "Doughnut Spider", Rarity = "Bakery", MoneyPerSecond = 500, Color = Color3.fromRGB(232, 141, 160) },
 	GingerbreadZombie = { Name = "Gingerbread Zombie", Rarity = "Bakery", MoneyPerSecond = 700, Color = Color3.fromRGB(128, 187, 160) },
+	BloodyGingerbread = { Name = "Bloody Gingerbread Zombie", Rarity = "Bloody", MoneyPerSecond = 14000, CandyPerSecond = 0.5, Color = Color3.fromRGB(150, 20, 20) },
+	-- Level 5: the Gravedigger's graveyard house.
+	GraveRat = { Name = "Grave Rat", Rarity = "Graveyard", MoneyPerSecond = 1800, Color = Color3.fromRGB(110, 110, 110) },
+	TombTurtle = { Name = "Tombstone Turtle", Rarity = "Graveyard", MoneyPerSecond = 2500, Color = Color3.fromRGB(130, 135, 140) },
+	SkeletonHound = { Name = "Skeleton Hound", Rarity = "Graveyard", MoneyPerSecond = 3500, Color = Color3.fromRGB(230, 225, 200) },
+	CoffinMimic = { Name = "Coffin Mimic", Rarity = "Graveyard", MoneyPerSecond = 5000, Color = Color3.fromRGB(80, 50, 35) },
+	BloodyMimic = { Name = "Bloody Coffin Mimic", Rarity = "Bloody", MoneyPerSecond = 100000, CandyPerSecond = 0.75, Color = Color3.fromRGB(150, 20, 20) },
+	-- Level 6: Count Vlad's castle.
+	GargoyleImp = { Name = "Gargoyle Imp", Rarity = "Castle", MoneyPerSecond = 11000, Color = Color3.fromRGB(100, 100, 110) },
+	CandleWraith = { Name = "Candelabra Wraith", Rarity = "Castle", MoneyPerSecond = 15000, Color = Color3.fromRGB(255, 200, 120) },
+	NobleBat = { Name = "Noble Vampire Bat", Rarity = "Castle", MoneyPerSecond = 21000, Color = Color3.fromRGB(90, 0, 30) },
+	DreadWolf = { Name = "Dread Wolf", Rarity = "Castle", MoneyPerSecond = 30000, Color = Color3.fromRGB(40, 35, 50) },
+	BloodyWolf = { Name = "Bloody Dread Wolf", Rarity = "Bloody", MoneyPerSecond = 600000, CandyPerSecond = 1, Color = Color3.fromRGB(150, 20, 20) },
 	Bat = { Name = "Bat", Rarity = "Common", MoneyPerSecond = 1, Color = Color3.fromRGB(60, 50, 70) },
 	Spider = { Name = "Candy Spider", Rarity = "Uncommon", MoneyPerSecond = 4, Color = Color3.fromRGB(120, 40, 160) },
 	Pumpkling = { Name = "Pumpkling", Rarity = "Uncommon", MoneyPerSecond = 6, Color = Color3.fromRGB(255, 130, 0) },
@@ -301,10 +319,10 @@ Config.Materials = {
 local SIZE_ORDER = { "Gigantic", "Huge", "Big" } -- rarest first
 local MATERIAL_ORDER = { "Rainbow", "Diamond", "Golden" }
 
-local function rollTier(pool, order: { string }): string?
+local function rollTier(pool, order: { string }, chanceMultiplier: number?): string?
 	local roll = math.random()
 	for _, name in order do
-		roll -= pool[name].Chance
+		roll -= pool[name].Chance * (chanceMultiplier or 1)
 		if roll < 0 then
 			return name
 		end
@@ -365,14 +383,15 @@ end
 
 -- Rolls a freshly spawned egg's size and material: (size token or nil, material or nil). The size token holds
 -- the egg's own random multiplier, so two Big eggs are usually not the same size.
-function Config.RollVariant(): (string?, string?)
-	local tierName = rollTier(Config.Sizes, SIZE_ORDER)
+-- chanceMultiplier scales every size and material chance (the Blood Moon raises them); noSize skips the size roll.
+function Config.RollVariant(chanceMultiplier: number?, noSize: boolean?): (string?, string?)
+	local tierName = if noSize then nil else rollTier(Config.Sizes, SIZE_ORDER, chanceMultiplier)
 	local token
 	if tierName then
 		local tier = Config.Sizes[tierName]
 		token = Config.SizeToken(tierName, tier.Min + math.random() * (tier.Max - tier.Min))
 	end
-	return token, rollTier(Config.Materials, MATERIAL_ORDER)
+	return token, rollTier(Config.Materials, MATERIAL_ORDER, chanceMultiplier)
 end
 
 -- "Bat+Big4.2+Golden" -> "Bat", "Big", "Golden", sizeInfo (see Config.SizeInfo). A plain id gives (id, nil, nil).
@@ -468,6 +487,16 @@ Config.IndexRewards = {
 Config.Eggs = {
 	BakeryEgg = { Name = "Bakery Egg", Rarity = "Bakery", HatchSeconds = 90, Size = 3, CarrySpeed = 0.90, Color = Color3.fromRGB(232, 141, 160),
 		Pool = { { Pet = "CroissantBat", Weight = 40 }, { Pet = "CupcakeGhost", Weight = 30 }, { Pet = "DonutSpider", Weight = 20 }, { Pet = "GingerbreadZombie", Weight = 10 } } },
+	BloodyBakeryEgg = { Name = "Bloody Bakery Egg", Rarity = "Bloody", HatchSeconds = 180, Size = 3.2, CarrySpeed = 0.88, Color = Color3.fromRGB(150, 10, 20),
+		Pool = { { Pet = "BloodyGingerbread", Weight = 1 } } },
+	BloodyGraveyardEgg = { Name = "Bloody Graveyard Egg", Rarity = "Bloody", HatchSeconds = 300, Size = 3.5, CarrySpeed = 0.86, Color = Color3.fromRGB(150, 10, 20),
+		Pool = { { Pet = "BloodyMimic", Weight = 1 } } },
+	BloodyCastleEgg = { Name = "Bloody Castle Egg", Rarity = "Bloody", HatchSeconds = 480, Size = 4, CarrySpeed = 0.84, Color = Color3.fromRGB(150, 10, 20),
+		Pool = { { Pet = "BloodyWolf", Weight = 1 } } },
+	GraveyardEgg = { Name = "Graveyard Egg", Rarity = "Graveyard", HatchSeconds = 150, Size = 3.3, CarrySpeed = 0.89, Color = Color3.fromRGB(110, 130, 120),
+		Pool = { { Pet = "GraveRat", Weight = 40 }, { Pet = "TombTurtle", Weight = 30 }, { Pet = "SkeletonHound", Weight = 18 }, { Pet = "CoffinMimic", Weight = 9 } } },
+	CastleEgg = { Name = "Castle Egg", Rarity = "Castle", HatchSeconds = 240, Size = 3.8, CarrySpeed = 0.87, Color = Color3.fromRGB(110, 40, 160),
+		Pool = { { Pet = "GargoyleImp", Weight = 40 }, { Pet = "CandleWraith", Weight = 30 }, { Pet = "NobleBat", Weight = 18 }, { Pet = "DreadWolf", Weight = 9 } } },
 	-- Level eggs: houses 1-3 drop only their own egg. Cheaper pets hatch more often.
 	SwampEgg = {
 		Name = "Swamp Egg", Rarity = "Swamp", HatchSeconds = 10, Size = 2, CarrySpeed = 0.95,
@@ -547,11 +576,11 @@ Config.Houses = {
 	{ Owner = "Scarecrow", OwnerSpeed = 56, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { HarvestEgg = 100 } },
 	{ Owner = "Zombie Chef", OwnerSpeed = 75, CandyPerKnock = 40, CostumeTier = 2, Floors = 2, Scale = 1.15, EggCount = 5,
-		EggWeights = { BakeryEgg = 100 } },
+		EggWeights = { BakeryEgg = 100 }, BloodyEgg = "BloodyBakeryEgg" },
 	{ Owner = "Gravedigger", OwnerSpeed = 87, CandyPerKnock = 80, CostumeTier = 3, Floors = 1, Scale = 1.2, EggCount = 5,
-		EggWeights = { PumpkinEgg = 20, BatEgg = 45, GhostEgg = 30, MoonEgg = 5 } },
+		EggWeights = { GraveyardEgg = 100 }, BloodyEgg = "BloodyGraveyardEgg" },
 	{ Owner = "Count Vlad", OwnerSpeed = 91, CandyPerKnock = 160, CostumeTier = 4, Floors = 2, Scale = 1.25, EggCount = 6,
-		EggWeights = { BatEgg = 40, GhostEgg = 40, MoonEgg = 18, CursedEgg = 2 } },
+		EggWeights = { CastleEgg = 100 }, BloodyEgg = "BloodyCastleEgg" },
 	{ Owner = "Banshee", OwnerSpeed = 108, CandyPerKnock = 320, CostumeTier = 5, Floors = 2, Scale = 1.3, EggCount = 6,
 		EggWeights = { BatEgg = 20, GhostEgg = 45, MoonEgg = 30, CursedEgg = 5 } },
 	{ Owner = "Headless Horseman", OwnerSpeed = 128, CandyPerKnock = 650, CostumeTier = 6, Floors = 2, Scale = 1.35, EggCount = 6,
@@ -608,6 +637,7 @@ Config.Audio = {
 	Music = {
 		Chill = { Id = "104408838738669", File = "music_chill.mp3", Volume = 0.45 }, -- slow spooky waltz, always playing
 		Chase = { Id = "84750268429068", File = "music_chase.mp3", Volume = 0.7 }, -- replaces it while an owner chases you
+		BloodMoon = { Id = "9048244842", Volume = 0.6 }, -- "Decapitazione" (APM, Creator Store): replaces Chill during the Blood Moon
 	},
 	Sfx = {
 		Click = { Id = "90777076070251", File = "ui_click.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/clickfast.wav" },
@@ -712,41 +742,42 @@ Config.PetSellSeconds = 30 -- selling a pet pays this many seconds of its income
 ---------------------------------------------------------------------------
 -- Quests. Effort and reward are tied together: every quest has an estimated number of MINUTES of effort (its target
 -- times the seconds one unit usually takes), and its reward is worth that many minutes of what the player
--- normally earns, times a multiplier (Daily 0.5, Weekly 0.6: a quest pays extra on top of what playing earns anyway).
+-- normally earns, times a multiplier (Daily 0.35, Weekly 0.45: a quest pays extra on top of what playing earns anyway).
 -- "What the player normally earns" comes from their own data (their pets' Money per minute, Candy per knock
 -- at their best house, Speed XP per minute), so a quest is always worth the same share of the player's progress
 -- whether they are on day 1 or on rebirth 5. Targets scale in the same way (a tier-1 player is asked for 3 knocks,
 -- a tier-6 player for the same effort in eggs from a faster house).
 ---------------------------------------------------------------------------
 Config.Quests = {
-	DailyMult = 0.5,
-	WeeklyMult = 0.6,
-	ChestBonus = 0.5, -- opening a chest pays this share of everything the quests in it paid
+	Version = 2,
+	DailyMult = 0.35,
+	WeeklyMult = 0.45,
+	ChestBonus = 0.25, -- opening a chest pays this share of everything the quests in it paid
 	StreakStep = 0.1, -- each extra day in a row adds this to the Daily Chest
 	StreakMax = 5, -- the streak stops growing at this many days
 	AchievementMinutes = { 6, 13, 29, 64, 140, 310 }, -- reward size of tier 1, 2, 3... of an achievement, in minutes of earning
 	Floors = { Money = 25, Candy = 20, Xp = 8 },
 	DailySlots = {
-		{ Slot = "Easy", Min = 3, Max = 6, Color = Color3.fromRGB(110, 220, 90) },
-		{ Slot = "Medium", Min = 8, Max = 13, Color = Color3.fromRGB(255, 180, 40) },
-		{ Slot = "Hard", Min = 16, Max = 26, Color = Color3.fromRGB(235, 70, 70) },
+		{ Slot = "Easy", Min = 2, Max = 3, Color = Color3.fromRGB(110, 220, 90) },
+		{ Slot = "Medium", Min = 4, Max = 6, Color = Color3.fromRGB(255, 180, 40) },
+		{ Slot = "Hard", Min = 8, Max = 12, Color = Color3.fromRGB(235, 70, 70) },
 	},
 	WeeklySlots = {
-		{ Slot = "Weekly", Min = 35, Max = 50, Color = Color3.fromRGB(180, 110, 255) },
-		{ Slot = "Weekly", Min = 35, Max = 50, Color = Color3.fromRGB(180, 110, 255) },
+		{ Slot = "Weekly", Min = 25, Max = 40, Color = Color3.fromRGB(180, 110, 255) },
+		{ Slot = "Weekly", Min = 45, Max = 65, Color = Color3.fromRGB(180, 110, 255) },
 	},
 	-- Kind: the game event that counts. SecPer: seconds one unit usually takes (Level is worked out per player).
 	-- Min/Max: smallest and largest target for a daily quest. Share: how the reward is split between currencies.
 	Templates = {
-		knock = { Kind = "Knock", Slots = { Easy = true, Medium = true, Weekly = true }, Text = "Trick-or-Treat %d times", SecPer = 14, Min = 3, Max = 45, WeeklyMax = 100, Share = { Candy = 0.7, Money = 0.3 }, Icon = "🚪" },
-		run = { Kind = "Run", Slots = { Easy = true, Medium = true, Weekly = true }, Text = "Run for %s", Unit = "time", SecPer = 1, Min = 90, Max = 900, WeeklyMax = 2400, Share = { Xp = 0.6, Money = 0.4 }, Icon = "👟" },
-		hatch = { Kind = "Hatch", Slots = { Easy = true, Medium = true, Weekly = true }, Text = "Hatch %d eggs", SecPer = 70, Min = 1, Max = 12, WeeklyMax = 40, Share = { Money = 0.8, Candy = 0.2 }, Icon = "🥚" },
-		deliver = { Kind = "Deliver", Slots = { Medium = true, Weekly = true }, Text = "Bring %d eggs home", SecPer = 60, Min = 2, Max = 12, WeeklyMax = 45, Share = { Money = 0.5, Candy = 0.2, Xp = 0.3 }, Icon = "🏃" },
-		levels = { Kind = "Level", Slots = { Medium = true, Weekly = true }, Text = "Gain %d Speed Levels", SecPer = 0, Min = 1, Max = 8, Share = { Money = 0.6, Candy = 0.4 }, Icon = "⚡" },
-		kicked = { Kind = "Caught", Slots = { Easy = true }, Text = "Get kicked by an owner (it hurts, it pays)", SecPer = 90, Fixed = 1, Share = { Candy = 1 }, Icon = "🦶" },
-		best = { Kind = "DeliverBest", Slots = { Hard = true }, Text = "Bring %d eggs home from House %d or higher", SecPer = 100, Min = 1, Max = 12, MinTier = 2, Share = { Money = 0.5, Candy = 0.25, Xp = 0.25 }, Icon = "🏚️" },
-		size = { Kind = "HatchSize", Slots = { Medium = true, Hard = true }, Text = "Hatch %d pet(s) of size Big or bigger", SecPer = 400, Min = 1, Max = 4, Share = { Money = 0.6, Candy = 0.2, Xp = 0.2 }, Icon = "🐘" },
-		material = { Kind = "HatchMaterial", Slots = { Hard = true }, Text = "Hatch %d Golden, Diamond or Rainbow pet(s)", SecPer = 700, Min = 1, Max = 2, Share = { Money = 0.6, Candy = 0.2, Xp = 0.2 }, Icon = "✨" },
+		knock = { Kind = "Knock", Slots = { Easy = true, Medium = true, Hard = true, Weekly = true }, Text = "Trick-or-Treat %d times", SecPer = 20, Min = 3, Max = 45, WeeklyMax = 180, Share = { Candy = 0.7, Money = 0.3 }, Icon = "🚪" },
+		run = { Kind = "Run", Slots = { Easy = true, Medium = true, Hard = true, Weekly = true }, Text = "Run for %s", Unit = "time", SecPer = 1, Min = 90, Max = 900, WeeklyMax = 3900, Share = { Xp = 0.6, Money = 0.4 }, Icon = "👟" },
+		hatch = { Kind = "Hatch", Slots = { Easy = true, Medium = true, Hard = true, Weekly = true }, Text = "Hatch %d eggs", SecPer = 70, Min = 1, Max = 12, WeeklyMax = 55, Share = { Money = 0.8, Candy = 0.2 }, Icon = "🥚" },
+		deliver = { Kind = "Deliver", Slots = { Medium = true, Hard = true, Weekly = true }, Text = "Bring %d eggs home", SecPer = 60, Min = 2, Max = 12, WeeklyMax = 65, Share = { Money = 0.5, Candy = 0.2, Xp = 0.3 }, Icon = "🏃" },
+		levels = { Kind = "Level", Slots = {}, Text = "Gain %d Speed Levels", SecPer = 0, Min = 1, Max = 8, Share = { Money = 0.6, Candy = 0.4 }, Icon = "⚡" },
+		kicked = { Kind = "Caught", Slots = {}, Text = "Get kicked by an owner (it hurts, it pays)", SecPer = 90, Fixed = 1, Share = { Candy = 1 }, Icon = "🦶" },
+		best = { Kind = "DeliverBest", Slots = {}, Text = "Bring %d eggs home from House %d or higher", SecPer = 100, Min = 1, Max = 12, MinTier = 2, Share = { Money = 0.5, Candy = 0.25, Xp = 0.25 }, Icon = "🏚️" },
+		size = { Kind = "HatchSize", Slots = {}, Text = "Hatch %d pet(s) of size Big or bigger", SecPer = 400, Min = 1, Max = 4, Share = { Money = 0.6, Candy = 0.2, Xp = 0.2 }, Icon = "🐘" },
+		material = { Kind = "HatchMaterial", Slots = {}, Text = "Hatch %d Golden, Diamond or Rainbow pet(s)", SecPer = 700, Min = 1, Max = 2, Share = { Money = 0.6, Candy = 0.2, Xp = 0.2 }, Icon = "✨" },
 	},
 	-- Lifetime goals: the reward for each step is paid once. Stat names are read by Config.Quests.Stat.
 	Achievements = {
@@ -1040,6 +1071,86 @@ function Config.Playtime.Resolve(data: { [string]: any }, reward: { [string]: an
 		end
 	end
 	return result
+end
+
+
+---------------------------------------------------------------------------
+-- Blood Moon: every hour at :00 (server clock, so every server starts together) one night turns blood red.
+---------------------------------------------------------------------------
+Config.BloodMoon = {
+	EverySeconds = 3600, -- starts at every full hour
+	Seconds = 300, -- lasts one full night
+	CandyMultiplier = 5, -- road candies are all red and give this many times the candy
+	OwnerSpeedMultiplier = 1.1, -- owners run 10% faster, and kill a thief they catch (the carried egg is lost)
+	VariantChanceMultiplier = 2, -- size and material chances on normal eggs (not on bloody eggs)
+	BloodyEggChance = 0.5, -- each house with a BloodyEgg gets one this often
+	BadgeId = 0, -- paste a badge id here to also award a Roblox badge with the "Blood Moon Survivor" title
+	Title = "Blood Moon Survivor", -- earned by bringing a bloody egg home
+}
+
+-- When the next Blood Moon starts (server time, seconds).
+function Config.NextBloodMoon(now: number): number
+	local every = Config.BloodMoon.EverySeconds
+	return (math.floor(now / every) + 1) * every
+end
+
+-- Quest/login rewards use conservative permanent earning rates, excluding temporary boosts.
+-- Keep the existing playtime economy and lifetime achievement payouts unchanged.
+function Config.Quests.BalancedReward(data, minutes, share, mult)
+	local income = 0
+	for _, id in data.Pets do
+		local pet = Config.Pets[id]
+		income += if pet then pet.MoneyPerSecond * 60 else 0
+	end
+	local costume = Config.GetCostume(data.EquippedCostume)
+	local candy = 5 * costume.CandyMultiplier
+	for _, house in Config.Houses do
+		if house.CostumeTier <= costume.Tier then candy = house.CandyPerKnock * costume.CandyMultiplier end
+	end
+	local rates = { Money = math.max(income, 30), Candy = candy * 2, Xp = Config.XpRateFor(data, true) * 30 }
+	local caps = { Money = math.huge, Candy = math.huge, Xp = Config.XpToNext(math.min(data.SpeedLevel, Config.MaxSpeedLevel)) * 1.5 }
+	local moneyGoal = nextMoneyGoal(data)
+	if moneyGoal > 0 then caps.Money = math.max(25, moneyGoal * 0.2) end
+	for _, item in Config.Costumes do
+		if item.Price > 0 and not table.find(data.OwnedCostumes, item.Id) then
+			caps.Candy = math.max(20, item.Price * 0.18)
+			break
+		end
+	end
+	local out = {}
+	for kind, part in share do
+		out[kind] = math.max(1, math.floor(math.min(caps[kind], nice(math.max(Config.Quests.Floors[kind], rates[kind] * minutes * part * mult)))))
+	end
+	return out
+end
+
+Config.LoginRewards = {
+	Days = {
+		{ Kind = "Money", Minutes = 1.5 },
+		{ Kind = "Candy", Minutes = 2 },
+		{ Potion = "Xp", Count = 1 },
+		{ Kind = "Money", Minutes = 3 },
+		{ Potion = "Candy", Count = 1 },
+		{ Potion = "Hatch", Count = 1 },
+		{ Kind = "Money", Minutes = 5, Potion = "Money", Count = 2 },
+	},
+}
+
+function Config.LoginRewards.State(login, now)
+	local today = Config.Quests.DayKey(now)
+	local claimed = login.LastClaimDay >= today
+	local index = if claimed then (math.max(1, login.ClaimCount) - 1) % 7 + 1 else login.ClaimCount % 7 + 1
+	return index, not claimed
+end
+
+function Config.LoginRewards.Resolve(data)
+	local offers = {}
+	for i, day in Config.LoginRewards.Days do
+		local reward = if day.Kind then Config.Quests.BalancedReward(data, day.Minutes, { [day.Kind] = 1 }, 1) else {}
+		if day.Potion then reward.Potion, reward.Count = day.Potion, day.Count end
+		offers[i] = reward
+	end
+	return offers
 end
 
 

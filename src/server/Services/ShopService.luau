@@ -254,6 +254,11 @@ adminCommands.Phase = function()
 	return true, "Phase skipped (skip the day too for a fresh night with new eggs)"
 end
 
+adminCommands.BloodMoon = function()
+	require(script.Parent.DayNightService).ForceBloodMoon()
+	return true, "Blood Moon starting (after a short day if it was night)"
+end
+
 adminCommands.QuestsDone = function(player)
 	DataService.Update(player, function(d)
 		for _, list in { d.Quests.Daily, d.Quests.Weekly } do
@@ -371,6 +376,10 @@ function actions.DrinkPotion(player: Player, _data, arg: any)
 end
 
 -- Quests (the rules live in DataService and Config.Quests).
+function actions.ClaimLogin(player: Player, _data, _arg: any)
+	return DataService.ClaimLogin(player)
+end
+
 function actions.ClaimQuest(player: Player, _data, arg: any)
 	return DataService.ClaimQuest(player, arg)
 end
@@ -571,6 +580,13 @@ function actions.SetCustomSpeed(player: Player, data, speed: any)
 		d.CustomSpeed = if speed >= max then 0 else speed
 	end)
 	return true, "Speed set to " .. Config.FormatSpeed(speed)
+end
+
+function actions.SetSettings(player: Player, _data, preferences: any)
+	local schema = require(ReplicatedStorage.Shared.PlayerSettings)
+	if not schema.Validate(preferences) then return false, "Invalid preferences" end
+	DataService.Update(player, function(d) d.Settings = schema.Normalize(preferences) end)
+	return true, "Preferences updated"
 end
 
 local function runAction(player: Player, action: any, arg: any)

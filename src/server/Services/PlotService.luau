@@ -47,6 +47,18 @@ local function petIncome(data): number
 end
 PlotService.PetIncome = petIncome
 
+-- Candy per second from pets that make candy (bloody pets).
+local function petCandy(data): number
+	local total = 0
+	for _, petId in data.Pets do
+		local pet = Config.Pets[petId]
+		if pet and pet.CandyPerSecond then
+			total += pet.CandyPerSecond
+		end
+	end
+	return total
+end
+
 -- Friend boost: +Config.FriendBoostPercent% pet Money for every friend in the same server.
 -- Stored as the player's "FriendBoost" attribute (a percentage) so the HUD can show it.
 local friendCache: { [string]: boolean } = {}
@@ -178,7 +190,7 @@ local function renderPets(player: Player, data)
 			local start = randomSpot(base)
 			model:PivotTo(CFrame.new(start + Vector3.new(0, height / 2, 0)))
 			model.Parent = visuals
-			label(model.PrimaryPart :: BasePart, string.format("%s\n$%s/s", pet.Name, shortNumber(pet.MoneyPerSecond)), rarity.Color, height / 2 + 1.5)
+			label(model.PrimaryPart :: BasePart, string.format("%s\n$%s/s", pet.Name, shortNumber(pet.MoneyPerSecond)) .. (if pet.CandyPerSecond then string.format(" +%d candy/min", pet.CandyPerSecond * 60) else ""), rarity.Color, height / 2 + 1.5)
 			-- Winged models (WingL/WingR, each with a Hinge part) flap and hover.
 			local wings = {}
 			local root = model.PrimaryPart :: BasePart
@@ -534,7 +546,7 @@ hatchEgg = function(player: Player, plot: Instance, index: number, expectedEntry
 	Remotes.EggHatched:FireClient(player, { Egg = entry.Egg, Pet = petId, PadCFrame = padCFrame, ToBase = toBase })
 	task.delay(3.1, function()
 		if player.Parent then
-			local text = string.format("You hatched %s %s! $%s/s", pet.Rarity, pet.Name, shortNumber(pet.MoneyPerSecond))
+			local text = string.format("You hatched %s! $%s/s", if string.find(pet.Name, pet.Rarity, 1, true) then pet.Name else pet.Rarity .. " " .. pet.Name, shortNumber(pet.MoneyPerSecond)) -- "Bloody ..." names already say their rarity
 			if not toBase then text ..= " (in your Pets inventory: base full)" end
 			Remotes.Notify:FireClient(player, text, Config.Rarities[pet.Rarity].Color)
 		end
@@ -674,9 +686,11 @@ function PlotService.Start(map: Instance)
 				if data then
 					local boost = 1 + (player:GetAttribute("FriendBoost") or 0) / 100
 					local income = petIncome(data) * boost * Config.BoostFactor(data, "Money") * Config.IncomeTickSeconds
-					if income > 0 then
+					local candy = petCandy(data) * Config.IncomeTickSeconds
+					if income > 0 or candy > 0 then
 						DataService.Update(player, function(d)
 							d.Money += income
+							d.Candy += candy
 						end)
 					end
 					updateIncubators(player, data)
