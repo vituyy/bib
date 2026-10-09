@@ -24,6 +24,7 @@ Working title. **Version 5.0**, updated 3 October 2026 (place file **SpookySteal
 | Playtime Rewards and potions (5.1) | Twelve daily gifts for playing time, and timed boost potions (Speed XP, Candy, Money, hatching). |
 | V6 changes | Candy multipliers of the costumes now climb much faster (x2, x4, x7, x12, x20, x35, x60, x100, x170, x300) with costume prices raised to keep the same pace; Pet Capacity gives +2, +2, +1, +1 slots (8, 10, 11, 12); the green signs between levels show the Recommended Level (the Speed Level to bring) and hang over the road; the potion timers at the top of the screen are gone (active potions show in the Rewards window). |
 | Random egg sizes (6.1) | Every Big, Huge and Gigantic egg now gets its own random size, and the money multiplier is that size: Big pets are drawn 2x to 3x bigger and pay x2.5 to x3.5, Huge 3x to 5x and x4 to x6, Gigantic 7x and x16 (before: fixed x3, x8 and x30). Eggs are drawn half as big as the pet. See 2.8. The Blood Moon event is shelved for now; it stays in the git history (commits 346b54e and 4d825cd). |
+| Speed and level changes (6.7) | Each Speed Level gives +1 speed and every 5th level +1.5 (max speed 130, was 170). Owner speeds are now set from the Recommended Level of their house (owner = 90% of the level's speed + 1). Levelling up costs 10% more from level 10 and another 10% more every 20 levels. V6.7 itself (Index window, Robux treadmills, bloody pets for houses 1 to 3, new music and the Playtime changes) was adopted as the main place. |
 | V6.5 adopted | Your uploaded V6.5 is now the main place: the Blood Moon event with bloody eggs, houses 5 and 6 with their own pets, the Settings window, login rewards and the lighter quest rewards come from it. |
 | Eggs carried in the arms (6.5) | A thief now holds the egg with both arms: every player's client bends the carrier's shoulders and elbows so the hands rest on the sides of the egg (two-bone arm IK on the R15 joints, written into the joints' C0 so the run animation can not overwrite it; the code lives in `CostumeLabels.client` because `Main.client` is at the 200-local limit), and the egg sits closer and chest high. It is only a pose, so there is no new animation asset. |
 | Road candy stays spread out (6.5) | Each road candy now belongs to one stretch of the road (the road is cut into 160 equal slices) and respawns inside that slice, so candies taken near the start come back near the start. Before, they respawned anywhere on the whole road, which emptied the first levels when players stayed near the start. |
@@ -90,17 +91,17 @@ Houses 1 (swamp) and 2 (desert) are built and themed; the themes for houses 3 to
 
 | # | Owner | Owner speed | Candy per knock | Min. costume | Floors | Eggs | Drops | Look |
 |---|---|---|---|---|---|---|---|---|
-| 1 | Old Witch | 17 | 20 | Bedsheet Ghost | 1 | 4 | Swamp Egg (5 level pets) | Built: swamp cottage with chimney smoke, cauldrons and reeds |
-| 2 | Friendly Mummy | 38 | 45 | Bedsheet Ghost | 1 | 4 | Pyramid Egg (5 level pets) | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
-| 3 | Scarecrow | 53 | 48 | Pumpkin Head | 1 | 5 | Harvest Egg (5 level pets) | Placeholder |
-| 4 | Zombie Chef | 72 | 100 | Witch | 2 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
-| 5 | Gravedigger | 84 | 200 | Vampire | 1 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
-| 6 | Count Vlad | 88 | 400 | Glowing Skeleton | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
-| 7 | Banshee | 105 | 800 | Werewolf | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
-| 8 | Headless Horseman | 125 | 1,600 | Grim Reaper | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
-| 9 | Lich King | 145 | 3,200 | Mummy | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
+| 1 | Old Witch | 19.9 (level 1) | 20 | Bedsheet Ghost | 1 | 4 | Swamp Egg (5 level pets) | Built: swamp cottage with chimney smoke, cauldrons and reeds |
+| 2 | Friendly Mummy | 35.6 (level 17) | 45 | Bedsheet Ghost | 1 | 4 | Pyramid Egg (5 level pets) | Built: Egyptian tomb (great hall, burial chamber, treasure vault, golden altars) |
+| 3 | Scarecrow | 46.4 (level 28) | 48 | Pumpkin Head | 1 | 5 | Harvest Egg (5 level pets) | Placeholder |
+| 4 | Zombie Chef | 60.4 (level 42) | 100 | Witch | 2 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
+| 5 | Gravedigger | 69.4 (level 51) | 200 | Vampire | 1 | 5 | Pumpkin, Bat, Ghost and Blood Moon eggs | Placeholder |
+| 6 | Count Vlad | 72.1 (level 54) | 400 | Glowing Skeleton | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
+| 7 | Banshee | 84.2 (level 66) | 800 | Werewolf | 2 | 6 | Bat, Ghost, Blood Moon and Cursed eggs | Placeholder |
+| 8 | Headless Horseman | 99.1 (level 81) | 1,600 | Grim Reaper | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
+| 9 | Lich King | 113.9 (level 96) | 3,200 | Mummy | 2 | 6 | Ghost, Blood Moon, Cursed and Nightmare eggs | Placeholder |
 
-Owner speed rises with every house so the last houses need a well-trained runner. House 1's owner (17) is slower than a brand-new player (20), so a first-timer can always get away from it. The Candy you get from a knock is the number above times your costume's Candy multiplier. Owner names, speeds, Candy and egg odds live in `Config.Houses`; the house models carry the same `Index` and `Owner` attributes (House 1 = Old Witch, House 2 = Friendly Mummy).
+Owner speed rises with every house so the last houses need a well-trained runner. The number in brackets is the Recommended Level on the green signs (`RecommendedLevel` in `Config.Houses`); the owner's speed is set from it: the speed you run at with an egg at that level (90% of your max speed) plus 1, so a player who brings the recommended level only just loses ground. House 1's owner (19.9) is slower than a brand-new player (20), so a first-timer can always get away from it. The Candy you get from a knock is the number above times your costume's Candy multiplier. Owner names, speeds, Candy and egg odds live in `Config.Houses`; the house models carry the same `Index` and `Owner` attributes (House 1 = Old Witch, House 2 = Friendly Mummy).
 
 ### 2.4 Trick-or-Treat
 
@@ -252,7 +253,7 @@ Old saves keep what they had: the single base level of Version 4 is converted in
 | Cursed | x21 | $3,000,000 |
 
 - **Trails (Money):** sold in the Trails tab of the Speed Shop. A trail multiplies your Speed XP everywhere (a costume rate of 30 XP/s with a 2x trail gives 60 XP/s). You keep every trail you buy and equip one at a time; it shows as a visible trail behind your character.
-- **Speed Levels:** speed grows by the same amount every level: 20 at level 0, +1.5 per level, 170 at level 100. Each level costs 20% more XP than the last up to level 30 (20 XP for level 1, about 3,956 for level 30), then 8% more up to level 70 (about 85,948), then 4% more (about 278,764 for level 100). The steep start is what puts houses 3 and 4 at about 20 and 35 minutes; the big multipliers keep the later levels moving.
+- **Speed Levels (6.7):** every level gives +1 speed and every 5th level (5, 10, 15 ...) gives +1.5, so you run 20 at level 0, 25.5 at level 5, 31 at level 10, 53 at level 30, 75 at level 50 and 130 at level 100. Levels cost 20% more XP than the last up to level 30 (20 XP for level 1), then 8% more up to level 70, then 4% more. From level 10 on, levelling up costs 10% extra, and another 10% extra every 20 levels after that (levels 10 to 29: x1.1, 30 to 49: x1.2, 50 to 69: x1.3, 70 to 89: x1.4, 90 to 99: x1.5). For example the step from level 10 to 11 costs 136 XP (was 124), level 30 to 31 costs 5,127 (was 4,273) and level 99 to 100 costs 418,146 (was 278,764). Knobs: `Config.SpeedPerLevel`, `SpeedBonusEvery`, `SpeedBonusExtra`, `XpHardFrom`, `XpHardStep`, `XpHardEvery`.
 - **Custom speed (V4.2):** a panel lets you run slower than your max speed (down to 16), for example to stay under control. It does not change your XP.
 - **Rebirth:** opens at Speed Level 10, then 20, 30, 40, 55, 70, 85 and 100 (8 rebirths). It resets your Speed Level and XP and raises your XP multiplier: x2 after the first rebirth, x3 after the second, up to x9. Pets, eggs, Money, Candy, treadmills, trails and costumes are kept.
 
@@ -301,8 +302,8 @@ These come from a simulation of an active player (about 40% of the time on the t
 | First costume (starting Candy) | at once | at once |
 | Second costume (Pumpkin Head, 300 Candy) | 4 min | 7 min |
 | Steal from house 2 | 8 min | 13 min |
-| Steal from house 3 | 16 min (target about 20) | 26 min |
-| Steal from house 4 | 29 min (target about 35) | 47 min |
+| Steal from house 3 | 18 min (target about 20) | 29 min |
+| Steal from house 4 | 31 min (target about 35) | 50 min |
 | Costume 5 (Skeleton) | 28 min | 45 min |
 | Steal from house 6 | 38 min | 1 h |
 | Steal from house 9 | about 1.2 h | 1.9 h |
@@ -564,7 +565,7 @@ Each phase ends with a playtest in Studio. ✓ done, ◐ in progress, ○ not st
 
 **3b. Houses 4 to 6 come close together.** In the simulation houses 4, 5 and 6 open at about 36, 39 and 41 minutes because the owner speeds (72, 84, 88) are close and the big multipliers add speed fast. Spread the speeds of houses 5 to 8 if you want a longer gap between them.
 
-**4. Endgame.** With the V4.2 speed scale (max 170) the Lich King runs at 145. Carrying a Ghost egg (x0.89) you need speed 163 (level 96), a Blood Moon egg (x0.87) speed 167 (level 98); a Cursed egg (x0.85) needs 171 and a Nightmare egg (x0.82) 177, more than the maximum, so those can only be taken by outlasting the 30 s chase. Decide whether that is intended, or lower the last owners' speed or raise the max speed. Also decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
+**4. Endgame.** With the 6.7 speed scale (max 130) the Lich King runs at 113.9. Carrying a Ghost egg (x0.89) you need speed 128 (level 98), a Blood Moon egg (x0.87) speed 131, a Cursed egg (x0.85) 134 and a Nightmare egg (x0.82) 139, more than the maximum, so those can only be taken by outlasting the 30 s chase. Decide whether that is intended, or lower the last owners' speed or raise the max speed. Also decide what comes after house 9: more streets, a boss house, prestige worlds, limited events.
 
 5. **Reading eggs.** With no signs, a new player can't tell a Common egg from a Mythic one. Decide how much help to give: only size, a subtle glow for Legendary and up, or the pet index revealing designs as you discover them (recommended).
 

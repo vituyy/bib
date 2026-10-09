@@ -47,17 +47,23 @@ Config.DaySeconds = 10
 
 ---------------------------------------------------------------------------
 -- Player speed: run on a treadmill for XP, each Speed Level makes you faster.
--- Speed grows by the same amount every level: 20 at level 0, 170 at level 100.
+-- Every Speed Level gives +1 speed and every 5th level (5, 10, 15 ...) gives +1.5: 20 at level 0, 25.5 at level 5,
+-- 31 at level 10, 130 at level 100.
 ---------------------------------------------------------------------------
 Config.BaseWalkSpeed = 20 -- new players start here
-Config.SpeedPerLevel = 1.5 -- extra walk speed for every Speed Level
+Config.SpeedPerLevel = 1 -- extra walk speed for every Speed Level
+Config.SpeedBonusEvery = 5 -- every this many levels ...
+Config.SpeedBonusExtra = 0.5 -- ... the level gives this much more (1.5 instead of 1)
 Config.SpeedBonus = 0 -- flat extra speed on top of the curve
 Config.MaxSpeedLevel = 100
 Config.MinCustomSpeed = 16 -- lowest speed the Custom speed panel can pick (Roblox default walk speed)
 
 -- A player's max speed at this Speed Level.
 function Config.WalkSpeedFor(speedLevel: number): number
-	return Config.BaseWalkSpeed + Config.SpeedPerLevel * speedLevel + Config.SpeedBonus
+	return Config.BaseWalkSpeed
+		+ Config.SpeedPerLevel * speedLevel
+		+ Config.SpeedBonusExtra * math.floor(speedLevel / Config.SpeedBonusEvery)
+		+ Config.SpeedBonus
 end
 
 -- The speed a player actually runs at: their Custom speed if they picked one below their max, else their max.
@@ -76,10 +82,18 @@ end
 -- Each level costs 20% more than the one before up to level 30, then 8% more up to level 70 and 4% more
 -- after that. The first levels are cheap, the steep part makes levels 20 to 30 (houses 3 and 4) take about
 -- 20 and 35 minutes, and the flatter end keeps up with the big treadmill, costume and trail multipliers.
+-- On top of that, going up from Speed Level 10 on costs 10% more, and another 10% more every 20 levels after that
+-- (levels 10 to 29: x1.1, 30 to 49: x1.2, 50 to 69: x1.3, 70 to 89: x1.4, 90 to 99: x1.5), so the higher levels
+-- go slower.
+Config.XpHardFrom = 10 -- the Speed Level from which levelling up costs more
+Config.XpHardStep = 0.1 -- ... by this much (10%) ...
+Config.XpHardEvery = 20 -- ... and by this much more every this many levels
 local XP_TO_REACH = {}
 local xpCost = 20
 for level = 1, 100 do
-	XP_TO_REACH[level] = math.floor(xpCost + 0.5)
+	local from = level - 1 -- the Speed Level you level up from
+	local harder = if from >= Config.XpHardFrom then 1 + Config.XpHardStep * (1 + math.floor((from - Config.XpHardFrom) / Config.XpHardEvery)) else 1
+	XP_TO_REACH[level] = math.floor(xpCost * harder + 0.5)
 	xpCost *= if level < 30 then 1.2 elseif level < 70 then 1.08 else 1.04
 end
 
@@ -584,29 +598,37 @@ end
 ---------------------------------------------------------------------------
 -- The street: 9 houses, each one its own level. House 1 is next to the bases, house 9 is the far end.
 -- Floors: 1 or 2. Scale: house size multiplier. EggCount: eggs spawned inside each night.
+-- RecommendedLevel: the Speed Level to bring (the green signs on the road). OwnerSpeed is set from it right below.
 -- CostumeTier: the minimum costume tier that gets Candy at the door. Houses 1 and 2 need the 1st costume (Ghost),
 -- house 3 the 2nd (Pumpkin), house 4 the 3rd (Witch) and so on, so a costume is always one step ahead of the street.
 ---------------------------------------------------------------------------
 Config.Houses = {
-	{ Owner = "Old Witch", OwnerSpeed = 20, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.0, EggCount = 4,
+	{ Owner = "Old Witch", OwnerSpeed = 0, RecommendedLevel = 1, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.0, EggCount = 4,
 		EggWeights = { SwampEgg = 100 }, BloodyEgg = "BloodySwampEgg" },
-	{ Owner = "Friendly Mummy", OwnerSpeed = 41, CandyPerKnock = 45, CostumeTier = 1, Floors = 1, Scale = 1.05, EggCount = 4,
+	{ Owner = "Friendly Mummy", OwnerSpeed = 0, RecommendedLevel = 17, CandyPerKnock = 45, CostumeTier = 1, Floors = 1, Scale = 1.05, EggCount = 4,
 		EggWeights = { PyramidEgg = 100 }, BloodyEgg = "BloodyPyramidEgg" },
-	{ Owner = "Scarecrow", OwnerSpeed = 56, CandyPerKnock = 48, CostumeTier = 2, Floors = 1, Scale = 1.1, EggCount = 5,
+	{ Owner = "Scarecrow", OwnerSpeed = 0, RecommendedLevel = 28, CandyPerKnock = 48, CostumeTier = 2, Floors = 1, Scale = 1.1, EggCount = 5,
 		EggWeights = { HarvestEgg = 100 }, BloodyEgg = "BloodyHarvestEgg" },
-	{ Owner = "Zombie Chef", OwnerSpeed = 75, CandyPerKnock = 100, CostumeTier = 3, Floors = 2, Scale = 1.15, EggCount = 5,
+	{ Owner = "Zombie Chef", OwnerSpeed = 0, RecommendedLevel = 42, CandyPerKnock = 100, CostumeTier = 3, Floors = 2, Scale = 1.15, EggCount = 5,
 		EggWeights = { BakeryEgg = 100 }, BloodyEgg = "BloodyBakeryEgg" },
-	{ Owner = "Gravedigger", OwnerSpeed = 87, CandyPerKnock = 200, CostumeTier = 4, Floors = 1, Scale = 1.2, EggCount = 5,
+	{ Owner = "Gravedigger", OwnerSpeed = 0, RecommendedLevel = 51, CandyPerKnock = 200, CostumeTier = 4, Floors = 1, Scale = 1.2, EggCount = 5,
 		EggWeights = { GraveyardEgg = 100 }, BloodyEgg = "BloodyGraveyardEgg" },
-	{ Owner = "Count Vlad", OwnerSpeed = 91, CandyPerKnock = 400, CostumeTier = 5, Floors = 2, Scale = 1.25, EggCount = 6,
+	{ Owner = "Count Vlad", OwnerSpeed = 0, RecommendedLevel = 54, CandyPerKnock = 400, CostumeTier = 5, Floors = 2, Scale = 1.25, EggCount = 6,
 		EggWeights = { CastleEgg = 100 }, BloodyEgg = "BloodyCastleEgg" },
-	{ Owner = "Banshee", OwnerSpeed = 108, CandyPerKnock = 800, CostumeTier = 6, Floors = 2, Scale = 1.3, EggCount = 6,
+	{ Owner = "Banshee", OwnerSpeed = 0, RecommendedLevel = 66, CandyPerKnock = 800, CostumeTier = 6, Floors = 2, Scale = 1.3, EggCount = 6,
 		EggWeights = { BatEgg = 20, GhostEgg = 45, MoonEgg = 30, CursedEgg = 5 } },
-	{ Owner = "Headless Horseman", OwnerSpeed = 128, CandyPerKnock = 1600, CostumeTier = 7, Floors = 2, Scale = 1.35, EggCount = 6,
+	{ Owner = "Headless Horseman", OwnerSpeed = 0, RecommendedLevel = 81, CandyPerKnock = 1600, CostumeTier = 7, Floors = 2, Scale = 1.35, EggCount = 6,
 		EggWeights = { GhostEgg = 40, MoonEgg = 40, CursedEgg = 18, NightmareEgg = 2 } },
-	{ Owner = "Lich King", OwnerSpeed = 148, CandyPerKnock = 3200, CostumeTier = 8, Floors = 2, Scale = 1.45, EggCount = 6,
+	{ Owner = "Lich King", OwnerSpeed = 0, RecommendedLevel = 96, CandyPerKnock = 3200, CostumeTier = 8, Floors = 2, Scale = 1.45, EggCount = 6,
 		EggWeights = { GhostEgg = 20, MoonEgg = 45, CursedEgg = 30, NightmareEgg = 5 } },
 }
+
+-- Owner speed = the speed you run at with an egg at the recommended level (RecommendedCarryFactor of your max
+-- speed) + 1, so a player who brings the recommended level only just loses ground to the owner.
+Config.RecommendedCarryFactor = 0.9
+for _, house in Config.Houses do
+	house.OwnerSpeed = math.floor((Config.WalkSpeedFor(house.RecommendedLevel) * Config.RecommendedCarryFactor + 1) * 10 + 0.0001) / 10
+end
 
 ---------------------------------------------------------------------------
 -- House interaction timings
@@ -734,12 +756,7 @@ function Config.RecommendedLevel(houseIndex: number): number
 	if not house then
 		return 0
 	end
-	for level = 0, Config.MaxSpeedLevel do
-		if Config.WalkSpeedFor(level) * 0.9 >= house.OwnerSpeed - 1 then
-			return level
-		end
-	end
-	return Config.MaxSpeedLevel
+	return house.RecommendedLevel
 end
 
 -- Eggs that can hatch at once, with this many Hatching Pad upgrades.
@@ -826,7 +843,7 @@ end
 
 -- The best house the player can rob: the highest one whose owner is no faster than the player with an egg.
 function Config.Quests.Tier(data: { [string]: any }): number
-	local speed = Config.WalkSpeedFor(data.SpeedLevel) * 0.9
+	local speed = Config.WalkSpeedFor(data.SpeedLevel) * Config.RecommendedCarryFactor
 	local tier = 1
 	for index, house in Config.Houses do
 		if speed >= house.OwnerSpeed - 1 then
