@@ -25,6 +25,7 @@ Config.StartingData = {
 	PadLevel = 0, -- Hatching Pad upgrades bought (0 to #Config.HatchPadUpgrades)
 	Discovered = {}, -- pet ids hatched at least once (the Index)
 	IndexClaimed = {}, -- Index milestone counts already claimed (5, 10, 15, 20)
+	IndexPetClaimed = {}, -- plain pet id -> true: one-time discovery reward claimed
 	RedeemedCodes = {}, -- codes this player has already used (see CODES in ShopService)
 	CustomSpeed = 0, -- speed the player chose with the Custom speed panel (0 = always run at their max speed)
 	EggsStolen = 0, -- eggs brought home in total (the Top Egg Thieves board)
@@ -116,6 +117,13 @@ Config.Treadmills = {
 	{ Name = "Bone Treadmill", Price = 80000, XpMultiplier = 8, Color = Color3.fromRGB(230, 225, 200) },
 	{ Name = "Ghostly Treadmill", Price = 500000, XpMultiplier = 13, Color = Color3.fromRGB(170, 230, 255) },
 	{ Name = "Cursed Treadmill", Price = 3000000, XpMultiplier = 21, Color = Color3.fromRGB(140, 40, 200) },
+	{ Name = "Vampire Treadmill", Price = 18000000, XpMultiplier = 34, Color = Color3.fromRGB(205, 38, 74) },
+	{ Name = "Haunted Mansion Treadmill", Price = 100000000, XpMultiplier = 55, Color = Color3.fromRGB(116, 50, 168) },
+	-- Tiers 10-12 are sold for Robux only. Create each as a Developer Product on the Creator Dashboard and put its ID in
+	-- ProductId (0 shows "Soon" in the Speed Shop). They have no Money price: BuyTreadmill refuses them.
+	{ Name = "Golden Pumpkin Carriage", Price = 0, Robux = 349, ProductId = 0, XpMultiplier = 89, Color = Color3.fromRGB(255, 170, 30) },
+	{ Name = "Hellfire Throne", Price = 0, Robux = 599, ProductId = 0, XpMultiplier = 144, Color = Color3.fromRGB(255, 80, 30) },
+	{ Name = "Celestial Moon Treadmill", Price = 0, Robux = 999, ProductId = 0, XpMultiplier = 233, Color = Color3.fromRGB(120, 200, 255) },
 }
 
 -- Trails: bought with Money in the Speed Shop's Trails tab. You keep every trail you buy and equip one.
@@ -284,6 +292,10 @@ Config.Pets = {
 	CiderRaccoon = { Name = "Cider Barrel Raccoon", Rarity = "Harvest", MoneyPerSecond = 115, Color = Color3.fromRGB(120, 110, 100) },
 	LanternMoth = { Name = "Lantern Moth", Rarity = "Harvest", MoneyPerSecond = 160, Color = Color3.fromRGB(255, 200, 90) },
 	StrawGolem = { Name = "Straw Golem", Rarity = "Harvest", MoneyPerSecond = 250, Color = Color3.fromRGB(220, 180, 80) },
+	-- Bloody pets of houses 1-3: 20x their house's top pet, plus a little candy (Blood Moon eggs only).
+	BloodyHexedOwl = { Name = "Bloody Hexed Owl", Rarity = "Bloody", MoneyPerSecond = 220, CandyPerSecond = 0.2, Color = Color3.fromRGB(150, 20, 20) },
+	BloodyAnubisPup = { Name = "Bloody Anubis Pup", Rarity = "Bloody", MoneyPerSecond = 1100, CandyPerSecond = 0.35, Color = Color3.fromRGB(150, 20, 20) },
+	BloodyStrawGolem = { Name = "Bloody Straw Golem", Rarity = "Bloody", MoneyPerSecond = 5000, CandyPerSecond = 0.5, Color = Color3.fromRGB(150, 20, 20) },
 }
 
 ---------------------------------------------------------------------------
@@ -487,6 +499,12 @@ Config.IndexRewards = {
 Config.Eggs = {
 	BakeryEgg = { Name = "Bakery Egg", Rarity = "Bakery", HatchSeconds = 90, Size = 3, CarrySpeed = 0.90, Color = Color3.fromRGB(232, 141, 160),
 		Pool = { { Pet = "CroissantBat", Weight = 40 }, { Pet = "CupcakeGhost", Weight = 30 }, { Pet = "DonutSpider", Weight = 20 }, { Pet = "GingerbreadZombie", Weight = 10 } } },
+	BloodySwampEgg = { Name = "Bloody Swamp Egg", Rarity = "Bloody", HatchSeconds = 60, Size = 2.5, CarrySpeed = 0.9, Color = Color3.fromRGB(150, 10, 20),
+		Pool = { { Pet = "BloodyHexedOwl", Weight = 1 } } },
+	BloodyPyramidEgg = { Name = "Bloody Pyramid Egg", Rarity = "Bloody", HatchSeconds = 90, Size = 2.9, CarrySpeed = 0.89, Color = Color3.fromRGB(150, 10, 20),
+		Pool = { { Pet = "BloodyAnubisPup", Weight = 1 } } },
+	BloodyHarvestEgg = { Name = "Bloody Harvest Egg", Rarity = "Bloody", HatchSeconds = 120, Size = 3.3, CarrySpeed = 0.88, Color = Color3.fromRGB(150, 10, 20),
+		Pool = { { Pet = "BloodyStrawGolem", Weight = 1 } } },
 	BloodyBakeryEgg = { Name = "Bloody Bakery Egg", Rarity = "Bloody", HatchSeconds = 180, Size = 3.2, CarrySpeed = 0.88, Color = Color3.fromRGB(150, 10, 20),
 		Pool = { { Pet = "BloodyGingerbread", Weight = 1 } } },
 	BloodyGraveyardEgg = { Name = "Bloody Graveyard Egg", Rarity = "Bloody", HatchSeconds = 300, Size = 3.5, CarrySpeed = 0.86, Color = Color3.fromRGB(150, 10, 20),
@@ -571,11 +589,11 @@ end
 ---------------------------------------------------------------------------
 Config.Houses = {
 	{ Owner = "Old Witch", OwnerSpeed = 20, CandyPerKnock = 20, CostumeTier = 1, Floors = 1, Scale = 1.0, EggCount = 4,
-		EggWeights = { SwampEgg = 100 } },
+		EggWeights = { SwampEgg = 100 }, BloodyEgg = "BloodySwampEgg" },
 	{ Owner = "Friendly Mummy", OwnerSpeed = 41, CandyPerKnock = 45, CostumeTier = 1, Floors = 1, Scale = 1.05, EggCount = 4,
-		EggWeights = { PyramidEgg = 100 } },
+		EggWeights = { PyramidEgg = 100 }, BloodyEgg = "BloodyPyramidEgg" },
 	{ Owner = "Scarecrow", OwnerSpeed = 56, CandyPerKnock = 48, CostumeTier = 2, Floors = 1, Scale = 1.1, EggCount = 5,
-		EggWeights = { HarvestEgg = 100 } },
+		EggWeights = { HarvestEgg = 100 }, BloodyEgg = "BloodyHarvestEgg" },
 	{ Owner = "Zombie Chef", OwnerSpeed = 75, CandyPerKnock = 100, CostumeTier = 3, Floors = 2, Scale = 1.15, EggCount = 5,
 		EggWeights = { BakeryEgg = 100 }, BloodyEgg = "BloodyBakeryEgg" },
 	{ Owner = "Gravedigger", OwnerSpeed = 87, CandyPerKnock = 200, CostumeTier = 4, Floors = 1, Scale = 1.2, EggCount = 5,
@@ -636,12 +654,15 @@ Config.BoardRefreshSeconds = 90
 ---------------------------------------------------------------------------
 Config.Audio = {
 	Music = {
-		Chill = { Id = "104408838738669", File = "music_chill.mp3", Volume = 0.45 }, -- slow spooky waltz, always playing
-		Chase = { Id = "84750268429068", File = "music_chase.mp3", Volume = 0.7 }, -- replaces it while an owner chases you
+		-- Priority: Alarm (carrying a stolen egg / chased) > House (inside someone's house) > Chill (everywhere else).
+		Chill = { Id = "101048422760129", File = "music_chill_haunted.mp3", Volume = 0.5 }, -- haunted carnival loop with the whispers removed, always playing (old waltz was 104408838738669)
+		House = { Id = "79224712340954", File = "music_house.mp3", Volume = 0.55 }, -- dramatic cinematic loop, inside a house
+		Alarm = { Id = "100646307711374", File = "alarm.mp3", Volume = 0.55 }, -- replaces it the instant you steal an egg; also drives the red screen-edge pulse (old chase music was 84750268429068)
 		BloodMoon = { Id = "9048244842", Volume = 0.6 }, -- "Decapitazione" (APM, Creator Store): replaces Chill during the Blood Moon
 	},
 	Sfx = {
-		Click = { Id = "90777076070251", File = "ui_click.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/clickfast.wav" },
+		Click = { Id = "77120543307812", File = "ui_click.mp3", Volume = 0.6, -- "ui-bubble-click" (Creator Store); old synthesized click was 90777076070251
+			 Fallback = "rbxasset://sounds/clickfast.wav" },
 		Hover = { Id = "136773357162673", File = "ui_hover.mp3", Volume = 0.25 },
 		Open = { Id = "112378718438149", File = "ui_open.mp3", Volume = 0.5 },
 		Close = { Id = "140705850204002", File = "ui_close.mp3", Volume = 0.45 },
@@ -649,11 +670,13 @@ Config.Audio = {
 		Error = { Id = "112807538408601", File = "ui_error.mp3", Volume = 0.6, Fallback = "rbxasset://sounds/bass.wav" },
 		Notify = { Id = "140436292459203", File = "ui_notify.mp3", Volume = 0.45 },
 		Candy = { Id = "136234586640642", File = "ui_candy.mp3", Volume = 0.5 },
-		LevelUp = { Id = "70844323367904", File = "ui_levelup.mp3", Volume = 0.7 },
+		LevelUp = { Id = "112485797063762", File = "ui_levelup.mp3", Volume = 0.7 }, -- "UI - Level Up" by SodaBreadle (Creator Store); old one was 70844323367904
 		Fanfare = { Id = "102746230510443", File = "fanfare.mp3", Volume = 0.8 },
+		PlaytimeClaim = { Id = "136234586640642", Volume = 0.65 }, -- short reward pop, followed by the purchase chime
 		EggPickup = { Id = "117400458549929", File = "egg_pickup.mp3", Volume = 0.7 },
 		EggPlace = { Id = "113778628585626", File = "egg_place.mp3", Volume = 0.6 },
 		EggHatch = { Id = "138241628258698", File = "egg_hatch.mp3", Volume = 0.8 },
+		EggCrack = { Id = "82889092185397", File = "egg_crack.mp3", Volume = 0.9, Fallback = "rbxassetid://138241628258698" }, -- the one hatch sound (the old hatch sound, 138241628258698, is only a fallback)
 		ChaseAlert = { Id = "138434141721230", File = "chase_alert.mp3", Volume = 0.8 },
 		Escape = { Id = "110374782293236", File = "escape.mp3", Volume = 0.8 },
 		Caught = { Id = "110987063379359", File = "caught.mp3", Volume = 0.8 },
@@ -1020,58 +1043,59 @@ end
 ---------------------------------------------------------------------------
 -- Playtime Rewards: a gift for every stretch of time the player is really playing today (they only count while
 -- moving or using menus). Twelve gifts, the last one after 2 hours. Everything resets at 00:00 UTC. Currency gifts
--- are worth `Amount` minutes of what the player normally earns (see Config.Quests.Rates), so they grow with the player.
+-- use capped permanent earning rates (Config.Quests.BalancedReward); egg tiers also retain collection progress.
 ---------------------------------------------------------------------------
 Config.Playtime = {
-	RoundGrowth = 1.5, -- Money, Candy and XP gifts grow this much every new round after all twelve are claimed
-	AfkSeconds = 60, -- no movement or menu use for this long and the clock stops
+	RoundGrowth = 1.15,
+	MaxRoundMultiplier = 1.6,
+	AfkSeconds = 60,
 	Rewards = {
-		{ Minutes = 0, Kind = "Money", Amount = 4 },
-		{ Minutes = 2, Kind = "Candy", Amount = 5 },
+		{ Minutes = 0, Kind = "Money", Amount = 1 },
+		{ Minutes = 2, Kind = "Candy", Amount = 2 },
 		{ Minutes = 5, Kind = "Potion", Potion = "Xp", Amount = 1 },
-		{ Minutes = 10, Kind = "Xp", Amount = 6 },
-		{ Minutes = 15, Kind = "Egg", Amount = 1 },
+		{ Minutes = 10, Kind = "Xp", Amount = 1.5 },
+		{ Minutes = 15, Kind = "Egg", Amount = 1, MinTier = 2 },
 		{ Minutes = 20, Kind = "Potion", Potion = "Candy", Amount = 1 },
-		{ Minutes = 30, Kind = "Money", Amount = 14 },
+		{ Minutes = 30, Kind = "Money", Amount = 5 },
 		{ Minutes = 45, Kind = "Potion", Potion = "Money", Amount = 1 },
-		{ Minutes = 60, Kind = "Egg", Amount = 2 },
-		{ Minutes = 80, Kind = "Candy", Amount = 25 },
+		{ Minutes = 60, Kind = "Egg", Amount = 1, MinTier = 5 },
+		{ Minutes = 80, Kind = "Candy", Amount = 6 },
 		{ Minutes = 100, Kind = "Potion", Potion = "Hatch", Amount = 2 },
-		{ Minutes = 120, Kind = "Egg", Amount = 3 },
+		{ Minutes = 120, Kind = "Egg", Amount = 2, MinTier = 6 },
 	},
 }
-
--- The egg given as a gift: the most common egg of the best house the player can rob.
-function Config.Playtime.EggFor(data: { [string]: any }): string
-	local house = Config.Houses[Config.Quests.Tier(data)]
-	local bestId, bestWeight = "CandyEgg", -1
-	for eggId, weight in house.EggWeights do
-		if weight > bestWeight then
-			bestId, bestWeight = eggId, weight
+-- Preserve collection progress through rebirths. Gift eggs never fall below the milestone's floor.
+local playtimeEggs = { "SwampEgg", "PyramidEgg", "HarvestEgg", "BakeryEgg", "GraveyardEgg", "CastleEgg", "MoonEgg", "CursedEgg", "CursedEgg" }
+local playtimePetTier = {}
+for tier, eggId in playtimeEggs do
+	for _, entry in Config.Eggs[eggId].Pool do
+		playtimePetTier[entry.Pet] = math.min(playtimePetTier[entry.Pet] or tier, tier)
+	end
+end
+-- Intermediate Nightfall eggs and event pets also establish permanent progress.
+for eggId, tier in { CandyEgg=1, PumpkinEgg=2, BatEgg=7, GhostEgg=7, NightmareEgg=9,
+	BloodySwampEgg=1, BloodyPyramidEgg=2, BloodyHarvestEgg=3, BloodyBakeryEgg=4, BloodyGraveyardEgg=5, BloodyCastleEgg=6 } do
+	for _, entry in Config.Eggs[eggId].Pool do playtimePetTier[entry.Pet]=tier end
+end
+function Config.Playtime.EggFor(data: { [string]: any }, minTier: number?): string
+	local tier = math.max(Config.Quests.Tier(data), minTier or 1)
+	for _, list in { data.Discovered or {}, data.Pets or {}, data.Storage or {} } do
+		for _, id in list do
+			local base = Config.SplitPet(id)
+			tier = math.max(tier, playtimePetTier[base] or 1)
 		end
 	end
-	return bestId
+	return playtimeEggs[math.clamp(tier, 1, #playtimeEggs)]
 end
-
--- What one gift pays this player right now: { Money, Candy, Xp } amounts, or { Egg = id, Count } or { Potion, Count }.
 function Config.Playtime.Resolve(data: { [string]: any }, reward: { [string]: any }): { [string]: any }
 	if reward.Kind == "Egg" then
-		return { EggId = Config.Playtime.EggFor(data), Count = reward.Amount }
+		return { EggId = Config.Playtime.EggFor(data, reward.MinTier), Count = reward.Amount }
 	elseif reward.Kind == "Potion" then
 		return { Potion = reward.Potion, Count = reward.Amount }
 	end
-	local result = Config.Quests.Reward(data, reward.Amount, { [reward.Kind] = 1 }, 1)
-	-- Each new round of the day pays more (eggs and potions stay the same).
-	local round = (data.Playtime and data.Playtime.Round) or 1
-	if round > 1 then
-		local factor = Config.Playtime.RoundGrowth ^ (round - 1)
-		for _, currency in { "Money", "Candy", "Xp" } do
-			if result[currency] then
-				result[currency] = nice(result[currency] * factor)
-			end
-		end
-	end
-	return result
+	local round = math.max(1, (data.Playtime and data.Playtime.Round) or 1)
+	local factor = math.min(Config.Playtime.MaxRoundMultiplier, Config.Playtime.RoundGrowth ^ math.min(round - 1, 5))
+	return Config.Quests.BalancedReward(data, reward.Amount, { [reward.Kind] = 1 }, factor)
 end
 
 
@@ -1096,7 +1120,7 @@ function Config.NextBloodMoon(now: number): number
 end
 
 -- Quest/login rewards use conservative permanent earning rates, excluding temporary boosts.
--- Keep the existing playtime economy and lifetime achievement payouts unchanged.
+-- Shared by quests, login and playtime rewards; temporary boosts do not inflate payouts.
 function Config.Quests.BalancedReward(data, minutes, share, mult)
 	local income = 0
 	for _, id in data.Pets do

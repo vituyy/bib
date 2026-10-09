@@ -230,6 +230,7 @@ local function stepWanderers(dt: number)
 			local toTarget = w.Target - w.Pos
 			local flat = Vector3.new(toTarget.X, 0, toTarget.Z)
 			local hop = 0
+			local walking = false
 			if w.Idle > 0 then
 				w.Idle -= dt
 			elseif flat.Magnitude < 0.5 then
@@ -239,10 +240,21 @@ local function stepWanderers(dt: number)
 				local stepLen = math.min(PET_SPEED * dt, flat.Magnitude)
 				w.Pos += flat.Unit * stepLen
 				hop = math.abs(math.sin(w.Phase * 8)) * 0.6 -- little hops while walking
+				walking = true
 			end
 			local look = if flat.Magnitude > 0.05 then flat.Unit else w.Model:GetPivot().LookVector
-			local at = w.Pos + Vector3.new(0, w.Height / 2 + hop + w.Float, 0)
-			w.Model:PivotTo(CFrame.lookAt(at, at + Vector3.new(look.X, 0, look.Z)))
+			-- Pets whose art is marked WalkAnim also waddle side to side with each hop, lean into the walk and
+			-- breathe when idle (their legs, tail and wings are animated by the client's PetAnimator).
+			local lean, roll, breathe = 0, 0, 0
+			if w.Model:GetAttribute("WalkAnim") then
+				local walk = (w.Walk or 0) + ((if walking then 1 else 0) - (w.Walk or 0)) * math.min(dt * 8, 1)
+				w.Walk = walk
+				roll = math.sin(w.Phase * 8) * 0.12 * walk
+				lean = -0.1 * walk
+				breathe = (1 - walk) * math.sin(w.Phase * 2.2) * 0.07
+			end
+			local at = w.Pos + Vector3.new(0, w.Height / 2 + hop + breathe + w.Float, 0)
+			w.Model:PivotTo(CFrame.lookAt(at, at + Vector3.new(look.X, 0, look.Z)) * CFrame.Angles(lean, 0, roll))
 			if #w.Wings > 0 then
 				local root = w.Model.PrimaryPart :: BasePart
 				local angle = math.sin(w.Phase * 9) * math.rad(22)
@@ -281,6 +293,11 @@ local function updateIncubators(player: Player, data)
 		local l = incubatorLabels[player] and incubatorLabels[player][n]
 		local prompt = incubatorPrompts[player] and incubatorPrompts[player][n]
 		local left = entry.EndsAt - now
+		-- Mark a finished egg so clients can make it wobble (EggWobble in StarterPlayerScripts).
+		local eggModel = l and l:FindFirstAncestorOfClass("Model")
+		if eggModel then
+			eggModel:SetAttribute("ReadyToHatch", left <= 0)
+		end
 		if l and egg then
 			l.Text = egg.Name .. "\n" .. (if left > 0 then formatTime(left) elseif full then "READY — Pets full!" else "READY — Hatch!")
 			l.TextColor3 = if left > 0 then Color3.fromRGB(255, 220, 140) else Color3.fromRGB(140, 255, 165)

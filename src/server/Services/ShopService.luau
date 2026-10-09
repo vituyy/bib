@@ -45,6 +45,9 @@ function actions.BuyTreadmill(player: Player, data, tier: any)
 	if not info then
 		return false, "Unknown treadmill"
 	end
+	if info.Robux then
+		return false, info.Name .. " is sold for Robux in the Speed Shop"
+	end
 	if tier <= data.Treadmill then
 		return false, "You already have a better treadmill"
 	end
@@ -545,6 +548,14 @@ function actions.Rebirth(player: Player, data)
 	return true, string.format("Rebirth %d! You now train x%s faster.", data.Rebirths, tostring(Config.XpMultiplier(data.Rebirths)))
 end
 
+-- One-time discovery claims; amounts and eligibility always come from the server.
+function actions.ClaimIndexPet(player: Player, data, petId: any)
+	return require(script.Parent.IndexService).ClaimPet(player, data, petId)
+end
+function actions.ClaimAllIndex(player: Player, data)
+	return require(script.Parent.IndexService).ClaimAll(player, data)
+end
+
 -- Claim an Index milestone reward once enough different pets have been discovered.
 function actions.ClaimIndex(player: Player, data, count: any)
 	local reward
@@ -675,7 +686,8 @@ local function wireMenuCounters(map: Instance)
 			local prompt = Instance.new("ProximityPrompt")
 			prompt.ActionText = "Shop"
 			prompt.ObjectText = menu
-			prompt.MaxActivationDistance = 10
+			prompt.MaxActivationDistance = 12
+			prompt.RequiresLineOfSight = false -- the counter is solid art, so a line-of-sight check would always be blocked
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
 			prompt:SetAttribute("OpenMenu", menu) -- the client opens the menu when this prompt fires
 			prompt.Parent = inst

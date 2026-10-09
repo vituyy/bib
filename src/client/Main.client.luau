@@ -191,8 +191,8 @@ end
 local toggleMenu: (name: string, forceOpen: boolean?) -> ()
 
 ---------------------------------------------------------------------------
--- Audio: a chill Halloween theme that is always playing, an intense track that takes over while an owner chases
--- you, and sound effects for the UI and the big moments. Ids and volumes live in Config.Audio; a sound
+-- Audio: a chill Halloween theme that is always playing, dramatic music inside houses, an alarm that takes over
+-- while an owner chases you, and sound effects for the UI and the big moments. Ids and volumes live in Config.Audio; a sound
 -- without an id is simply skipped. The player can switch music and sounds off in the Store menu.
 ---------------------------------------------------------------------------
 local SoundService = game:GetService("SoundService")
@@ -233,8 +233,8 @@ local function setMusic(name: string, fade: number)
 	for trackName, track in tracks do
 		local on = trackName == name
 		if on then
-			if name == "Chase" then
-				track.Sound.TimePosition = 0 -- the chase always starts from its opening beat
+			if name == "Alarm" then
+				track.Sound.TimePosition = 0 -- the alarm always starts from its opening beat
 			end
 			if not track.Sound.IsPlaying then
 				track.Sound:Play()
@@ -276,7 +276,7 @@ task.spawn(function() -- load everything before it is needed, so the first click
 	end)
 end)
 applyAudioSettings()
-setMusic("Chill", 3)
+-- The first track starts when the loading screen is gone (see the music block near the chase handlers).
 -- Route world effects through the same local SFX bus without altering their base volume.
 do
 	local function route(sound)
@@ -700,7 +700,9 @@ local function request(action: string, arg: any?)
 		return
 	end
 	toast(message or "", if success then GREEN else RED)
-	sfx(if success then "Buy" else "Error")
+	if not success then
+		sfx("Error") -- a successful action only makes the click sound
+	end
 end
 
 -- Section heading: coloured outlined text straight on the panel.
@@ -1548,7 +1550,7 @@ end
 ---------------------------------------------------------------------------
 -- Today's playing time, kept current between server updates (the server sends it every few seconds).
 function QR.played(): number
-	return QR.Seconds + (os.clock() - QR.At)
+	return QR.Seconds + (if data and data.Playtime and data.Playtime.Active then math.clamp(os.clock() - QR.At, 0, 6) else 0)
 end
 
 function QR.mmss(seconds: number): string
@@ -1601,89 +1603,6 @@ QR.GIFT_TINT = {
 QR.GLOW = "rbxassetid://86140178508751"
 QR.RAYS = "rbxassetid://96566829321081"
 QR.SPARK = "rbxassetid://125848556656404"
-function QR.giftCard(grid: Instance, index: number, d, reward)
-	local claimed = d.Playtime.Claimed[tostring(index)] == true
-	local need = reward.Minutes * 60
-	local ready = not claimed and QR.played() >= need
-	local resolved = Config.Playtime.Resolve(d, reward)
-	local tint = if ready then Color3.fromRGB(255, 190, 30) elseif resolved.Potion then Config.Potions[resolved.Potion].Color else QR.GIFT_TINT[reward.Kind] or QR.GIFT_TINT.Money
-	local mega = index == #Config.Playtime.Rewards
-	local card = box({ LayoutOrder = index, Parent = grid }, { tint:Lerp(WHITE, 0.2), tint:Lerp(BLACK, 0.35) })
-	local stroke = card:FindFirstChildOfClass("UIStroke") :: UIStroke
-	stroke.Thickness = 4
-	studs(card, 18, 12, WHITE, 0.8)
-
-	local text = QR.giftLabel(d, reward)
-	outlined({ Size = UDim2.new(1, -14, 0, 26), Position = UDim2.fromOffset(7, 6), Text = text, ZIndex = 6, Parent = card }, 3)
-
-	-- The prize over glowing rays.
-	local stage = new("Frame", { Size = UDim2.new(1, -8, 1, -82), Position = UDim2.fromOffset(4, 32), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 3, Parent = card })
-	local rays = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1.7, 1.7), BackgroundTransparency = 1, Image = QR.RAYS, ImageColor3 = tint:Lerp(WHITE, 0.55), ImageTransparency = if ready then 0.2 elseif claimed then 0.9 else 0.6, ZIndex = 3, Parent = stage }, { new("UIAspectRatioConstraint", {}) })
-	new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Size = UDim2.fromScale(1.15, 1.15), BackgroundTransparency = 1, Image = QR.GLOW, ImageColor3 = tint:Lerp(WHITE, 0.5), ImageTransparency = if claimed then 0.8 elseif ready then 0 else 0.25, ZIndex = 3, Parent = stage }, { new("UIAspectRatioConstraint", {}) })
-	TweenService:Create(rays, TweenInfo.new(if ready then 6 else 16, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 }):Play()
-	local image = if resolved.Potion then QR.POTION_ICONS[resolved.Potion] elseif resolved.EggId then QR.GIFT_ICONS.Egg else QR.GIFT_ICONS[reward.Kind]
-	local picture = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.92, 0.92), Position = UDim2.fromScale(0.5, 0.52), BackgroundTransparency = 1, Image = image or "", ScaleType = Enum.ScaleType.Fit, ImageTransparency = if claimed then 0.35 else 0, ZIndex = 4, Parent = stage })
-	if not claimed then -- the prize floats up and down
-		TweenService:Create(picture, TweenInfo.new(if ready then 0.55 else 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Position = UDim2.fromScale(0.5, 0.45) }):Play()
-	end
-	if resolved.Count and resolved.Count > 1 then
-		outlined({ AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(46, 28), Position = UDim2.new(1, -6, 1, -2), Text = "x" .. resolved.Count, TextColor3 = QR.GOLD, ZIndex = 6, Parent = stage }, 2.5)
-	end
-	if mega then
-		outlined({ AnchorPoint = Vector2.new(0, 1), Size = UDim2.fromOffset(40, 34), Position = UDim2.new(0, 2, 1, -2), Text = "👑", ZIndex = 6, Parent = stage }, 0)
-		task.spawn(function() -- rainbow frame
-			local hue = 0
-			while card.Parent do
-				hue = (hue + 0.02) % 1
-				stroke.Color = Color3.fromHSV(hue, 0.85, 1)
-				task.wait(0.05)
-			end
-		end)
-		stroke.Thickness = 5
-	end
-
-	-- The dark pill at the bottom.
-	local function pill(): Frame
-		return new("Frame", { Size = UDim2.new(1, -16, 0, 36), Position = UDim2.new(0, 8, 1, -44), BackgroundColor3 = Color3.fromRGB(28, 22, 38), BackgroundTransparency = 0.1, ClipsDescendants = true, ZIndex = 5, Parent = card }, {
-			new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			new("UIStroke", { Color = BLACK, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-		})
-	end
-	if claimed then
-		new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.62, 0.62), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1, Image = QR.CHECK, ScaleType = Enum.ScaleType.Fit, ZIndex = 7, Parent = stage })
-		local p = pill()
-		outlined({ Size = UDim2.new(1, -16, 1, -10), Position = UDim2.fromOffset(8, 5), Text = "Claimed", TextColor3 = Color3.fromRGB(190, 185, 200), ZIndex = 6, Parent = p }, 2)
-	elseif ready then
-		chunkyButton({ Size = UDim2.new(1, -16, 0, 42), Position = UDim2.new(0, 8, 1, -48), Text = "CLAIM!", ZIndex = 6, Parent = card }, PAINT.Green, function()
-			request("ClaimPlaytime", index)
-			sfx("Fanfare")
-		end)
-		if not mega then
-			stroke.Color = Color3.fromRGB(255, 240, 120)
-			stroke.Thickness = 5
-			TweenService:Create(stroke, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Color = Color3.fromRGB(255, 140, 20) }):Play()
-		end
-		TweenService:Create(new("UIScale", { Parent = card }), TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.05 }):Play()
-		local shine = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromScale(0.3, 2), Position = UDim2.fromScale(-0.4, 0.5), Rotation = 20, BackgroundColor3 = WHITE, ZIndex = 5, Parent = stage }, {
-			new("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.3), NumberSequenceKeypoint.new(1, 1) }) }),
-		})
-		TweenService:Create(shine, TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, false, 0.9), { Position = UDim2.fromScale(1.4, 0.5) }):Play()
-		for i, spot in { Vector2.new(0.15, 0.2), Vector2.new(0.85, 0.28), Vector2.new(0.8, 0.85), Vector2.new(0.2, 0.8) } do
-			local spark = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(spot.X, spot.Y), Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1, Image = QR.SPARK, ImageColor3 = Color3.fromRGB(255, 255, 220), ImageTransparency = 1, ZIndex = 6, Parent = stage })
-			TweenService:Create(spark, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, 0.15 * i), { ImageTransparency = 0, Size = UDim2.fromOffset(26, 26), Rotation = 90 }):Play()
-		end
-	else
-		local p = pill()
-		local fill = new("Frame", { Size = UDim2.fromScale(math.clamp(QR.played() / math.max(need, 1), 0, 1), 1), BackgroundColor3 = tint, BackgroundTransparency = 0.45, ZIndex = 5, Parent = p }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
-		new("ImageLabel", { Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(2, 1), BackgroundTransparency = 1, Image = QR.LOCK, ScaleType = Enum.ScaleType.Fit, ZIndex = 7, Parent = p })
-		local label = outlined({ Size = UDim2.new(1, -46, 1, -10), Position = UDim2.fromOffset(38, 5), Text = QR.mmss(need - QR.played()), ZIndex = 7, Parent = p }, 2.5)
-		label:GetPropertyChangedSignal("Text"):Connect(function()
-			fill.Size = UDim2.fromScale(math.clamp(QR.played() / math.max(need, 1), 0, 1), 1)
-		end)
-		table.insert(QR.Timers, { Label = label, Need = need })
-	end
-end
-
 function QR.potionRow(order: number, d, kind: string)
 	local potion = Config.Potions[kind]
 	local owned = d.Potions[kind] or 0
@@ -1702,91 +1621,6 @@ function QR.potionRow(order: number, d, kind: string)
 			toast("You have no " .. potion.Name .. ". Play to win more!", ORANGE)
 		end
 	end)
-end
-
-function menus.Rewards(d)
-	table.clear(QR.Timers)
-	table.clear(QR.PotionTimers)
-	QR.Seconds, QR.At = d.Playtime.Seconds, os.clock()
-	local now = workspace:GetServerTimeNow()
-	-- Top: the candy-corn progress bar toward the next gift (dots mark every gift of the day), with the countdown,
-	-- a CLAIM ALL button when several gifts are waiting, and a small line with today's time and the reset.
-	local rewards = Config.Playtime.Rewards
-	local readyList, nextNeed = {}, nil
-	for index, reward in rewards do
-		local done = d.Playtime.Claimed[tostring(index)] == true
-		if not done and QR.played() >= reward.Minutes * 60 then
-			table.insert(readyList, index)
-		elseif not done and not nextNeed then
-			nextNeed = reward.Minutes * 60
-		end
-	end
-	local top = new("Frame", { Size = UDim2.new(1, -8, 0, 56), BackgroundTransparency = 1, LayoutOrder = 0, Parent = list })
-	local lastMinutes = rewards[#rewards].Minutes * 60
-	local roundPill = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(104, 40), Position = UDim2.new(1, -218, 0, 7), BackgroundColor3 = Color3.fromRGB(28, 22, 38), ZIndex = 3, Parent = top }, {
-		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-		border(3),
-	})
-	outlined({ Size = UDim2.new(1, -14, 1, -12), Position = UDim2.fromOffset(7, 6), Text = "Round " .. (d.Playtime.Round or 1), TextColor3 = Color3.fromRGB(255, 225, 60), ZIndex = 4, Parent = roundPill }, 2.5)
-	local bar = new("Frame", { Size = UDim2.new(1, -336, 0, 34), Position = UDim2.fromOffset(6, 10), BackgroundColor3 = Color3.fromRGB(28, 22, 38), ZIndex = 3, Parent = top }, {
-		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-		border(3),
-	})
-	local fill = new("Frame", { Size = UDim2.fromScale(math.clamp(QR.played() / lastMinutes, 0.04, 1), 1), BackgroundColor3 = WHITE, ZIndex = 3, Parent = bar }, {
-		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 200, 60), Color3.fromRGB(255, 120, 20)) }),
-	})
-	shine(fill)
-	for index, reward in rewards do
-		local done = d.Playtime.Claimed[tostring(index)] == true
-		local isReady = not done and QR.played() >= reward.Minutes * 60
-		if reward.Minutes > 0 then
-			local dot = new("Frame", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Size = UDim2.fromOffset(12, 12),
-				Position = UDim2.fromScale(reward.Minutes * 60 / lastMinutes, 0.5),
-				BackgroundColor3 = if done then Color3.fromRGB(110, 230, 110) elseif isReady then WHITE else Color3.fromRGB(90, 75, 120),
-				ZIndex = 4,
-				Parent = bar,
-			}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), border(2) })
-			if isReady then
-				TweenService:Create(new("UIScale", { Parent = dot }), TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.5 }):Play()
-			end
-		end
-	end
-	if #readyList >= 2 then
-		local claimAll = chunkyButton({ AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(200, 46), Position = UDim2.new(1, -4, 0, 4), Text = "CLAIM ALL (" .. #readyList .. ")", ZIndex = 3, Parent = top }, PAINT.Green, function()
-			for _, index in readyList do
-				request("ClaimPlaytime", index)
-			end
-			sfx("Fanfare")
-		end)
-		TweenService:Create(new("UIScale", { Parent = claimAll }), TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.07 }):Play()
-	else
-		local pillFrame = new("Frame", { AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(204, 40), Position = UDim2.new(1, -4, 0, 7), BackgroundColor3 = Color3.fromRGB(28, 22, 38), ZIndex = 3, Parent = top }, {
-			new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			border(3),
-		})
-		if nextNeed then
-			outlined({ Size = UDim2.new(0.55, -8, 1, -14), Position = UDim2.fromOffset(12, 7), Text = "Next gift in", TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4, Parent = pillFrame }, 2)
-			local nextLabel = outlined({ Size = UDim2.new(0.45, -12, 1, -10), Position = UDim2.new(0.55, 0, 0, 5), Text = QR.mmss(nextNeed - QR.played()), TextColor3 = Color3.fromRGB(255, 225, 60), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = pillFrame }, 2.5)
-			table.insert(QR.Timers, { Label = nextLabel, Need = nextNeed })
-		else
-			outlined({ Size = UDim2.new(1, -20, 1, -14), Position = UDim2.fromOffset(10, 7), Text = "All gifts claimed! 🎉", TextColor3 = Color3.fromRGB(150, 255, 150), ZIndex = 4, Parent = pillFrame }, 2)
-		end
-	end
-	local grid = new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2, Parent = list }, {
-		new("UIGridLayout", { CellSize = UDim2.new(0.25, -14, 0, 190), CellPadding = UDim2.fromOffset(14, 16), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
-		new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
-	})
-	for index, reward in Config.Playtime.Rewards do
-		QR.giftCard(grid, index, d, reward)
-	end
-	local round = d.Playtime.Round or 1
-	local roundLabel = panel:FindFirstChild("RoundLabel", true)
-	if roundLabel then
-		roundLabel.Text = "ROUND " .. round
-	end
 end
 
 -- Potions you own, in their own window (opened with the Potions button). Drink one to start its boost.
@@ -1906,48 +1740,7 @@ function QR.signature(d): string
 	return table.concat(parts, ",")
 end
 
-function menus.Index(d)
-	local found = d.Discovered or {}
-	local claimed = d.IndexClaimed or {}
-	local total = #Config.PetOrder
-
-	local barHolder = spacer(0, 44)
-	local bar, fill = progressBar({ Size = UDim2.new(1, -8, 1, -6), Position = UDim2.fromOffset(4, 3), Parent = barHolder }, PAINT.XpFill)
-	setBar(fill, #found / total)
-	outlined({ Size = UDim2.new(1, -24, 1, -12), Position = UDim2.fromOffset(12, 6), Text = string.format("%d / %d discovered", #found, total), ZIndex = 3, Parent = bar }, 2)
-
-	for n, reward in Config.IndexRewards do
-		local done = table.find(claimed, reward.Count) ~= nil
-		local ready = not done and #found >= reward.Count
-		row(n, string.format("%d pets: $%s", reward.Count, formatNumber(reward.Money)), if done then Color3.fromRGB(200, 200, 200) elseif ready then GREEN else WHITE,
-			if done then "Claimed" elseif ready then "Claim" else string.format("%d/%d", math.min(#found, reward.Count), reward.Count),
-			if ready then PAINT.Green else PAINT.Grey, function()
-				if ready then
-					request("ClaimIndex", reward.Count)
-				end
-			end)
-	end
-
-	local grid = new("Frame", { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 10, Parent = list }, {
-		new("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 132), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
-		new("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingTop = UDim.new(0, 3) }),
-	})
-	for n, petId in Config.PetOrder do
-		local pet = Config.Pets[petId]
-		local known = table.find(found, petId) ~= nil
-		local rarity = Config.Rarities[pet.Rarity]
-		local card = box({ LayoutOrder = n, Parent = grid }, if known then PAINT.Cyan else PAINT.Grey)
-		modelViewport(petModel(petId), card, {
-			Size = UDim2.new(1, -8, 1, -46),
-			Position = UDim2.fromOffset(4, 4),
-			ImageColor3 = if known then WHITE else BLACK, -- undiscovered pets are a black silhouette
-			ImageTransparency = if known then 0 else 0.15,
-			ZIndex = 2,
-		})
-		outlined({ Size = UDim2.new(1, -8, 0, 20), Position = UDim2.new(0, 4, 1, -42), Text = if known then pet.Name else "???", ZIndex = 2, Parent = card }, 1.5)
-		outlined({ Size = UDim2.new(1, -8, 0, 17), Position = UDim2.new(0, 4, 1, -21), Text = if known then pet.Rarity else "", TextColor3 = rarity.Color, ZIndex = 2, Parent = card }, 1.5)
-	end
-end
+-- Pet Index is rendered by Shared.IndexUI.
 
 -- The Speed Shop has two tabs: Treadmills and Trails (both paid with Money). Every item is a studded card with a
 -- little 3D picture of it, its XP multiplier on a badge and a price / equip button underneath.
@@ -2136,12 +1929,21 @@ function menus.Treadmills(d)
 		end
 		return
 	end
-	header(0, "Treadmills: paid with Money, multiply your costume's XP while you run on them")
+	header(0, "Treadmills: paid with Money (or Robux), multiply your costume's XP while you run on them")
 	local grid = shopGrid(1)
 	for tier, info in Config.Treadmills do
 		local picture = treadmillPicture(info, tier)
 		if tier <= d.Treadmill then
 			shopCard(grid, tier, info.Name, info.Color, picture, info.XpMultiplier, if tier == d.Treadmill then "Owned" else "-", PAINT.Grey, tier < d.Treadmill)
+		elseif info.Robux then
+			local soon = info.ProductId == 0
+			shopCard(grid, tier, info.Name, info.Color, picture, info.XpMultiplier, if soon then "Soon" else "\u{E002}" .. info.Robux, if soon then PAINT.Grey else PAINT.Green, false, function()
+				if soon then
+					toast(info.Name .. " opens soon!", ORANGE)
+				else
+					game:GetService("MarketplaceService"):PromptProductPurchase(player, info.ProductId)
+				end
+			end)
 		else
 			shopCard(grid, tier, info.Name, info.Color, picture, info.XpMultiplier, "$" .. formatNumber(info.Price), if d.Money >= info.Price then PAINT.Green else PAINT.Red, false, function()
 				request("BuyTreadmill", tier)
@@ -2454,6 +2256,12 @@ for order, menu in MENU_ORDER do
 	tile.Activated:Connect(function()
 		toggleMenu(menu)
 	end)
+end
+
+-- Only the server-confirmed delivery event starts the cosmetic flight.
+do
+	local controller = require(ReplicatedStorage.Shared.EggDeliveryFX).Attach(menuButtons.EggsButton, Remotes.EggDelivered, sfx)
+	script.Destroying:Connect(function() controller:Destroy() end)
 end
 
 -- Rewards on the top bar, between the night timer and the top-right corner: the gift glows over slowly turning light
@@ -2882,10 +2690,7 @@ local function wireButton(inst: Instance)
 	end
 	wiredButtons[inst] = true
 	inst.Activated:Connect(function()
-		sfx("Click", 0.96 + math.random() * 0.08)
-	end)
-	inst.MouseEnter:Connect(function()
-		sfx("Hover", 0.95 + math.random() * 0.1)
+		sfx("Click", 0.96 + math.random() * 0.08) -- the only sound a button makes: no hover sound, no open/close/buy sounds
 	end)
 end
 gui.DescendantAdded:Connect(wireButton)
@@ -2895,17 +2700,6 @@ end
 ProximityPromptService.PromptTriggered:Connect(function()
 	sfx("Click")
 end)
-
-local panelsOpen = false
-local function checkPanels()
-	local open = panel.Visible or invPanel.Visible
-	if open ~= panelsOpen then
-		panelsOpen = open
-		sfx(if open then "Open" else "Close")
-	end
-end
-panel:GetPropertyChangedSignal("Visible"):Connect(checkPanels)
-invPanel:GetPropertyChangedSignal("Visible"):Connect(checkPanels)
 
 -- Gain pop-ups: the speed icon with "+XP" or the candy icon with "+Candy" pops up near the middle of the screen,
 -- floats up and fades. Gains that arrive close together are added into one pop-up so running doesn't spam them.
@@ -2983,14 +2777,29 @@ Remotes.DataChanged.OnClientEvent:Connect(function(new)
 		end
 		queueGain("Xp", xp)
 	end
-	queueGain("Candy", new.Candy - old.Candy)
-	if new.Candy > old.Candy and os.clock() - lastCandy > 0.2 then
+	-- Bloody pets make a little Candy every second. That trickle is not announced: no "+Candy" pop-up and no sound
+	-- (the Candy counter still goes up). Anything that arrives with it, like a Trick-or-Treat knock, still shows.
+	local passiveCandy = 0
+	for _, petId in new.Pets or {} do
+		local pet = Config.Pets[petId]
+		if pet and pet.CandyPerSecond then
+			passiveCandy += pet.CandyPerSecond
+		end
+	end
+	passiveCandy *= Config.IncomeTickSeconds
+	local candyGain = new.Candy - old.Candy
+	if passiveCandy > 0 and candyGain > 0 then
+		candyGain = if candyGain <= passiveCandy + 1e-6 then 0 else candyGain - passiveCandy
+	end
+	queueGain("Candy", candyGain)
+	if candyGain > 0 and os.clock() - lastCandy > 0.2 then
 		lastCandy = os.clock()
 		sfx("Candy")
 	end
 	if #new.Incubators > #old.Incubators then
 		sfx("EggPlace")
-	elseif #new.Eggs > #old.Eggs then
+	elseif #new.Eggs > #old.Eggs and (new.EggsStolen or 0) == (old.EggsStolen or 0) then
+		-- Deliveries play their success chime when the flying egg reaches the button.
 		sfx("Escape")
 	end
 end)
@@ -3007,23 +2816,112 @@ player:GetAttributeChangedSignal("CarryingEgg"):Connect(function()
 	end
 end)
 
--- The chase: the stinger and the intense track when an owner starts running, back to the chill theme afterwards.
-Remotes.ChaseState.OnClientEvent:Connect(function(isChased: boolean)
-	if isChased then
-		sfx("ChaseAlert")
-		setMusic("Chase", 0.5)
-	else
-		setMusic("Chill", 2.5)
+-- Which music plays: the alarm the instant an egg is stolen (until you escape, are caught or the owner gives up),
+-- dramatic music while you are inside a house, the chill theme everywhere else. While the alarm plays the screen
+-- edges glow red and pulse with it.
+do
+	local ReplicatedFirst = game:GetService("ReplicatedFirst")
+	local chased, inHouse = false, false
+
+	local function refreshMusic()
+		if ReplicatedFirst:GetAttribute("LoadingScreen") then
+			return -- the loading screen has its own music
+		end
+		local want = if chased then "Alarm" elseif inHouse then "House" else "Chill"
+		if not tracks[want] then
+			want = "Chill" -- that track has no id yet
+		end
+		setMusic(want, if want == "Alarm" then 0.05 elseif want == "House" then 1.5 else 2.5)
 	end
-end)
-Remotes.Kick.OnClientEvent:Connect(function()
-	sfx("Caught")
-	setMusic("Chill", 2.5)
-end)
+
+	-- Red glow on the four screen edges, brighter on the alarm's beats.
+	local alarmGui = new("ScreenGui", { Name = "AlarmVignette", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 50, Enabled = false, Parent = player:WaitForChild("PlayerGui") })
+	local edges: { Frame } = {}
+	for _, edge in {
+		{ Pos = UDim2.fromScale(0, 0), Size = UDim2.fromScale(0.22, 1), Rot = 0 },
+		{ Pos = UDim2.fromScale(0.78, 0), Size = UDim2.fromScale(0.22, 1), Rot = 180 },
+		{ Pos = UDim2.fromScale(0, 0), Size = UDim2.fromScale(1, 0.3), Rot = 90 },
+		{ Pos = UDim2.fromScale(0, 0.7), Size = UDim2.fromScale(1, 0.3), Rot = 270 },
+	} do
+		table.insert(edges, new("Frame", { Position = edge.Pos, Size = edge.Size, BackgroundColor3 = Color3.fromRGB(255, 20, 20), BorderSizePixel = 0, Parent = alarmGui }, {
+			new("UIGradient", { Rotation = edge.Rot, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.4, 0.6), NumberSequenceKeypoint.new(1, 1) }) }),
+		}))
+	end
+
+	local pulseConn: RBXScriptConnection? = nil
+	local function setVignette(on: boolean)
+		on = on and audioOn.Values.EventEffects
+		if pulseConn then
+			pulseConn:Disconnect()
+			pulseConn = nil
+		end
+		alarmGui.Enabled = on
+		if not on then
+			return
+		end
+		local sound = tracks.Alarm and tracks.Alarm.Sound
+		local peak, level = 1, 0
+		pulseConn = RunService.RenderStepped:Connect(function(dt: number)
+			-- Half a steady beat, half the alarm's own loudness, so it follows the siren whatever its rhythm is.
+			local beat = 0.5 + 0.5 * math.sin(os.clock() * 2 * math.pi * 1.6)
+			local target = beat
+			if sound and sound.IsPlaying then
+				peak = math.max(sound.PlaybackLoudness, peak * (1 - 0.2 * dt))
+				target = 0.4 * beat + 0.6 * math.clamp(sound.PlaybackLoudness / peak, 0, 1)
+			end
+			level += (target - level) * math.min(1, dt * 14)
+			for _, edge in edges do
+				edge.BackgroundTransparency = 0.85 - 0.7 * level
+			end
+		end)
+	end
+
+	-- The chase starts the moment an egg is stolen and ends on escape, catch or give-up.
+	Remotes.ChaseState.OnClientEvent:Connect(function(isChased: boolean)
+		chased = isChased
+		setVignette(isChased)
+		refreshMusic()
+	end)
+	Remotes.Kick.OnClientEvent:Connect(function()
+		sfx("Caught")
+		chased = false
+		setVignette(false)
+		refreshMusic()
+	end)
+
+	-- Inside a house = inside the walls of one of the houses on the street (boxes are stored on each house).
+	task.spawn(function()
+		local houses = workspace:WaitForChild("Map"):WaitForChild("Street"):WaitForChild("Houses")
+		while true do
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local inside = false
+			if root then
+				for _, house in houses:GetChildren() do
+					local cf, size = house:GetAttribute("InteriorCFrame"), house:GetAttribute("InteriorSize")
+					if cf and size then
+						local p = (cf :: CFrame):PointToObjectSpace(root.Position)
+						if math.abs(p.X) <= (size :: Vector3).X / 2 and math.abs(p.Y) <= (size :: Vector3).Y / 2 and math.abs(p.Z) <= (size :: Vector3).Z / 2 then
+							inside = true
+							break
+						end
+					end
+				end
+			end
+			if inside ~= inHouse then
+				inHouse = inside
+				refreshMusic()
+			end
+			task.wait(0.25)
+		end
+	end)
+
+	ReplicatedFirst:GetAttributeChangedSignal("LoadingScreen"):Connect(refreshMusic)
+	refreshMusic()
+end
 
 -- Play the hatch sound as the reveal egg opens, respecting the existing sound toggle.
 Remotes.EggHatched.OnClientEvent:Connect(function()
-	task.delay(0.85, function() sfx("EggHatch") end)
+	task.delay(0.5, function() sfx("EggCrack") end) -- hatching makes only this sound: the egg wiggles for 0.85 s (HatchReveal), the crack runs into the pop
 end)
 
 ---------------------------------------------------------------------------
@@ -3270,13 +3168,21 @@ do
 end
 
 
--- Dedicated native-resolution quest and daily-login menus. Existing HUD and playtime gifts remain intact.
+-- Native menus share the approved materials and close one another.
 do
+	local indexController, playtimeController
 	local controller = require(ReplicatedStorage.Shared.QuestRewardsUI).new({
 		Notify = toast,
-		CloseOthers = function() closeMenus(); if audioOn.Settings and audioOn.Settings.panel.Visible then audioOn.Settings:Close() end end,
+		CloseOthers = function()
+			closeMenus()
+			if indexController then indexController:Close() end
+			if playtimeController then playtimeController:Close() end
+			if audioOn.Settings and audioOn.Settings.panel.Visible then audioOn.Settings:Close() end
+		end,
 		CanAutoOpen = function()
 			return data ~= nil and not Config.NeedsTutorial(data) and openMenu == nil
+				and not (indexController and indexController.panel.Visible)
+				and not (playtimeController and playtimeController.panel.Visible)
 				and not (audioOn.Settings and audioOn.Settings.panel.Visible)
 				and not player:GetAttribute("CarryingEgg") and not banner.Visible
 		end,
@@ -3284,7 +3190,11 @@ do
 	local originalToggle = toggleMenu
 	audioOn.Settings = require(ReplicatedStorage.Shared.SettingsUI).new({
 		Icon = "rbxassetid://84813511233758",
-		CloseOthers = function() closeMenus(); controller:Close() end,
+		CloseOthers = function()
+			closeMenus(); controller:Close()
+			if indexController then indexController:Close() end
+			if playtimeController then playtimeController:Close() end
+		end,
 		Apply = function(values)
 			local changedEffects = audioOn.Values.EventEffects ~= values.EventEffects
 			audioOn.Values = table.clone(values)
@@ -3292,9 +3202,27 @@ do
 			if changedEffects and audioOn.ApplyEventEffects then audioOn.ApplyEventEffects() end
 		end,
 	})
-	Remotes.DataChanged.OnClientEvent:Connect(function(snapshot) audioOn.Settings:SetData(snapshot) end)
-	if data then audioOn.Settings:SetData(data) end
+	indexController = require(ReplicatedStorage.Shared.IndexUI).new({
+		Notify = toast, Sfx = sfx, Model = petModel, Viewport = modelViewport,
+		EggModel = function(group) return Art.Egg(group.Egg, group.Pets[1], false) end,
+		CloseOthers = function() closeMenus(); controller:Close(); audioOn.Settings:Close(); if playtimeController then playtimeController:Close() end end,
+	})
+	playtimeController = require(ReplicatedStorage.Shared.PlaytimeRewardsUI).new({
+		Notify = toast, Sfx = sfx, Viewport = modelViewport,
+		EggModel = function(eggId) return Art.Egg(eggId, Config.Eggs[eggId].Pool[1].Pet, false) end,
+		CloseOthers = function() closeMenus(); controller:Close(); indexController:Close(); audioOn.Settings:Close() end,
+	})
 	toggleMenu = function(name, forceOpen)
+		if name == "Rewards" then
+			if playtimeController.panel.Visible and not forceOpen then playtimeController:Close() else playtimeController:Open() end
+			return
+		end
+		playtimeController:Close()
+		if name == "Index" then
+			if indexController.panel.Visible and not forceOpen then indexController:Close() else indexController:Open() end
+			return
+		end
+		indexController:Close()
 		if name == "Settings" then
 			if audioOn.Settings.panel.Visible and not forceOpen then audioOn.Settings:Close() else audioOn.Settings:Open() end
 			return
@@ -3308,6 +3236,9 @@ do
 			originalToggle(name, forceOpen)
 		end
 	end
-	Remotes.DataChanged.OnClientEvent:Connect(function(snapshot) controller:SetData(snapshot) end)
-	if data then controller:SetData(data) end
+	Remotes.DataChanged.OnClientEvent:Connect(function(snapshot)
+		audioOn.Settings:SetData(snapshot); controller:SetData(snapshot); indexController:SetData(snapshot); playtimeController:SetData(snapshot)
+	end)
+	if data then audioOn.Settings:SetData(data); controller:SetData(data); indexController:SetData(data); playtimeController:SetData(data) end
+	script.Destroying:Connect(function()indexController:Destroy(); playtimeController:Destroy()end)
 end

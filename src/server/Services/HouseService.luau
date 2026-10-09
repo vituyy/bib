@@ -411,6 +411,16 @@ local function finishTheft(player: Player, outcome: string)
 	if not carry then
 		return
 	end
+	-- Capture the carried egg before clearCarry removes its world model.
+	local character = player.Character
+	local carriedEgg = character and character:FindFirstChild("CarriedEgg")
+	local deliveryPosition = nil
+	if carriedEgg and carriedEgg:IsA("Model") then
+		deliveryPosition = carriedEgg:GetBoundingBox().Position
+	else
+		local root = rootOf(character)
+		if root then deliveryPosition = (root.CFrame * CFrame.new(0, 0.6, -2)).Position end
+	end
 	clearCarry(player)
 	local state = carry.House
 	local egg = Config.Eggs[carry.EggId]
@@ -425,10 +435,14 @@ local function finishTheft(player: Player, outcome: string)
 	end
 
 	if outcome == "escaped" then
-		DataService.Update(player, function(data)
+		local awarded = DataService.Update(player, function(data)
 			table.insert(data.Eggs, Config.MakeEggEntry(carry.EggId, carry.PetId))
 			data.EggsStolen = (data.EggsStolen or 0) + 1
 		end)
+		if not awarded then return end
+		if deliveryPosition then
+			Remotes.EggDelivered:FireClient(player, deliveryPosition, carry.EggId, character)
+		end
 		DataService.QuestEvent(player, "Deliver", 1, { House = state.Index })
 		notify(player, "You escaped with a " .. eggName .. "! Put it in an incubator from the Eggs menu.", GREEN)
 		if egg.Rarity == "Bloody" then

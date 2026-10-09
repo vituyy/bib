@@ -187,6 +187,7 @@ local function sanitize(data: { [string]: any })
 		Seconds = if isNumber(playtime.Seconds) then math.max(0, math.floor(playtime.Seconds)) else 0,
 		Round = if isNumber(playtime.Round) then math.max(1, math.floor(playtime.Round)) else 1, -- how many times today's gifts were all claimed, plus one
 		Claimed = {},
+		Active = false, -- current-session activity is recomputed by the server
 	}
 	if type(playtime.Claimed) == "table" then
 		for key, value in playtime.Claimed do
@@ -256,6 +257,13 @@ local function sanitize(data: { [string]: any })
 		end
 		return nil
 	end)
+	local indexPets = if type(data.IndexPetClaimed) == "table" then data.IndexPetClaimed else {}
+	data.IndexPetClaimed = {}
+	for id, value in indexPets do
+		if type(id) == "string" and rawget(Config.Pets, id) and value == true and seen[id] then
+			data.IndexPetClaimed[id] = true
+		end
+	end
 	data.IndexClaimed = cleanList(data.IndexClaimed, function(n)
 		return if isNumber(n) then n else nil
 	end)
@@ -959,6 +967,8 @@ end
 -- Called when the player does something (opens a menu, buys): counts as being active.
 function DataService.Touch(player: Player)
 	lastActive[player] = os.clock()
+	local data = profiles[player]
+	if data and data.Playtime then data.Playtime.Active = true end
 end
 
 -- Starts a new day of playtime rewards when the date has changed. Returns true if it did.
@@ -1026,7 +1036,7 @@ function DataService.ClaimPlaytime(player: Player, index: any): (boolean, string
 			d.Playtime.Claimed = {}
 			d.Playtime.Seconds = 0
 		end)
-		return true, "Playtime reward: " .. playtimeText(resolved) .. "  Round " .. data.Playtime.Round .. " starts: bigger gifts!"
+		return true, "Playtime reward: " .. playtimeText(resolved) .. "  Round " .. data.Playtime.Round .. " starts. Gifts scale with your progress!"
 	end
 	return true, "Playtime reward: " .. playtimeText(resolved)
 end
@@ -1303,10 +1313,16 @@ function DataService.Start()
 					end
 				end
 				local newDay = playtimeNewDay(data)
-				if os.clock() - (lastActive[player] or 0) < Config.Playtime.AfkSeconds then
+				local wasActive = data.Playtime.Active
+				data.Playtime.Active = os.clock() - (lastActive[player] or 0) < Config.Playtime.AfkSeconds
+				local giftReady = false
+				if data.Playtime.Active then
 					data.Playtime.Seconds += 1
+					for _, reward in Config.Playtime.Rewards do
+						if data.Playtime.Seconds == reward.Minutes * 60 then giftReady = true; break end
+					end
 				end
-				if newDay or tick % 5 == 0 then
+				if newDay or giftReady or wasActive ~= data.Playtime.Active or tick % 5 == 0 then
 					publish(player)
 				end
 			end
@@ -1346,18 +1362,36 @@ function DataService.ProcessReceipt(receipt): Enum.ProductPurchaseDecision
 			break
 		end
 	end
+	local treadmillTier: number? = nil
+	if not product then
+		for tier, info in Config.Treadmills do
+			if info.Robux and info.ProductId ~= 0 and info.ProductId == receipt.ProductId then
+				treadmillTier = tier
+				break
+			end
+		end
+	end
 	local player = Players:GetPlayerByUserId(receipt.PlayerId)
 	local data = player and profiles[player]
-	if not (product and player and data) then
+	if not ((product or treadmillTier) and player and data) then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	data.Receipts = if type(data.Receipts) == "table" then data.Receipts else {}
 	if not data.Receipts[receipt.PurchaseId] then
-		DataService.Update(player, function(d)
-			d.Potions[product.Potion] = (d.Potions[product.Potion] or 0) + product.Amount
-			d.Receipts[receipt.PurchaseId] = os.time()
-		end)
-		Remotes.Notify:FireClient(player, string.format("Thanks! +%d %s", product.Amount, Config.Potions[product.Potion].Name), "Good")
+		if product then
+			DataService.Update(player, function(d)
+				d.Potions[product.Potion] = (d.Potions[product.Potion] or 0) + product.Amount
+				d.Receipts[receipt.PurchaseId] = os.time()
+			end)
+			Remotes.Notify:FireClient(player, string.format("Thanks! +%d %s", product.Amount, Config.Potions[product.Potion].Name), "Good")
+		else
+			local tier = treadmillTier :: number
+			DataService.Update(player, function(d)
+				d.Treadmill = math.max(d.Treadmill, tier)
+				d.Receipts[receipt.PurchaseId] = os.time()
+			end)
+			Remotes.Notify:FireClient(player, string.format("Thanks! %s is now in front of your base!", Config.Treadmills[tier].Name), "Good")
+		end
 	end
 	if store and canSave[player] then
 		if not writeSave(player, deepCopy(data), false) then
